@@ -1,31 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0 <0.9.0;
 import "./utils/Helpers.sol";
-import "./C9SVGShare.sol";
+import "./C9Shared.sol";
 
+
+/**
+* @dev A validity flag has been added, in the event royalties are 
+* not paid then the token is no longer redeemable.
+*/
 interface IC9SVG {
-    struct TokenInfo {
-        uint8 edition;
-        uint8 tag;
-        uint8 tush;
-        uint8 gentag;
-        uint8 gentush;
-        uint8 markertush;
-        uint8 spec;
-        uint8 rtier;
-        uint16 mintid;
-        uint24 id;
-        uint56 mintstamp;
-        uint96 royalty;
-        string name;
-        string qrdata;
-        string bardata;
-    }
-    function returnSVG(address _address, TokenInfo calldata _token) external view returns (string memory);
+    function returnSVG(address _address, C9Shared.TokenInfo calldata _token) external view returns (string memory);
 }
 
-contract C9SVG is IC9SVG, C9SVGShare  {
-    bytes constant flg_blk = "<path fill='#777' d='M0 0h640v480H0z'/>"; // blank flag
+contract C9SVG is IC9SVG, C9Shared {
+    bytes constant flg_blk = "<pattern id='ptrn' width='.1' height='.1'><rect width='64' height='48' fill='#def' stroke='#000'/></pattern><path d='M0 0h640v480H0z' fill='url(#ptrn)'/>"; //blank flag
     bytes constant flg_can = "<path fill='#fff' d='M0 0h640v480H0z'/><path fill='#d21' d='M-19.7 0h169.8v480H-19.7zm509.5 0h169.8v480H489.9zM201 232l-13.3 4.4 61.4 54c4.7 13.7-1.6 17.8-5.6 25l66.6-8.4-1.6 67 13.9-.3-3.1-66.6 66.7 8c-4.1-8.7-7.8-13.3-4-27.2l61.3-51-10.7-4c-8.8-6.8 3.8-32.6 5.6-48.9 0 0-35.7 12.3-38 5.8l-9.2-17.5-32.6 35.8c-3.5.9-5-.5-5.9-3.5l15-74.8-23.8 13.4c-2 .9-4 .1-5.2-2.2l-23-46-23.6 47.8c-1.8 1.7-3.6 1.9-5 .7L264 130.8l13.7 74.1c-1.1 3-3.7 3.8-6.7 2.2l-31.2-35.3c-4 6.5-6.8 17.1-12.2 19.5-5.4 2.3-23.5-4.5-35.6-7 4.2 14.8 17 39.6 9 47.7z'/>";
     bytes constant flg_chn = "<g id='c9chn'><path fill='#ff0' d='M-.6.8 0-1 .6.8-1-.3h2z'/></g><path fill='#e12' d='M0 0h640v480H0z'/><use href='#c9chn' transform='matrix(72 0 0 72 120 120)'/><use href='#c9chn' transform='matrix(-12.3 -20.6 20.6 -12.3 240.3 48)'/><use href='#c9chn' transform='matrix(-3.4 -23.8 23.8 -3.4 288 96)'/><use href='#c9chn' transform='matrix(6.6 -23 23 6.6 288 168)'/><use href='#c9chn' transform='matrix(15 -18.7 18.7 15 240 216)'/>";
     bytes constant flg_ger = "<path fill='#fc0' d='M0 320h640v160H0z'/><path d='M0 0h640v160H0z'/><path fill='#d00' d='M0 160h640v160H0z'/>";
@@ -39,6 +27,7 @@ contract C9SVG is IC9SVG, C9SVGShare  {
      * @dev Sets up the mapping for compressed/mapped SVG input data.
      */
     constructor () {
+        stonum[0x61] = 0x2e35; // a->.5
         stonum[0x41] = 0x3130; // A->10
         stonum[0x42] = 0x3131; // B->11
         stonum[0x43] = 0x3132; // C->12
@@ -46,6 +35,8 @@ contract C9SVG is IC9SVG, C9SVGShare  {
         stonum[0x45] = 0x3134; // E->14
         stonum[0x46] = 0x3135; // F->15
         stonum[0x47] = 0x3136; // G->16
+
+        //1.5, 2.5, 3.5, 4.5, 5.5, 7.5 => Z, Y, X, W, V, U
     }
 
     /**
@@ -55,8 +46,8 @@ contract C9SVG is IC9SVG, C9SVGShare  {
     function addAddress(address _address, bytes memory b) internal pure {
         (bytes32 _a1, bytes8 _a2) = Helpers.addressToB32B8(_address);
         assembly {
-            mstore(add(b, 2725), _a1)
-            let dst := add(b, 2757)
+            mstore(add(b, 2800), _a1)
+            let dst := add(b, 2832)
             mstore(dst, or(and(mload(dst), not(shl(192, 0xFFFFFFFFFFFFFFFF))), _a2))
         }
     }
@@ -67,13 +58,44 @@ contract C9SVG is IC9SVG, C9SVGShare  {
      * SVGs may be displayed on the same page without CSS conflict.
      */
     function addIds(bytes6 _id, bytes memory b) internal pure {
-        uint16[11] memory offsets = [195, 221, 247, 289, 364, 795, 2273, 2351, 2476, 2826, 2888];
+        uint16[11] memory offsets = [195, 221, 247, 289, 364, 795, 2273, 2351, 2544, 2901, 2963];
         uint16 idx;
         for(uint8 j; j<11; j++) {
             idx = offsets[j];
             assembly {
                 let dst := add(b, idx)
                 mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _id))
+            }
+        }
+    }
+
+    /**
+     * @dev Adds validity flag info to SVG output memory `b`.
+     */
+    function addValidityInfo(TokenInfo calldata _token, bytes memory b) internal view {
+        uint8 _validityIdx = _token.validity;
+        bytes16 _validity = "                ";
+        if (_validityIdx > 0) {
+            _validity = _vValidity[_validityIdx-1];
+        }
+        bytes3 _clr = bytes3("b00");
+        bytes2 _in = bytes2("IN");
+        bytes2 _marks = bytes2(">>");
+        if (_validityIdx == 1) {
+            _clr = bytes3("a0f");
+            _in = bytes2("  ");
+        }
+        assembly {
+            let _vcheck := gt(_validityIdx, 0)
+            switch _vcheck case 1 {
+                let dst := add(b, 2413)
+                mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _clr))
+                dst := add(b, 2418)
+                mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _in))
+                dst := add(b, 2426)
+                mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), _marks))
+                dst := add(b, 2429)
+                mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _validity))
             }
         }
     }
@@ -85,11 +107,11 @@ contract C9SVG is IC9SVG, C9SVGShare  {
     function addTokenInfo(TokenInfo calldata _token, bytes memory b) internal view {
         bytes7 _tagtxt = genTagsToAscii(_token.gentag, _token.tag);
         bytes7 _tushtxt = genTagsToAscii(_token.gentush, _token.tush);
-        (bytes3 _rgc2, bytes16 _classer) = getGradientColors(_token.spec, _token.rtier);
+        (bytes3 _rgc2, bytes16 _classer) = getGradientColors(_token);
         bytes6 _periods = getNFTAge(_token.mintstamp);
         bytes4 __mintid = Helpers.flip4Space(bytes4(Helpers.uintToBytes(_token.mintid)));
         bytes3 _royalty = Helpers.bpsToPercent(_token.royalty);
-        bytes2 _edition = Helpers.remove2Null(bytes2(Helpers.uintToBytes(_token.edition)));
+        bytes2 _edition = Helpers.flip2Space(Helpers.remove2Null(bytes2(Helpers.uintToBytes(_token.edition))));
         bytes2 _namesize = getNameSize(uint8(bytes(_token.name).length));
 
         assembly {
@@ -99,37 +121,45 @@ contract C9SVG is IC9SVG, C9SVGShare  {
             // Colors
             dst := add(b, 497)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _rgc2))
-            dst := add(b, 2548)
+            dst := add(b, 2617)
             mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _classer))
+            
             // Edition
-            dst := add(b, 2383)
+            let _edcheck := gt(_edition, 9)
+            switch _edcheck case 0 {
+                dst := add(b, 2686)
+            } default {
+                dst := add(b, 2685)
+            }
             mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _edition))
-            // Royalty
-            dst := add(b, 2416)
-            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _royalty))
+
             // Mintid
-            dst := add(b, 2613)
+            dst := add(b, 2688)
             mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), __mintid))
+            // Royalty
+            dst := add(b, 2484)
+            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _royalty))
+            
             // Timestamps
-            dst := add(b, 2646)
+            dst := add(b, 2721)
             let mask := shl(208, 0xFFFF00000000)
             let srcpart := and(_periods, mask)
             let destpart := and(mload(dst), not(mask))
             mstore(dst, or(destpart, srcpart))
-            dst := add(b, 2649)
+            dst := add(b, 2724)
             mask := shl(208, 0x0000FFFF0000)
             srcpart := and(_periods, mask)
             destpart := and(mload(dst), not(mask))
             mstore(dst, or(destpart, srcpart))
-            dst := add(b, 2652)
+            dst := add(b, 2727)
             mask := shl(208, 0x00000000FFFF)
             srcpart := and(_periods, mask)
             destpart := and(mload(dst), not(mask))
             mstore(dst, or(destpart, srcpart))
             // Gen Country Text
-            dst := add(b, 2834)
+            dst := add(b, 2909)
             mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tagtxt))
-            dst := add(b, 2844)
+            dst := add(b, 2919)
             mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tushtxt))
         }
     }
@@ -258,8 +288,10 @@ contract C9SVG is IC9SVG, C9SVGShare  {
         assembly {
             let dst := add(_tmpout, 32)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), __gentag))
-            dst := add(_tmpout, 36)
-            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _cntrytag))
+            if lt(_tag, 7) {
+                dst := add(_tmpout, 36)
+                mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _cntrytag))
+            }
         }
         return bytes7(_tmpout);
     }
@@ -268,7 +300,9 @@ contract C9SVG is IC9SVG, C9SVGShare  {
      * @dev Returns styling and textual information based on token attributes input 
      * params `_spec` and `_rtier`.
      */
-    function getGradientColors(uint8 _spec, uint8 _rtier) internal pure returns (bytes3, bytes16) {
+    function getGradientColors(TokenInfo calldata _token) internal pure returns (bytes3, bytes16) {
+        uint8 _spec = _token.spec;
+        uint8 _rtier = _token.rtier;
         bytes3[11] memory spec_c2 = [bytes3("101"), "fc3", "bbb", "a74", "c0f", "c00", "0a0", "0cf", "eee", "cb8", "fff"];
         bytes16[12] memory rtiers = [bytes16("T0 GHOST        "),
             "T1 LEGENDARY    ",
@@ -276,8 +310,8 @@ contract C9SVG is IC9SVG, C9SVGShare  {
             "T3 ULTRA RARE   ",
             "T4 RARE         ",
             "T5 UNCOMMON     ",
-            "T6 KNOWN        ",
-            "T7 FREE         ",
+            "T6 COMMON       ",
+            "T7 ABUNDANT     ",
             "S0 PROTO UNIQUE ",
             "S1 ODDITY RARE  ",
             "S2 PROD HALT    ",
@@ -496,7 +530,6 @@ contract C9SVG is IC9SVG, C9SVGShare  {
     function qrCodeSVGFull(bytes calldata _qrdata) internal view returns (bytes memory) {
         return bytes.concat(
             "<svg class='qr' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 17'><style type='text/css'>.qr{opacity:0.89;} .qr rect{width:1px;height:1px;}</style><symbol id='d'><rect/><rect x='2'/></symbol><symbol id='j'><rect/><rect x='3'/></symbol><rect transform='scale(3)' x='0.67' y='0.67' fill='#111'/><rect x='0.5' y='0.5' style='width:6px;height:6px;fill:none;stroke:#111;'/>",
-            //qrCodeSVG("d8:0:dC:0:G:0:G:1:dB:3:F:4:dD:5:F:6:B:7:d0:8:d5:8:C:8:F:9:0:A:F:A:0:C:G:C:0:E:B:F:0:G:g2:5.5:4:4.5:6:7.5:7:4.5:8:7.5:8:6.5:B:5.5:C:5.5:G:e:"),
             qrCodeSVG("d80dC0G0G1dB3F4dD5F6B7d08d58C8F90AFA0CGC0EBF0Gg2:5.5:4:4.5:6:7.5:7:4.5:8:7.5:8:6.5:B:5.5:C:5.5:G:e:"),
             qrCodeSVG(_qrdata),
             "</svg>"
@@ -510,14 +543,14 @@ contract C9SVG is IC9SVG, C9SVGShare  {
      * but users should be able to fetch meta-data updates to see 
      * color changes.
      */
-    function checkForSpecialBg(uint8 _spec, bytes memory b) internal view {
+    function checkForSpecialBg(uint8 _rtier, bytes memory b) internal view {
         bytes32 _filter_mod = "turbulence' baseFrequency='0.002";
         bytes1 _octaves_mod = bytes1("4");
         bytes3 _feMatrix_mod = bytes3("0.9");
         bytes32[3] memory mods = [bytes32("1 1 0 0 0 1 0 0 0 0 0 1 0 0 0 0 "),
             "0 0 0 0 1 1 0 0 0 0 0 1 0 0 0 0 ",
             "0 0 0 0 0 1 0 0 0 0 0 1 1 1 0 0 "];
-        if (_spec == 10) {
+        if (_rtier == 8) {
             assembly {
                 let dst := add(b, 560)
                 mstore(dst, _filter_mod)
@@ -542,12 +575,13 @@ contract C9SVG is IC9SVG, C9SVGShare  {
      * and owner `_address`.
      */
     function returnSVG(address _address, TokenInfo calldata _token) external view override returns (string memory) {
-        bytes memory b = "<svg class='c9svg' xmlns='http://www.w3.org/2000/svg' width='100%' height='100%' viewBox='0 0 630 880'><style type='text/css'>.c9svg{font-family:'Courier New';} .sXXXXXX{font-size:22px;} .mXXXXXX{font-size:32px;} .tXXXXXX{font-size:54px;font-weight:700;} .nXXXXXX{font-size:34px;font-weight:700;}</style><defs><radialGradient id='rgXXXXXX' cx='50%' cy='44%' r='50%' gradientUnits='userSpaceOnUse'><stop offset='25%' stop-color='#fff'/><stop offset='1' stop-color='#e66'/></radialGradient><filter id='noiser'><feTurbulence type='fractalNoise' baseFrequency='0.2' numOctaves='8'/><feComposite in2='SourceGraphic' operator='in'/><feColorMatrix values='1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0.2 0'/></filter></defs><rect rx='20' width='100%' height='100%' fill='url(#rgXXXXXX)'/><rect width='100%' height='100%' rx='20' filter='url(#noiser)'/><rect y='560' width='100%' height='22' fill='#ddf' fill-opacity='0.6'/><g style='fill:#ded;'><rect x='20' y='20' width='590' height='150' rx='10'/><rect x='20' y='740' width='590' height='120' rx='10'/></g><g transform='translate(470 6) scale(0.2)' fill-opacity='0.89'><a href='https://collect9.io' target='_blank'><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 276'><defs><radialGradient id='c9r1' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'><stop offset='25%' stop-color='#2fd'/><stop offset='1' stop-color='#0a6'/></radialGradient><radialGradient id='c9r2' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'><stop offset='25%' stop-color='#26f'/><stop offset='1' stop-color='#03a'/></radialGradient><radialGradient id='c9r3' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'><stop offset='25%' stop-color='#2ff'/><stop offset='1' stop-color='#0a9'/></radialGradient></defs><symbol id='c9p'><path d='M122.4,2,26,57.5a11,11,0,0,0,0,19.4h0a11,11,0,0,0,11,0l84-48.5V67L74.3,94.3a6,6,0,0,0,0,10L125,134a6,6,0,0,0,6,0l98.7-57a11,11,0,0,0,0-19.4L133.6,2A11,11,0,0,0,122.4,2Zm12,65V28.5l76,44-33.5,19.3Z'/></symbol><use href='#c9p' fill='url(#c9r2)'/><use href='#c9p' transform='translate(0 9.3) rotate(240 125 138)' fill='url(#c9r3)'/><use href='#c9p' transform='translate(9 4) rotate(120 125 138)' fill='url(#c9r1)'/></svg></a></g><g transform='translate(30 58)' class='mXXXXXX'><text>COLLECT9</text><text y='34'>RWA REDEEMABLE NFT</text><g class='sXXXXXX'><text y='74'>EDITION >>  1</text><text y='100'>EIP-2981: 3.5%</text></g></g><g transform='translate(30 768)' class='sXXXXXX'><text>TYPE: VINTAGE BEANIE BABY</text><text y='26'>RARITY TIER:                                 </text><text y='52'>ED. MINT ID:     </text><text y='78'>NFT AGE:   YR   MO   D</text></g><text x='50%' y='576' fill='#999' text-anchor='middle'>a2a3c5f0f4ce432893d0beafc2f5b32607e68bb0</text><g text-anchor='middle'><text x='50%' y='645' class='nXXXXXX'>        |        </text><text x='50%' y='698' class='tXXXXXX'>";
+        bytes memory b = "<svg class='c9svg' xmlns='http://www.w3.org/2000/svg' width='100%' height='100%' viewBox='0 0 630 880'><style type='text/css'>.c9svg{font-family:'Courier New';} .sXXXXXX{font-size:22px;} .mXXXXXX{font-size:32px;} .tXXXXXX{font-size:54px;font-weight:700;} .nXXXXXX{font-size:34px;font-weight:700;}</style><defs><radialGradient id='rgXXXXXX' cx='50%' cy='44%' r='50%' gradientUnits='userSpaceOnUse'><stop offset='25%' stop-color='#fff'/><stop offset='1' stop-color='#e66'/></radialGradient><filter id='noiser'><feTurbulence type='fractalNoise' baseFrequency='0.2' numOctaves='8'/><feComposite in2='SourceGraphic' operator='in'/><feColorMatrix values='1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0.2 0'/></filter></defs><rect rx='20' width='100%' height='100%' fill='url(#rgXXXXXX)'/><rect width='100%' height='100%' rx='20' filter='url(#noiser)'/><rect y='560' width='100%' height='22' fill='#ddf' fill-opacity='0.6'/><g style='fill:#ded;'><rect x='20' y='20' width='590' height='150' rx='10'/><rect x='20' y='740' width='590' height='120' rx='10'/></g><g transform='translate(470 6) scale(0.2)' fill-opacity='0.89'><a href='https://collect9.io' target='_blank'><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 276'><defs><radialGradient id='c9r1' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'><stop offset='25%' stop-color='#2fd'/><stop offset='1' stop-color='#0a6'/></radialGradient><radialGradient id='c9r2' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'><stop offset='25%' stop-color='#26f'/><stop offset='1' stop-color='#03a'/></radialGradient><radialGradient id='c9r3' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'><stop offset='25%' stop-color='#2ff'/><stop offset='1' stop-color='#0a9'/></radialGradient></defs><symbol id='c9p'><path d='M122.4,2,26,57.5a11,11,0,0,0,0,19.4h0a11,11,0,0,0,11,0l84-48.5V67L74.3,94.3a6,6,0,0,0,0,10L125,134a6,6,0,0,0,6,0l98.7-57a11,11,0,0,0,0-19.4L133.6,2A11,11,0,0,0,122.4,2Zm12,65V28.5l76,44-33.5,19.3Z'/></symbol><use href='#c9p' fill='url(#c9r2)'/><use href='#c9p' transform='translate(0 9.3) rotate(240 125 138)' fill='url(#c9r3)'/><use href='#c9p' transform='translate(9 4) rotate(120 125 138)' fill='url(#c9r1)'/></svg></a></g><g transform='translate(30 58)' class='mXXXXXX'><text>COLLECT9</text><text y='34'>RWA REDEEMABLE NFT</text><g class='sXXXXXX'><text y='74'>STATUS: <tspan font-weight='bold' fill='#080'>  VALID                    </tspan></text><text y='100'>EIP-2981: 3.5%</text></g></g><g transform='translate(30 768)' class='sXXXXXX'><text>CLASS: VINTAGE BEANIE BABY</text><text y='26'>RARITY TIER:                                 </text><text y='52'>ED NUM.MINT ID:   .    </text><text y='78'>NFT AGE:   YR   MO   D</text></g><text x='50%' y='576' fill='#999' text-anchor='middle'>a2a3c5f0f4ce432893d0beafc2f5b32607e68bb0</text><g text-anchor='middle'><text x='50%' y='645' class='nXXXXXX'>        |        </text><text x='50%' y='698' class='tXXXXXX'>";
         bytes6 _id = Helpers.tokenIdToBytes(_token.id);
         addIds(_id, b);
         addTokenInfo(_token, b);
+        addValidityInfo(_token, b);
         addAddress(_address, b);
-        checkForSpecialBg(_token.spec, b);
+        checkForSpecialBg(_token.rtier, b);
         bytes memory e;
         if (_token.markertush > 0) {
             e = addTushMarker(_token.markertush);

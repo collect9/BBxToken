@@ -79,6 +79,19 @@ library Helpers {
         }
     }
 
+    function flip2Space(bytes2 input) internal pure returns (bytes2) {
+        bytes memory output = new bytes(2);
+        if (input[1] == 0x20) {
+            output[0] = input[1];
+            output[1] = input[0];
+        }
+        else {
+            output[0] = input[0];
+            output[1] = input[1];
+        }
+        return bytes2(output);
+    }
+
     function flip4Space(bytes4 input) internal pure returns (bytes4) {
         bytes memory output = new bytes(4);
         for(uint8 i; i<4; i++) {
@@ -155,25 +168,26 @@ library Helpers {
         return ret;
     }
 
-    function uintToOrdinal(uint8 input_) internal pure returns (bytes3) {
-        if (input_ == 0) {
+    function uintToOrdinal(uint8 _input) internal pure returns (bytes3) {
+        if (_input == 0) {
             return "PRE";
         }
-        if (input_ == 255) {
+        if (_input == 254) {
+            return "TYR";
+        }
+        if (_input == 255) {
             return "PAX";
         }
         bytes32[4] memory ends = [bytes32("TH"), "ST", "ND", "RD"];
-
-
-        if(((input_ % 100) >= 11) && ((input_ % 100) <= 13)) {
+        if(((_input % 100) >= 11) && ((_input % 100) <= 13)) {
             return bytes3(
-                bytes.concat(bytes1(uintToBytes(input_)), "TH"));
+                bytes.concat(bytes1(uintToBytes(_input)), "TH"));
         }
         else {
             return bytes3(
                 bytes.concat(
-                    bytes1(uintToBytes(input_)),
-                    bytes2(ends[input_ % 10])
+                    bytes1(uintToBytes(_input)),
+                    bytes2(ends[_input % 10])
                 )
             );
         }
