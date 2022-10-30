@@ -46,4 +46,27 @@ abstract contract C9Shared {
         "TRANSFER DUE    ",
         "OTHER           "
     ];
+
+    /**
+     * @dev Necessary getters for array lengths.
+     */
+    /*
+    function flagsLength()
+        public view
+        returns(uint256) {
+            return _vFlags.length;
+    }
+
+    function markersLength()
+        public view
+        returns(uint256) {
+            return _vMarkers.length;
+    }
+
+    function validityLength()
+        public view
+        returns(uint256) {
+            return _vValidity.length;
+    }
+    */
 }

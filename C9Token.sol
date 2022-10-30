@@ -39,8 +39,8 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
     /**
      * @dev The meta and SVG contracts.
      */
-    address public _metaContract = 0xCBbe39C6087336392ca5d5E1A27704782d0B8de3;
-    address public _svgContract = 0x2eFe2423bcf3c3A348880c0e9638deeE8Af03Ff7;
+    address public _metaContract = 0x2aBf1D0C7ed6EE7462BCFA7e92b5aEC6e8B5324b;
+    address public _svgContract = 0x421BDC29d13078E3977C018C641C06a05E385aE0;
     
     /**
      * @dev The address to send royalties to.
@@ -51,7 +51,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * @dev The constructor sets the default royalty of the token 
      * to 3.5%.
      */
-    constructor() ERC721("Collect9 RWAR Tokens", "C9T") {
+    constructor() ERC721("Collect9 BBR NFTs", "C9xBB") {
         _setDefaultRoyalty(_royaltiesTo, 350);
     }
 
@@ -92,14 +92,6 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
     /**
      * @dev Testing function only, remove for release.
      */
-    function burn10(uint256[10] calldata tokenId)
-        public
-        onlyOwner {
-        for (uint8 i; i<10; i++) {
-           burn(tokenId[i]); 
-        }
-    }
-
     function burnAll()
         public
         onlyOwner {
@@ -118,18 +110,21 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      *
      * - `tokenId` must exist.
     */
-    function b64Image(
-        uint256 _tokenId
-    ) public view tokenExists(_tokenId) returns (string memory) {
-        return Base64.encode(bytes(svgImage(_tokenId)));
+    function b64Image(uint256 _tokenId)
+        public view
+        tokenExists(_tokenId)
+        returns (string memory) {
+            return Base64.encode(bytes(svgImage(_tokenId)));
     }
 
     /**
      * @dev Contract-level meta data.
      * OpenSea: https://docs.opensea.io/docs/contract-level-metadata
      */
-    function contractURI() public pure returns (string memory) {
-        return "https://collect9.io/metadata/Collect9RWARBBToken.json";
+    function contractURI()
+        public pure
+        returns (string memory) {
+            return "https://collect9.io/metadata/Collect9RWARBBToken.json";
     }
 
     /**
@@ -167,67 +162,64 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * - `_input` tag and tush country id mappings are valid.
      * - `_input` royalty is between 1-9.99%.
     */
-    function mint1(C9Shared.TokenInfo calldata _input) public onlyOwner {
-        require(_input.tag < 8 && _input.tush < 8, "ERR TAG TUSH FLG");
-        require(_input.royalty > 99 && _input.royalty < 1001, "ERR ROYALTY");
-        uint256 _uid = uint256(_input.id); 
+    function mint1(C9Shared.TokenInfo calldata _input)
+        public
+        onlyOwner {
+            require(_input.tag < 8 && _input.tush < 8, "ERR TAG TUSH");
+            require(_input.royalty < 1000, "ERR ROYALTY");
+            uint256 _uid = uint256(_input.id); 
 
-        uint8 _edition = _input.edition;
-        if (_edition == 0) {
-            bytes32 _data;
-            for (uint8 i=1; i<100; i++) {
-                _data = getPhysicalHash(_input, i);
-                if (!attrComboExists[_data]) {
-                    _edition = i;
-                    break;
+            uint8 _edition = _input.edition;
+            if (_edition == 0) {
+                bytes32 _data;
+                for (uint8 i=1; i<100; i++) {
+                    _data = getPhysicalHash(_input, i);
+                    if (!attrComboExists[_data]) {
+                        _edition = i;
+                        break;
+                    }
                 }
             }
-        }
 
-        uint16 __mintId = _input.mintid == 0 ? _mintId[_edition] + 1 : _input.mintid;
-        _setTokenRoyalty(_uid, _royaltiesTo, _input.royalty);
+            uint16 __mintId = _input.mintid == 0 ? _mintId[_edition] + 1 : _input.mintid;
+            tokens[_uid] = C9Shared.TokenInfo(
+                _input.validity,
+                _edition,
+                _input.tag,
+                _input.tush,
+                _input.gentag,
+                _input.gentush,
+                _input.markertush,
+                _input.spec,
+                _input.rtier,
+                __mintId,
+                _input.id,
+                uint48(block.timestamp),
+                _input.royalty,
+                _input.name,
+                _input.qrdata,
+                _input.bardata
+            );
 
-        tokens[_uid] = C9Shared.TokenInfo(
-            _input.validity,
-            _edition,
-            _input.tag,
-            _input.tush,
-            _input.gentag,
-            _input.gentush,
-            _input.markertush,
-            _input.spec,
-            _input.rtier,
-            __mintId,
-            _input.id,
-            uint48(block.timestamp),
-            _input.royalty,
-            _input.name,
-            _input.qrdata,
-            _input.bardata
-        );
-
-        _mint(msg.sender, _uid);
-        
-        attrComboExists[getPhysicalHash(_input, _edition)] = true;
-        if (_input.mintid == 0) {
-            _mintId[_edition] = __mintId;
-        }
+            _setTokenRoyalty(_uid, _royaltiesTo, _input.royalty);
+            _mint(msg.sender, _uid);
+            
+            attrComboExists[getPhysicalHash(_input, _edition)] = true;
+            if (_input.mintid == 0) {
+                _mintId[_edition] = __mintId;
+            }
     }
 
     /**
      * @dev Helps makes the overall minting process faster and cheaper 
      * on average per mint.
     */
-    function mint10(C9Shared.TokenInfo[10] calldata _input) external onlyOwner {
-        for (uint8 i; i<10; i++) {
-            mint1(_input[i]);
-        }
-    }
-
-    function mint20(C9Shared.TokenInfo[20] calldata _input) external onlyOwner {
-        for (uint8 i; i<20; i++) {
-            mint1(_input[i]);
-        }
+    function mintN(C9Shared.TokenInfo[] calldata _input, uint8 N)
+        external
+        onlyOwner {
+            for (uint8 i; i<N; i++) {
+                mint1(_input[i]);
+            }
     }
 
     /**
@@ -326,18 +318,20 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
         external
         onlyOwner
         tokenExists(_tokenId) {
-            require(_newRoyalty < 1001, "ROYALTY TOO HIGH"); // Limit max royalty to 10%
+            require(_newRoyalty < 1000, "ROYALTY TOO HIGH"); // Limit max royalty to 10%
             _setTokenRoyalty(_tokenId, _royaltiesTo, _newRoyalty);
     }
 
     /**
      * @dev Updates the token validity status.
+     * Validity will not prevent or pause transfers. It is 
+     * only a display flag to let users know of the token's 
+     * status.
      */
     function updateTokenValidity(uint256 _tokenId, uint8 _vFlag)
         external
         onlyOwner
         tokenExists(_tokenId) {
-            require(_vFlag < 5, "vFlag MUST BE <5");
             tokens[_tokenId].validity = _vFlag;
     }
 }
