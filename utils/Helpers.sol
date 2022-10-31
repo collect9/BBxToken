@@ -10,18 +10,21 @@ library Helpers {
         }
     }
 
-    function bpsToPercent(uint96 input) internal pure returns(bytes3) {
+    function bpsToPercent(uint96 input) internal pure returns(bytes4) {
         bytes32 _input = uintToBytes(input);
-        bytes memory tmp = "X.X";
+        bytes memory tmp = "X.XX";
         bytes1 e0 = _input[0];
         bytes1 e1 = _input[1];
+        bytes1 e2 = _input[2];
         assembly {
             let dst := add(tmp, 32)
             mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), e0))
             dst := add(tmp, 34)
             mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), e1))
+            dst := add(tmp, 35)
+            mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), e2))
         }
-        return bytes3(tmp);
+        return bytes4(tmp);
     }
 
     // https://ethereum.stackexchange.com/questions/8346/convert-address-to-string
@@ -142,7 +145,7 @@ library Helpers {
         return s;
     }
 
-    function tokenIdToBytes(uint24 _id) internal pure returns (bytes6) {
+    function tokenIdToBytes(uint32 _id) internal pure returns (bytes6) {
         bytes memory output = new bytes(6);
         output[0] = bytes1("0");
         bytes32 _bid = uintToBytes(_id);

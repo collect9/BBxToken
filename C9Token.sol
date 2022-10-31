@@ -2,6 +2,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/token/common/ERC2981.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -13,6 +14,13 @@ import "./C9SVG.sol";
 
 
 contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
+    /**
+     * @dev Flag that may enable IPFS artwork versions to be 
+     displayed in the future.
+     */
+    bool public svgOnly = true;
+    string baseURI;
+
     /**
      * @dev Structure that holds all of the token info required to 
      * construct the SVG.
@@ -39,8 +47,8 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
     /**
      * @dev The meta and SVG contracts.
      */
-    address public _metaContract = 0x2aBf1D0C7ed6EE7462BCFA7e92b5aEC6e8B5324b;
-    address public _svgContract = 0x421BDC29d13078E3977C018C641C06a05E385aE0;
+    address public _metaContract = 0xdCd6ea996f3feBC00CF79e1cB88495420AF2332A;
+    address public _svgContract = 0xE1A03465DE47cD5D3F4B1fe4aE3b225D3a5f2F1E;
     
     /**
      * @dev The address to send royalties to.
@@ -183,7 +191,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
 
             uint16 __mintId = _input.mintid == 0 ? _mintId[_edition] + 1 : _input.mintid;
             tokens[_uid] = C9Shared.TokenInfo(
-                _input.validity,
+                _input.validity, // may not be needed, stored in mapping that will default to false -> automatically becomes valid after block.timestamp + 1 year
                 _edition,
                 _input.tag,
                 _input.tush,
@@ -193,9 +201,9 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
                 _input.spec,
                 _input.rtier,
                 __mintId,
+                _input.royalty, // not needed, already stored in setTokenRoyalty -> svg contract can call token contract
                 _input.id,
-                uint48(block.timestamp),
-                _input.royalty,
+                uint56(block.timestamp),
                 _input.name,
                 _input.qrdata,
                 _input.bardata
@@ -259,18 +267,45 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
         public view override
         tokenExists(_tokenId)
         returns (string memory) {
-            return string(
-                abi.encodePacked(
-                    'data:application/json;base64,',
-                    Base64.encode(
-                        abi.encodePacked(
-                            IC9MetaData(_metaContract).metaNameDesc(tokens[_tokenId]),
-                            b64Image(_tokenId),
-                            IC9MetaData(_metaContract).metaAttributes(tokens[_tokenId])
+            if (svgOnly) {
+                return string(
+                    abi.encodePacked(
+                        'data:application/json;base64,',
+                        Base64.encode(
+                            abi.encodePacked(
+                                IC9MetaData(_metaContract).metaNameDesc(tokens[_tokenId]),
+                                b64Image(_tokenId),
+                                IC9MetaData(_metaContract).metaAttributes(tokens[_tokenId])
+                            )
                         )
                     )
-                )
-            );
+                );
+            }
+            else {
+                return bytes(baseURI).length > 0 ? string(abi.encodePacked(baseURI, Strings.toString(_tokenId))) : ""; //consider updating so metadata remains fixed
+            }
+    }
+
+    /**
+     * @dev Base URI for computing {tokenURI}. If set, the resulting URI for each
+     * token will be the concatenation of the `baseURI` and the `tokenId`.
+     */
+    function _baseURI()
+    internal view override
+    returns (string memory) {
+        return baseURI;
+    }
+
+    /**
+     * @dev Updates the baseURI.
+     * By default this contract will load SVGs from another contract, 
+     * but if a future upgrade allows for artwork on IPFS, the 
+     * contract will need to set the IPFS location.
+     */
+    function setBaseUri(string calldata _newBaseURI)
+        external
+        onlyOwner {
+        baseURI = _newBaseURI;
     }
 
     /**
@@ -278,7 +313,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * This will be most useful when trying to make a generic 
      * SVG template that will include other collectible classes.
      */
-    function updateMetaContract(address _address)
+    function setMetaContract(address _address)
         external
         onlyOwner {
             _metaContract = _address;
@@ -288,7 +323,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * @dev Allows the contract owner to update the royalties 
      * receving address.
      */
-    function updateRoyaltiesAddress(address _address)
+    function setRoyaltiesAddress(address _address)
         external
         onlyOwner {
             _royaltiesTo = _address;
@@ -301,10 +336,19 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * This will be most useful when trying to make a generic 
      * SVG template that will include other collectible classes.
      */
-    function updateSVGContract(address _address)
+    function setSVGContract(address _address)
         external
         onlyOwner {
             _svgContract = _address;
+    }
+
+    /**
+     * @dev Set SVG flag.
+     */
+    function setSVGFlag(bool _flag)
+        external
+        onlyOwner {
+            svgOnly = _flag;
     }
 
     /**
@@ -314,7 +358,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * royalty free weekends, etc, as well as fine tuning the 
      * royalty income model.
      */
-    function updateTokenRoyalties(uint256 _tokenId, uint96 _newRoyalty)
+    function setTokenRoyalties(uint256 _tokenId, uint96 _newRoyalty)
         external
         onlyOwner
         tokenExists(_tokenId) {
@@ -328,7 +372,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * only a display flag to let users know of the token's 
      * status.
      */
-    function updateTokenValidity(uint256 _tokenId, uint8 _vFlag)
+    function setTokenValidity(uint256 _tokenId, uint8 _vFlag)
         external
         onlyOwner
         tokenExists(_tokenId) {

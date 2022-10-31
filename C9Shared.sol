@@ -14,14 +14,17 @@ abstract contract C9Shared {
         uint8 spec; // Special id
         uint8 rtier; // Rarity tier id
         uint16 mintid; // Mint id for the physical edition id
-        uint24 id; // Physical authentication id
-        uint48 mintstamp; // Minting timestamp
-        uint96 royalty; // Royalty amount
+        uint16 royalty; // Royalty amount
+        uint32 id; // Physical authentication id
+        uint56 mintstamp; // Minting timestamp
         string name; // Name to display on SVG
         string qrdata; // QR data to display on SVG
         string bardata; // Bar code data to display on SVG
     }
 
+    /*
+     * @dev Valid country/region flags.
+     */
     bytes3[8] _vFlags = [
         bytes3("CAN"),
         "CHN",
@@ -33,40 +36,23 @@ abstract contract C9Shared {
         "UNQ"
     ];
 
+    /*
+     * @dev Tush tag special markers.
+     */
     bytes4[4] _vMarkers = [
         bytes4("4L  "),
         "EMBS",
         "EMBF",
         "CE  "
     ];
-    
+
+    /*
+     * @dev Token validity flags.
+     */   
     bytes16[4] _vValidity = [
         bytes16("PRE-RELEASE     "),
         "ROYALTIES DUE   ",
         "TRANSFER DUE    ",
         "OTHER           "
     ];
-
-    /**
-     * @dev Necessary getters for array lengths.
-     */
-    /*
-    function flagsLength()
-        public view
-        returns(uint256) {
-            return _vFlags.length;
-    }
-
-    function markersLength()
-        public view
-        returns(uint256) {
-            return _vMarkers.length;
-    }
-
-    function validityLength()
-        public view
-        returns(uint256) {
-            return _vValidity.length;
-    }
-    */
 }
