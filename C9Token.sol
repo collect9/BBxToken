@@ -28,9 +28,10 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * display.
      */
     address payable public Owner;
-    mapping(uint256 => bool) upgraded;
+    mapping(uint256 => bool) tokenUpgraded;
+    mapping(uint256 => bool) tokenUpgradedView;
     uint256 upgradePrice = 1000000000000000000;
-    event TokenUpgraded(
+    event EventUpgraded(
         address indexed buyer,
         uint256 indexed tokenId,
         uint256 indexed price
@@ -112,6 +113,8 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
             require(_isApprovedOrOwner(msg.sender, tokenId), "BURNER not approved");
             _burn(tokenId);
             delete(tokens[tokenId]);
+            delete(tokenUpgraded[tokenId]);
+            delete(tokenUpgradedView[tokenId]);
     }
 
     /**
@@ -288,7 +291,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
         returns (string memory) {
             bytes memory meta = IC9MetaData(_metaContract).metaNameDesc(tokens[_tokenId]);
             bytes memory attributes = IC9MetaData(_metaContract).metaAttributes(tokens[_tokenId]);
-            if (bytes(baseURI).length > 0 && upgraded[_tokenId] && !svgOnly) {
+            if (!svgOnly && tokenUpgraded[_tokenId] && tokenUpgradedView[_tokenId]) {
                 return string(
                     abi.encodePacked(
                         'data:application/json;base64,',
@@ -320,14 +323,21 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
             }
     }
 
+    /**
+     * @dev Allows the token holder to upgrade their token.
+     How to handle is user wants to still display SVG???
+     */
     function upgradeToken(uint256 _tokenId)
-    public payable {
+    public payable
+    tokenExists(_tokenId) {
         require(!svgOnly, "SVG only enabled");
+        require(_isApprovedOrOwner(msg.sender, _tokenId), "UPGRADER not approved");
         require(msg.value == upgradePrice, "Wrong amount of ETH");
         (bool success,) = Owner.call{value: msg.value}("");
         require(success, "Failed to send ETH");
-        upgraded[_tokenId] = true;
-        emit TokenUpgraded(msg.sender, _tokenId, msg.value);
+        tokenUpgraded[_tokenId] = true;
+        tokenUpgradedView[_tokenId] = true;
+        emit EventUpgraded(msg.sender, _tokenId, msg.value);
     }
 
     /**
@@ -432,6 +442,19 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
         onlyOwner
         tokenExists(_tokenId) {
             tokens[_tokenId].validity = _vFlag;
+    }
+
+    /**
+     * @dev Allows holder to set back to SVG view after 
+     * token has already been upgraded. Flag must be set 
+     * back to true for upgraded view to show again.
+     */
+    function setTokenBaseURIView(uint256 _tokenId, bool _flag)
+        external
+        tokenExists(_tokenId) {
+            require(_isApprovedOrOwner(msg.sender, _tokenId), "VIEWER not approved");
+            require(tokenUpgraded[_tokenId], "Token not yet upgraded");
+            tokenUpgradedView[_tokenId] = _flag;
     }
 
     /**
