@@ -47,8 +47,8 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
     /**
      * @dev The meta and SVG contracts.
      */
-    address public _metaContract = 0xdCd6ea996f3feBC00CF79e1cB88495420AF2332A;
-    address public _svgContract = 0xE1A03465DE47cD5D3F4B1fe4aE3b225D3a5f2F1E;
+    address public _metaContract = 0xf85B4726Fb94D4be4570728452F13F1c8A6Cf809;
+    address public _svgContract = 0x9871416Dcc5c3432D1d39EE9597610f5EAD05fd6;
     
     /**
      * @dev The address to send royalties to.
@@ -119,7 +119,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * - `tokenId` must exist.
     */
     function b64Image(uint256 _tokenId)
-        public view
+        internal view
         tokenExists(_tokenId)
         returns (string memory) {
             return Base64.encode(bytes(svgImage(_tokenId)));

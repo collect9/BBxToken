@@ -22,6 +22,7 @@ contract C9SVG is IC9SVG, C9Shared {
     bytes constant flg_uk  = "<path fill='#026' d='M0 0h640v480H0z'/><path fill='#fff' d='m75 0 244 181L562 0h78v62L400 241l240 178v61h-80L320 301 81 480H0v-60l239-178L0 64V0h75z'/><path fill='#c12' d='m424 281 216 159v40L369 281h55zm-184 20 6 35L54 480H0l240-179zM640 0v3L391 191l2-44L590 0h50zM0 0l239 176h-60L0 42V0z'/><path fill='#fff' d='M241 0v480h160V0H241zM0 160v160h640V160H0z'/><path fill='#c12' d='M0 193v96h640v-96H0zM273 0v480h96V0h-96z'/>";
     bytes constant flg_us  = "<path fill='#fff' d='M0 0h640v480H0z'/><g id='c9uss'><path fill='#fff' d='m30.4 11 3.4 10.3h10.6l-8.6 6.3 3.3 10.3-8.7-6.4-8.6 6.3L25 27.6l-8.7-6.3h10.9z'/></g><g id='c9uso'><use href='#c9uss'/><use href='#c9uss' y='51.7'/><use href='#c9uss' y='103.4'/><use href='#c9uss' y='155.1'/><use href='#c9uss' y='206.8'/></g><g id='c9use'><use href='#c9uss' y='25.9'/><use href='#c9uss' y='77.6'/><use href='#c9uss' y='129.5'/><use href='#c9uss' y='181.4'/></g><g id='c9usa'><use href='#c9uso'/><use href='#c9use' x='30.4'/></g><path fill='#b02' d='M0 0h640v37H0zm0 73.9h640v37H0zm0 73.8h640v37H0zm0 73.8h640v37H0zm0 74h640v36.8H0zm0 73.7h640v37H0zM0 443h640V480H0z'/><path fill='#026' d='M0 0h364.8v259H0z'/><use href='#c9usa'/><use href='#c9usa' x='60.8'/><use href='#c9usa' x='121.6'/><use href='#c9usa' x='182.4'/><use href='#c9usa' x='243.2'/><use href='#c9uso' x='304'/>";
     mapping(bytes1 => bytes2) stonum;
+    mapping(bytes1 => bytes5) stonum5;
 
     /**
      * @dev Sets up the mapping for compressed/mapped SVG input data.
@@ -37,6 +38,12 @@ contract C9SVG is IC9SVG, C9Shared {
         stonum[0x47] = 0x3136; // G->16
         stonum[0x48] = 0x3138; // H->18
         stonum[0x49] = 0x3338; // I->38
+        stonum5[0x55] = 0x322e363730; // U->2.670
+        stonum5[0x56] = 0x342e353030; // V->4.500
+        stonum5[0x57] = 0x352e353030; // W->5.500
+        stonum5[0x58] = 0x372e353030; // X->7.500
+        stonum5[0x59] = 0x32332e3333; // Y->23.33
+        stonum5[0x5a] = 0x33322e3530; // Z->32.50
     }
 
     /**
@@ -46,8 +53,8 @@ contract C9SVG is IC9SVG, C9Shared {
     function addAddress(address _address, bytes memory b) internal pure {
         (bytes32 _a1, bytes8 _a2) = Helpers.addressToB32B8(_address);
         assembly {
-            mstore(add(b, 2801), _a1)
-            let dst := add(b, 2833)
+            mstore(add(b, 2815), _a1)
+            let dst := add(b, 2847)
             mstore(dst, or(and(mload(dst), not(shl(192, 0xFFFFFFFFFFFFFFFF))), _a2))
         }
     }
@@ -58,7 +65,7 @@ contract C9SVG is IC9SVG, C9Shared {
      * SVGs may be displayed on the same page without CSS conflict.
      */
     function addIds(bytes6 _id, bytes memory b) internal pure {
-        uint16[11] memory offsets = [195, 221, 247, 289, 364, 795, 2273, 2351, 2545, 2902, 2964];
+        uint16[11] memory offsets = [209, 235, 261, 303, 378, 809, 2287, 2365, 2559, 2916, 2978];
         uint16 idx;
         for(uint8 j; j<11; j++) {
             idx = offsets[j];
@@ -88,13 +95,13 @@ contract C9SVG is IC9SVG, C9Shared {
         assembly {
             let _vcheck := gt(_validityIdx, 0)
             switch _vcheck case 1 {
-                let dst := add(b, 2413)
+                let dst := add(b, 2427)
                 mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _clr))
-                dst := add(b, 2418)
+                dst := add(b, 2432)
                 mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _in))
-                dst := add(b, 2426)
+                dst := add(b, 2440)
                 mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), _marks))
-                dst := add(b, 2429)
+                dst := add(b, 2443)
                 mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _validity))
             }
         }
@@ -116,50 +123,50 @@ contract C9SVG is IC9SVG, C9Shared {
 
         assembly {
             // Name Font Size
-            let dst := add(b, 264)
+            let dst := add(b, 278)
             mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _namesize))
             // Colors
-            dst := add(b, 497)
+            dst := add(b, 511)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _rgc2))
-            dst := add(b, 2618)
+            dst := add(b, 2632)
             mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _classer))
             
             // Edition
             let _edcheck := gt(_edition, 9)
             switch _edcheck case 0 {
-                dst := add(b, 2687)
+                dst := add(b, 2701)
             } default {
-                dst := add(b, 2686)
+                dst := add(b, 2700)
             }
             mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _edition))
 
             // Mintid
-            dst := add(b, 2689)
+            dst := add(b, 2703)
             mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), __mintid))
             // Royalty
-            dst := add(b, 2484)
+            dst := add(b, 2498)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _royalty))
             
             // Timestamps
-            dst := add(b, 2722)
+            dst := add(b, 2736)
             let mask := shl(208, 0xFFFF00000000)
             let srcpart := and(_periods, mask)
             let destpart := and(mload(dst), not(mask))
             mstore(dst, or(destpart, srcpart))
-            dst := add(b, 2725)
+            dst := add(b, 2739)
             mask := shl(208, 0x0000FFFF0000)
             srcpart := and(_periods, mask)
             destpart := and(mload(dst), not(mask))
             mstore(dst, or(destpart, srcpart))
-            dst := add(b, 2728)
+            dst := add(b, 2742)
             mask := shl(208, 0x00000000FFFF)
             srcpart := and(_periods, mask)
             destpart := and(mload(dst), not(mask))
             mstore(dst, or(destpart, srcpart))
             // Gen Country Text
-            dst := add(b, 2910)
+            dst := add(b, 2924)
             mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tagtxt))
-            dst := add(b, 2920)
+            dst := add(b, 2934)
             mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tushtxt))
         }
     }
@@ -216,11 +223,12 @@ contract C9SVG is IC9SVG, C9Shared {
      * @dev Reconstructs mapped compressed representation `_data` into a barcode SVG.
      */
     function barCodeSVG(bytes calldata _data, bytes6 _id) internal view returns(bytes memory output) {
-        output = "<svg class='qr' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 264 100'><g transform='scale(3 100)'><rect x='13'/><rect x='21'/>";
+        output = "<svg version='1.1' class='qr' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 264 100'><g transform='scale(3 100)'><rect x='13'/><rect x='21'/>";
         bytes memory entry = "     ";
         bytes memory tmp;
         bytes1 e0;
         bytes2 m0;
+        bytes5 m5;
         uint8 j = 0;
         bool delims = false;
         uint l = 0;
@@ -230,38 +238,46 @@ contract C9SVG is IC9SVG, C9Shared {
                 j += 1;
                 continue;
             }
-
-            if (_data[i-l] != 0x3a && delims) {
+            if (delims && _data[i-l] != 0x3a) {
                 entry[j] = _data[i-l];
                 j += 1;
-            }
-            else {
-                j = 0;
-                e0 = entry[0];
-                if (e0 == 0x67) {
-                    delims = true;
-                    tmp = "</g><g transform='scale(X 100)'>";
-                    e0 = entry[1];
-                    assembly {
-                        let dst := add(tmp, 56)
-                        mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), e0))
-                    }
-                    output = bytes.concat(output, tmp);
-                    if (e0 == 0x36) {
-                        output = bytes.concat(output, "<rect x='5'/>");
-                    }
-                    if (e0 == 0x39) {
-                        output = bytes.concat(output, "<rect x='5.33'/>");
-                    }
-                } else {
-                    m0 = stonum[e0];
-                    output = m0 != 0x0000 ? bytes.concat(output, "<rect x='", m0, "'/>") : bytes.concat(output, "<rect x='", Helpers.concatTilSpace(entry, 0), "'/>");
-                    if (!delims) {
-                        l += 1;
-                    }
+                if (i<_data.length+l-1) {
+                    continue;
                 }
-                entry = "     ";
             }
+
+            j = 0;
+            e0 = entry[0];
+            if (e0 == 0x67) {
+                delims = true;
+                tmp = "</g><g transform='scale(X 100)'>";
+                e0 = entry[1];
+                assembly {
+                    let dst := add(tmp, 56)
+                    mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), e0))
+                }
+                output = bytes.concat(output, tmp);
+                if (e0 == 0x36) {
+                    output = bytes.concat(output, "<rect x='5'/>");
+                }
+                if (e0 == 0x39) {
+                    output = bytes.concat(output, "<rect x='5.33'/>");
+                }
+            } 
+            else {
+                m0 = stonum[e0];
+                if (m0 != 0x0000) {
+                    output = bytes.concat(output, "<rect x='", m0, "'/>");
+                }
+                else {
+                    m5 = stonum5[e0];
+                    output = m5 != 0x0000000000 ? bytes.concat(output, "<rect x='", m5, "'/>") : bytes.concat(output, "<rect x='", Helpers.concatTilSpace(entry, 0), "'/>");
+                }
+                if (!delims) {
+                    l += 1;
+                }
+            }
+            entry = "     ";
         }
         // Remainder of the barcode svg
         tmp = "</g><text x='132' y='126' text-anchor='middle' font-family='Helvetica' font-size='28' fill='#111'>* XXXXXX  *</text></svg>";
@@ -292,18 +308,18 @@ contract C9SVG is IC9SVG, C9Shared {
             "0 0 0 0 0 1 0 0 0 0 0 1 1 1 0 0 "];
         if (_rtier == 8) {
             assembly {
-                let dst := add(b, 560)
+                let dst := add(b, 574)
                 mstore(dst, _filter_mod)
-                dst := add(b, 606)
+                dst := add(b, 620)
                 mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), _octaves_mod))
-                dst := add(b, 717)
+                dst := add(b, 731)
                 mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _feMatrix_mod))
             }
             uint256 psrand = block.timestamp % 4;
             if (psrand < 4) {
                 bytes32 _colormod = mods[psrand];
                 assembly {
-                    let dst := add(b, 683)
+                    let dst := add(b, 697)
                     mstore(dst, _colormod)
                 }
             }
@@ -470,90 +486,108 @@ contract C9SVG is IC9SVG, C9Shared {
             if(!delims) {
                 entry[j] = _data[i+l];
             }
-            
-            if (_data[i+l] != 0x3a && delims) {
+            if (delims && _data[i+l] != 0x3a) {
                 entry[j] = _data[i+l];
                 j += 1;
-            }
-            else {
-                j = 0;
-                e0 = entry[0];
-                m0 = stonum[e0];
-                if (xflg) {
-                    output = m0 != 0x0000 ? bytes.concat(output, "x='", m0, "'") : bytes.concat(output, "x='", Helpers.concatTilSpace(entry, 0), "'");
-                    xflg = false;
-                    yflg = true;
+                if (i<_data.length-3) {
+                    continue;
                 }
-                else if (yflg) {
-                    tmp = "' fill='#XXX'/>";
-                    color = colors[i % 3];
-                    assembly {
-                        let dst := add(tmp, 41)
-                        mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), color))
-                    }
-                    output = m0 != 0x0000 ? bytes.concat(output, " y='", m0, tmp) : bytes.concat(output, " y='", Helpers.concatTilSpace(entry, 0), tmp);
-                    yflg = false;
+            }
+
+            j = 0;
+            e0 = entry[0];
+            m0 = stonum[e0];
+            bytes5 m5 = stonum5[e0];
+            if (xflg) {
+                if (m0 != 0x0000) {
+                    output = bytes.concat(output, "x='", m0, "'");
                 }
                 else {
-                    if (e0 == 0x65) {
-                        output = bytes.concat(output, "</g>");
-                        entry = "      ";
-                        continue;
+                    output = m5 != 0x0000000000 ? bytes.concat(output, "x='", m5, "'") : bytes.concat(output, "x='", Helpers.concatTilSpace(entry, 0), "'");
+                }
+                xflg = false;
+                yflg = true;
+            }
+            else if (yflg) {
+                tmp = "' fill='#XXX'/>";
+                color = colors[i % 3];
+                assembly {
+                    let dst := add(tmp, 41)
+                    mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), color))
+                }
+                if (m0 != 0x0000) {
+                    output = bytes.concat(output, " y='", m0, tmp);
+                }
+                else {
+                    output = m5 != 0x0000000000 ? bytes.concat(output, " y='", m5, tmp) : bytes.concat(output, " y='", Helpers.concatTilSpace(entry, 0), tmp);
+                } 
+                yflg = false;
+            }
+            else {
+                if (e0 == 0x65) {
+                    output = bytes.concat(output, "</g>");
+                    entry = "      ";
+                    continue;
+                }
+                else if (e0 == 0x67) {
+                    delims = true;
+                    l = 2;
+                    tmp = "<g transform='scale(X 1)'>";
+                    e0 = _data[i+1];
+                    assembly {
+                        let dst := add(tmp, 52)
+                        mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), e0))
                     }
-                    else if (e0 == 0x67) {
-                        delims = true;
-                        l = 2;
-                        tmp = "<g transform='scale(X 1)'>";
-                        e0 = _data[i+1];
-                        assembly {
-                            let dst := add(tmp, 52)
-                            mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), e0))
-                        }
-                        output = bytes.concat(output, tmp);
-                        entry = "      ";
-                        continue;
+                    output = bytes.concat(output, tmp);
+                    entry = "      ";
+                    continue;
+                }
+                else if (e0 == 0x77) {
+                    tmp = "<rect style='width: px;' ";
+                    e0 = entry[1];
+                    assembly {
+                        let dst := add(tmp, 51)
+                        mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), e0))
                     }
-                    else if (e0 == 0x77) {
-                        tmp = "<rect style='width: px;' ";
-                        e0 = entry[1];
-                        assembly {
-                            let dst := add(tmp, 51)
-                            mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), e0))
-                        }
-                        output = bytes.concat(output, tmp);
+                    output = bytes.concat(output, tmp);
+                    xflg = true;
+                    entry = "      ";
+                    continue;
+                }
+                else if (e0 == 0x64) {
+                    output = bytes.concat(output, "<use href='#d' ");
+                    if(!delims) {
                         xflg = true;
                         entry = "      ";
                         continue;
                     }
-                    else if (e0 == 0x64) {
-                        output = bytes.concat(output, "<use href='#d' ");
-                        if(!delims) {
-                            xflg = true;
-                            entry = "      ";
-                            continue;
-                        }
-                    }
-                    else if (e0 == 0x6a) {
-                        output = bytes.concat(output, "<use href='#j' ");
-                        if(!delims) {
-                            xflg = true;
-                            entry = "      ";
-                            continue;
-                        }
-                    }
-                    else {
-                        output = bytes.concat(output, '<rect ');
-                        k = 0;
-                    }
-
-                    e0 = entry[k];
-                    m0 = stonum[e0];
-                    output = m0 != 0x0000 ? bytes.concat(output, "x='", m0, "'") : bytes.concat(output, "x='", Helpers.concatTilSpace(entry, k), "'");
-                    k = 1;
-                    yflg = true;
                 }
-                entry = "      ";
+                else if (e0 == 0x6a) {
+                    output = bytes.concat(output, "<use href='#j' ");
+                    if(!delims) {
+                        xflg = true;
+                        entry = "      ";
+                        continue;
+                    }
+                }
+                else {
+                    output = bytes.concat(output, '<rect ');
+                    k = 0;
+                }
+
+                e0 = entry[k];
+                m0 = stonum[e0];
+                if (m0 != 0x0000) {
+                    output = bytes.concat(output, "x='", m0, "'");
+                }
+                else {
+                    m5 = stonum5[e0];
+                    output = m5 != 0x0000000000 ? bytes.concat(output, "x='", m5, "'") : bytes.concat(output, "x='", Helpers.concatTilSpace(entry, k), "'");
+                }          
+                k = 1;
+                yflg = true;
             }
+            entry = "      ";
         }
     }
 
@@ -562,7 +596,7 @@ contract C9SVG is IC9SVG, C9Shared {
      */
     function qrCodeSVGFull(bytes calldata _qrdata) internal view returns (bytes memory) {
         return bytes.concat(
-            "<svg class='qr' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 17'><style type='text/css'>.qr{opacity:0.89;} .qr rect{width:1px;height:1px;}</style><symbol id='d'><rect/><rect x='2'/></symbol><symbol id='j'><rect/><rect x='3'/></symbol><rect transform='scale(3)' x='0.67' y='0.67' fill='#111'/><rect x='0.5' y='0.5' style='width:6px;height:6px;fill:none;stroke:#111;'/>",
+            "<svg version='1.1' class='qr' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 17'><style type='text/css'>.qr{opacity:0.89;} .qr rect{width:1px;height:1px;}</style><symbol id='d'><rect/><rect x='2'/></symbol><symbol id='j'><rect/><rect x='3'/></symbol><rect transform='scale(3)' x='0.67' y='0.67' fill='#111'/><rect x='0.5' y='0.5' style='width:6px;height:6px;fill:none;stroke:#111;'/>",
             qrCodeSVG("d80dC0G0G1dB3F4dD5F6B7d08d58C8F90AFA0CGC0EBF0Gg2:5.5:4:4.5:6:7.5:7:4.5:8:7.5:8:6.5:B:5.5:C:5.5:G:e:"),
             qrCodeSVG(_qrdata),
             "</svg>"
@@ -574,7 +608,7 @@ contract C9SVG is IC9SVG, C9Shared {
      * and owner `_address`.
      */
     function returnSVG(address _address, TokenInfo calldata _token) external view override returns (string memory) {
-        bytes memory b = "<svg class='c9svg' xmlns='http://www.w3.org/2000/svg' width='100%' height='100%' viewBox='0 0 630 880'><style type='text/css'>.c9svg{font-family:'Courier New';} .sXXXXXX{font-size:22px;} .mXXXXXX{font-size:32px;} .tXXXXXX{font-size:54px;font-weight:700;} .nXXXXXX{font-size:34px;font-weight:700;}</style><defs><radialGradient id='rgXXXXXX' cx='50%' cy='44%' r='50%' gradientUnits='userSpaceOnUse'><stop offset='25%' stop-color='#fff'/><stop offset='1' stop-color='#e66'/></radialGradient><filter id='noiser'><feTurbulence type='fractalNoise' baseFrequency='0.2' numOctaves='8'/><feComposite in2='SourceGraphic' operator='in'/><feColorMatrix values='1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0.2 0'/></filter></defs><rect rx='20' width='100%' height='100%' fill='url(#rgXXXXXX)'/><rect width='100%' height='100%' rx='20' filter='url(#noiser)'/><rect y='560' width='100%' height='22' fill='#ddf' fill-opacity='0.6'/><g style='fill:#ded;'><rect x='20' y='20' width='590' height='150' rx='10'/><rect x='20' y='740' width='590' height='120' rx='10'/></g><g transform='translate(470 6) scale(0.2)' fill-opacity='0.89'><a href='https://collect9.io' target='_blank'><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 276'><defs><radialGradient id='c9r1' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'><stop offset='25%' stop-color='#2fd'/><stop offset='1' stop-color='#0a6'/></radialGradient><radialGradient id='c9r2' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'><stop offset='25%' stop-color='#26f'/><stop offset='1' stop-color='#03a'/></radialGradient><radialGradient id='c9r3' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'><stop offset='25%' stop-color='#2ff'/><stop offset='1' stop-color='#0a9'/></radialGradient></defs><symbol id='c9p'><path d='M122.4,2,26,57.5a11,11,0,0,0,0,19.4h0a11,11,0,0,0,11,0l84-48.5V67L74.3,94.3a6,6,0,0,0,0,10L125,134a6,6,0,0,0,6,0l98.7-57a11,11,0,0,0,0-19.4L133.6,2A11,11,0,0,0,122.4,2Zm12,65V28.5l76,44-33.5,19.3Z'/></symbol><use href='#c9p' fill='url(#c9r2)'/><use href='#c9p' transform='translate(0 9.3) rotate(240 125 138)' fill='url(#c9r3)'/><use href='#c9p' transform='translate(9 4) rotate(120 125 138)' fill='url(#c9r1)'/></svg></a></g><g transform='translate(30 58)' class='mXXXXXX'><text>COLLECT9</text><text y='34'>RWA REDEEMABLE NFT</text><g class='sXXXXXX'><text y='74'>STATUS: <tspan font-weight='bold' fill='#080'>  VALID                    </tspan></text><text y='100'>EIP-2981: 3.50%</text></g></g><g transform='translate(30 768)' class='sXXXXXX'><text>CLASS: VINTAGE BEANIE BABY</text><text y='26'>RARITY TIER:                                 </text><text y='52'>ED NUM.MINT ID:   .    </text><text y='78'>NFT AGE:   YR   MO   D</text></g><text x='50%' y='576' fill='#999' text-anchor='middle'>a2a3c5f0f4ce432893d0beafc2f5b32607e68bb0</text><g text-anchor='middle'><text x='50%' y='645' class='nXXXXXX'>        |        </text><text x='50%' y='698' class='tXXXXXX'>";
+        bytes memory b = "<svg version='1.1' class='c9svg' xmlns='http://www.w3.org/2000/svg' width='100%' height='100%' viewBox='0 0 630 880'><style type='text/css'>.c9svg{font-family:'Courier New';} .sXXXXXX{font-size:22px;} .mXXXXXX{font-size:32px;} .tXXXXXX{font-size:54px;font-weight:700;} .nXXXXXX{font-size:34px;font-weight:700;}</style><defs><radialGradient id='rgXXXXXX' cx='50%' cy='44%' r='50%' gradientUnits='userSpaceOnUse'><stop offset='25%' stop-color='#fff'/><stop offset='1' stop-color='#e66'/></radialGradient><filter id='noiser'><feTurbulence type='fractalNoise' baseFrequency='0.2' numOctaves='8'/><feComposite in2='SourceGraphic' operator='in'/><feColorMatrix values='1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0.2 0'/></filter></defs><rect rx='20' width='100%' height='100%' fill='url(#rgXXXXXX)'/><rect width='100%' height='100%' rx='20' filter='url(#noiser)'/><rect y='560' width='100%' height='22' fill='#ddf' fill-opacity='0.6'/><g style='fill:#ded;'><rect x='20' y='20' width='590' height='150' rx='10'/><rect x='20' y='740' width='590' height='120' rx='10'/></g><g transform='translate(470 6) scale(0.2)' fill-opacity='0.89'><a href='https://collect9.io' target='_blank'><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 276'><defs><radialGradient id='c9r1' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'><stop offset='25%' stop-color='#2fd'/><stop offset='1' stop-color='#0a6'/></radialGradient><radialGradient id='c9r2' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'><stop offset='25%' stop-color='#26f'/><stop offset='1' stop-color='#03a'/></radialGradient><radialGradient id='c9r3' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'><stop offset='25%' stop-color='#2ff'/><stop offset='1' stop-color='#0a9'/></radialGradient></defs><symbol id='c9p'><path d='M122.4,2,26,57.5a11,11,0,0,0,0,19.4h0a11,11,0,0,0,11,0l84-48.5V67L74.3,94.3a6,6,0,0,0,0,10L125,134a6,6,0,0,0,6,0l98.7-57a11,11,0,0,0,0-19.4L133.6,2A11,11,0,0,0,122.4,2Zm12,65V28.5l76,44-33.5,19.3Z'/></symbol><use href='#c9p' fill='url(#c9r2)'/><use href='#c9p' transform='translate(0 9.3) rotate(240 125 138)' fill='url(#c9r3)'/><use href='#c9p' transform='translate(9 4) rotate(120 125 138)' fill='url(#c9r1)'/></svg></a></g><g transform='translate(30 58)' class='mXXXXXX'><text>COLLECT9</text><text y='34'>RWA REDEEMABLE NFT</text><g class='sXXXXXX'><text y='74'>STATUS: <tspan font-weight='bold' fill='#080'>  VALID                    </tspan></text><text y='100'>EIP-2981: 3.50%</text></g></g><g transform='translate(30 768)' class='sXXXXXX'><text>CLASS: VINTAGE BEANIE BABY</text><text y='26'>RARITY TIER:                                 </text><text y='52'>ED NUM.MINT ID:   .    </text><text y='78'>NFT AGE:   YR   MO   D</text></g><text x='50%' y='576' fill='#999' text-anchor='middle'>a2a3c5f0f4ce432893d0beafc2f5b32607e68bb0</text><g text-anchor='middle'><text x='50%' y='645' class='nXXXXXX'>        |        </text><text x='50%' y='698' class='tXXXXXX'>";
         bytes6 _id = Helpers.tokenIdToBytes(_token.id);
         addIds(_id, b);
         addTokenInfo(_token, b);

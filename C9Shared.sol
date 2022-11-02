@@ -3,6 +3,9 @@ pragma solidity >=0.8.0 <0.9.0;
 
 
 abstract contract C9Shared {
+    //425K mint cost with string, string, string
+    //
+
     struct TokenInfo {
         uint8 validity; // Validity flag to show whether not token is redeemable
         uint8 edition; // Physical edition
