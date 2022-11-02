@@ -20,6 +20,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      */
     bool public svgOnly = true;
     string baseURI;
+    string _contractURI;
 
     /**
      * @dev Structure that holds all of the token info required to 
@@ -61,6 +62,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      */
     constructor() ERC721("Collect9 BBR NFTs", "C9xBB") {
         _setDefaultRoyalty(_royaltiesTo, 350);
+        _contractURI = "https://collect9.io/metadata/Collect9RWARBBToken.json";
     }
 
     modifier tokenExists(uint256 _tokenId) {
@@ -130,9 +132,9 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * OpenSea: https://docs.opensea.io/docs/contract-level-metadata
      */
     function contractURI()
-        public pure
+        public view
         returns (string memory) {
-            return "https://collect9.io/metadata/Collect9RWARBBToken.json";
+            return _contractURI;
     }
 
     /**
@@ -296,6 +298,15 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
         return baseURI;
     }
 
+     /**
+     * @dev Updates the contractURI.
+     */
+    function setContractUri(string calldata _newContractURI)
+        external
+        onlyOwner {
+        _contractURI = _newContractURI;
+    }
+
     /**
      * @dev Updates the baseURI.
      * By default this contract will load SVGs from another contract, 
@@ -343,7 +354,9 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
     }
 
     /**
-     * @dev Set SVG flag.
+     * @dev Set SVG flag to either display on-chain SVG (true) or IPFS 
+     * version (false). If set to true, it is still possible 
+     * to retrieve the SVG image by calling svgImage(_tokenId).
      */
     function setSVGFlag(bool _flag)
         external
