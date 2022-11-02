@@ -23,6 +23,20 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
     string _contractURI;
 
     /**
+     * @dev These have to do with a potential token upgrade path.
+     * Upgraded involves setting token to point to baseURI and 
+     * display.
+     */
+    address payable public Owner;
+    mapping(uint256 => bool) upgraded;
+    uint256 upgradePrice = 1000000000000000000;
+    event TokenUpgraded(
+        address indexed buyer,
+        uint256 indexed tokenId,
+        uint256 indexed price
+    );
+
+    /**
      * @dev Structure that holds all of the token info required to 
      * construct the SVG.
      */
@@ -48,8 +62,8 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
     /**
      * @dev The meta and SVG contracts.
      */
-    address public _metaContract = 0xf85B4726Fb94D4be4570728452F13F1c8A6Cf809;
-    address public _svgContract = 0x9871416Dcc5c3432D1d39EE9597610f5EAD05fd6;
+    address public _metaContract = 0x28da84300236506C31B571a7c4D6a417Fb753Aba;
+    address public _svgContract = 0x98961D66D2272e990cf748A427E31bA1A99C74Db;
     
     /**
      * @dev The address to send royalties to.
@@ -63,10 +77,11 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
     constructor() ERC721("Collect9 BBR NFTs", "C9xBB") {
         _setDefaultRoyalty(_royaltiesTo, 350);
         _contractURI = "https://collect9.io/metadata/Collect9RWARBBToken.json";
+        Owner = payable(msg.sender);
     }
 
     modifier tokenExists(uint256 _tokenId) {
-        require(_exists(_tokenId), "QRY NULL TOKEN");
+        require(_exists(_tokenId), "QRY null token");
         _;
     }
 
@@ -94,7 +109,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
     function burn(uint256 tokenId)
         public
         override(ERC721Burnable) {
-            require(_isApprovedOrOwner(msg.sender, tokenId), "BURNER NOT APPROVED");
+            require(_isApprovedOrOwner(msg.sender, tokenId), "BURNER not approved");
             _burn(tokenId);
             delete(tokens[tokenId]);
     }
@@ -175,8 +190,8 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
     function mint1(C9Shared.TokenInfo calldata _input)
         public
         onlyOwner {
-            require(_input.tag < 8 && _input.tush < 8, "ERR TAG TUSH");
-            require(_input.royalty < 1000, "ERR ROYALTY");
+            require(_input.tag < 8 && _input.tush < 8, "ERR tag tush");
+            require(_input.royalty < 1000, "ERR royalty");
             uint256 _uid = uint256(_input.id); 
 
             uint8 _edition = _input.edition;
@@ -259,7 +274,9 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
 
     /**
      * @dev Required override that returns fully onchain constructed 
-     * json output that includes the SVG image.
+     * json output that includes the SVG image. If a baseURI is set and 
+     * the token has been upgraded and the svgOnly flag is false, call 
+     * the baseURI.
      *
      * Requirements:
      *
@@ -269,23 +286,48 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
         public view override
         tokenExists(_tokenId)
         returns (string memory) {
-            if (svgOnly) {
+            bytes memory meta = IC9MetaData(_metaContract).metaNameDesc(tokens[_tokenId]);
+            bytes memory attributes = IC9MetaData(_metaContract).metaAttributes(tokens[_tokenId]);
+            if (bytes(baseURI).length > 0 && upgraded[_tokenId] && !svgOnly) {
                 return string(
                     abi.encodePacked(
                         'data:application/json;base64,',
                         Base64.encode(
                             abi.encodePacked(
-                                IC9MetaData(_metaContract).metaNameDesc(tokens[_tokenId]),
-                                b64Image(_tokenId),
-                                IC9MetaData(_metaContract).metaAttributes(tokens[_tokenId])
+                                meta,
+                                ',"image":',
+                                baseURI, Strings.toString(_tokenId), '.png',
+                                attributes
                             )
                         )
                     )
                 );
             }
             else {
-                return bytes(baseURI).length > 0 ? string(abi.encodePacked(baseURI, Strings.toString(_tokenId))) : ""; //consider updating so metadata remains fixed
+                return string(
+                    abi.encodePacked(
+                        'data:application/json;base64,',
+                        Base64.encode(
+                            abi.encodePacked(
+                                meta,
+                                ',"image":"data:image/svg+xml;base64,',
+                                b64Image(_tokenId),
+                                attributes
+                            )
+                        )
+                    )
+                );
             }
+    }
+
+    function upgradeToken(uint256 _tokenId)
+    public payable {
+        require(!svgOnly, "SVG only enabled");
+        require(msg.value == upgradePrice, "Wrong amount of ETH");
+        (bool success,) = Owner.call{value: msg.value}("");
+        require(success, "Failed to send ETH");
+        upgraded[_tokenId] = true;
+        emit TokenUpgraded(msg.sender, _tokenId, msg.value);
     }
 
     /**
@@ -375,7 +417,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
         external
         onlyOwner
         tokenExists(_tokenId) {
-            require(_newRoyalty < 1000, "ROYALTY TOO HIGH"); // Limit max royalty to 10%
+            require(_newRoyalty < 1000, "Royalty too high"); // Limit max royalty to 10%
             _setTokenRoyalty(_tokenId, _royaltiesTo, _newRoyalty);
     }
 
@@ -390,5 +432,15 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
         onlyOwner
         tokenExists(_tokenId) {
             tokens[_tokenId].validity = _vFlag;
+    }
+
+    /**
+     * @dev Allows upgradePrice to be modified. Default is 
+     * 0.1ETH which may become too expensive in the future.
+     */
+    function setTokenUpgradePrice(uint256 _price)
+        external
+        onlyOwner {
+            upgradePrice = _price;
     }
 }

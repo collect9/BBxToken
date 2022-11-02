@@ -26,7 +26,7 @@ contract C9MetaData is C9Shared {
         bytes memory _name = bytes(token.name);
         bytes memory _datap1 = '{"external_url":"https://collect9.io/nft/      ","name":"Collect9 NFT #       -         ';
         bytes memory _datap2 = ' ","description":"NFT certified ownership and possession rights for the following physical collectible: (1x qty) [                  ';
-        bytes memory _datap3 = '] Beanie Baby(TM) professionally authenticated museum quality (MQ), uniquely identifiable by the authentication certificate id containing the series of numbers: XXXXXX. Redemption conditions apply. Visit the [Collect9 website](https://collect9.io) for details. Please refresh metadata to ensure status is VALID prior to offer or purchase.","image":"data:image/svg+xml;base64,';
+        bytes memory _datap3 = '] Beanie Baby(TM) professionally authenticated museum quality (MQ), uniquely identifiable by the authentication certificate id containing the series of numbers: XXXXXX. Redemption conditions apply. Visit the [Collect9 website](https://collect9.io) for details. Please refresh metadata to ensure status is VALID prior to offer or purchase."';
         assembly {
             let dst := add(_datap1, 73)
             mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _id))
