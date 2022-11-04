@@ -30,7 +30,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
     address payable Owner;
     mapping(uint256 => bool) tokenUpgraded;
     mapping(uint256 => bool) tokenUpgradedView;
-    uint256 upgradePrice = 1000000000000000000;
+    uint256 upgradePrice = 100000000000000000;
     event EventUpgrade(
         address indexed buyer,
         uint256 indexed tokenId,
@@ -307,7 +307,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
                         Base64.encode(
                             abi.encodePacked(
                                 meta,
-                                ',"image":',
+                                ',"image":"',
                                 baseURI, Strings.toString(_tokenId), '.png',
                                 attributes
                             )
@@ -341,6 +341,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
         tokenExists(_tokenId) {
             require(!svgOnly, "SVG only enabled");
             require(_isApprovedOrOwner(msg.sender, _tokenId), "UPGRADER unauthorized");
+            require(!tokenUpgraded[_tokenId], "Token already upgraded");
             require(msg.value == upgradePrice, "Wrong amount of ETH");
             (bool success,) = Owner.call{value: msg.value}("");
             require(success, "Failed to send ETH");
