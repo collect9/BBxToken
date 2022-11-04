@@ -18,20 +18,20 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * @dev Flag that may enable IPFS artwork versions to be 
      displayed in the future.
      */
+    string _contractURI = "https://collect9.io/metadata/Collect9RWARBBToken.json";
+    string public baseURI;
     bool public svgOnly = true;
-    string baseURI;
-    string _contractURI;
-
+    
     /**
      * @dev These have to do with a potential token upgrade path.
      * Upgraded involves setting token to point to baseURI and 
      * display.
      */
-    address payable public Owner;
+    address payable Owner;
     mapping(uint256 => bool) tokenUpgraded;
     mapping(uint256 => bool) tokenUpgradedView;
     uint256 upgradePrice = 1000000000000000000;
-    event EventUpgraded(
+    event EventUpgrade(
         address indexed buyer,
         uint256 indexed tokenId,
         uint256 indexed price
@@ -42,6 +42,10 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * construct the SVG.
      */
     mapping(uint256 => C9Shared.TokenInfo) tokens;
+    event EventMint(
+        address indexed to,
+        uint256 indexed tokenId
+    );
 
     /**
      * @dev Mapping that checks whether or not some combination of 
@@ -58,27 +62,30 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * for packed storage purposes as it takes up the same space as 7x 
      * uint256.
      */
-    uint16[96] private _mintId;
+    uint16[96] _mintId;
 
     /**
      * @dev The meta and SVG contracts.
      */
-    address public _metaContract = 0x28da84300236506C31B571a7c4D6a417Fb753Aba;
-    address public _svgContract = 0x98961D66D2272e990cf748A427E31bA1A99C74Db;
+    address public _metaContract = 0x67B452Bbc156392db54c83C5181a70AD0Ca62DF0;
+    address public _svgContract = 0xf409b25d9B57aBaD6A9cB446fdaA86f230Ce6a5D;
     
     /**
-     * @dev The address to send royalties to.
+     * @dev The address to send royalties to. This is defined so that it 
+     * may be changed or updated later on to a non-owner address if
+     * desired.
      */
-    address public _royaltiesTo = 0xA10cd593d65Ee05e9A140D69c83dfABB925Ec1A3;
+    address _royaltiesTo;
 
     /**
      * @dev The constructor sets the default royalty of the token 
-     * to 3.5%.
+     * to 3.5%. Owner needs to be set because owner from ownable is not
+     * payable.
      */
     constructor() ERC721("Collect9 BBR NFTs", "C9xBB") {
-        _setDefaultRoyalty(_royaltiesTo, 350);
-        _contractURI = "https://collect9.io/metadata/Collect9RWARBBToken.json";
         Owner = payable(msg.sender);
+        _royaltiesTo = Owner;
+        _setDefaultRoyalty(_royaltiesTo, 500);
     }
 
     modifier tokenExists(uint256 _tokenId) {
@@ -115,6 +122,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
             delete(tokens[tokenId]);
             delete(tokenUpgraded[tokenId]);
             delete(tokenUpgradedView[tokenId]);
+            _resetTokenRoyalty(tokenId);
     }
 
     /**
@@ -138,15 +146,15 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      *
      * - `tokenId` must exist.
     */
-    function b64Image(uint256 _tokenId)
-        internal view
+    function b64SVGImage(uint256 _tokenId)
+        public view
         tokenExists(_tokenId)
         returns (string memory) {
             return Base64.encode(bytes(svgImage(_tokenId)));
     }
 
     /**
-     * @dev Contract-level meta data.
+     * @dev Contract-level meta data for OpenSea.
      * OpenSea: https://docs.opensea.io/docs/contract-level-metadata
      */
     function contractURI()
@@ -161,21 +169,20 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * Note that if the token is burned, the edition cannot be replaced but 
      * instead will keep incrementing.
      */
-    function getPhysicalHash(
-        C9Shared.TokenInfo calldata _input,
-        uint8 _edition
-    ) internal pure returns (bytes32) {
-        return keccak256(
-            abi.encodePacked(
-                _edition,
-                _input.tag,
-                _input.tush,
-                _input.gentag,
-                _input.gentush,
-                _input.markertush,
-                _input.name
-            )
-        );
+    function getPhysicalHash(C9Shared.TokenInfo calldata _input, uint8 _edition)
+        internal pure
+        returns (bytes32) {
+            return keccak256(
+                abi.encodePacked(
+                    _edition,
+                    _input.tag,
+                    _input.tush,
+                    _input.gentag,
+                    _input.gentush,
+                    _input.markertush,
+                    _input.name
+                )
+            );
     }
 
     /**
@@ -188,12 +195,12 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * Requirements:
      *
      * - `_input` tag and tush country id mappings are valid.
-     * - `_input` royalty is between 1-9.99%.
+     * - `_input` royalty is <9.99%.
     */
     function mint1(C9Shared.TokenInfo calldata _input)
         public
         onlyOwner {
-            require(_input.tag < 8 && _input.tush < 8, "ERR tag tush");
+            //require(_input.tag < 8 && _input.tush < 8, "ERR tag tush");
             require(_input.royalty < 1000, "ERR royalty");
             uint256 _uid = uint256(_input.id); 
 
@@ -211,7 +218,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
 
             uint16 __mintId = _input.mintid == 0 ? _mintId[_edition] + 1 : _input.mintid;
             tokens[_uid] = C9Shared.TokenInfo(
-                _input.validity, // may not be needed, stored in mapping that will default to false -> automatically becomes valid after block.timestamp + 1 year
+                _input.validity,
                 _edition,
                 _input.tag,
                 _input.tush,
@@ -221,7 +228,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
                 _input.spec,
                 _input.rtier,
                 __mintId,
-                _input.royalty, // not needed, already stored in setTokenRoyalty -> svg contract can call token contract
+                _input.royalty,
                 _input.id,
                 uint56(block.timestamp),
                 _input.name,
@@ -236,6 +243,8 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
             if (_input.mintid == 0) {
                 _mintId[_edition] = __mintId;
             }
+
+            emit EventMint(msg.sender, _uid);
     }
 
     /**
@@ -314,7 +323,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
                             abi.encodePacked(
                                 meta,
                                 ',"image":"data:image/svg+xml;base64,',
-                                b64Image(_tokenId),
+                                b64SVGImage(_tokenId),
                                 attributes
                             )
                         )
@@ -328,16 +337,16 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      How to handle is user wants to still display SVG???
      */
     function upgradeToken(uint256 _tokenId)
-    public payable
-    tokenExists(_tokenId) {
-        require(!svgOnly, "SVG only enabled");
-        require(_isApprovedOrOwner(msg.sender, _tokenId), "UPGRADER not approved");
-        require(msg.value == upgradePrice, "Wrong amount of ETH");
-        (bool success,) = Owner.call{value: msg.value}("");
-        require(success, "Failed to send ETH");
-        tokenUpgraded[_tokenId] = true;
-        tokenUpgradedView[_tokenId] = true;
-        emit EventUpgraded(msg.sender, _tokenId, msg.value);
+        public payable
+        tokenExists(_tokenId) {
+            require(!svgOnly, "SVG only enabled");
+            require(_isApprovedOrOwner(msg.sender, _tokenId), "UPGRADER unauthorized");
+            require(msg.value == upgradePrice, "Wrong amount of ETH");
+            (bool success,) = Owner.call{value: msg.value}("");
+            require(success, "Failed to send ETH");
+            tokenUpgraded[_tokenId] = true;
+            tokenUpgradedView[_tokenId] = true;
+            emit EventUpgrade(msg.sender, _tokenId, msg.value);
     }
 
     /**
@@ -345,9 +354,9 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * token will be the concatenation of the `baseURI` and the `tokenId`.
      */
     function _baseURI()
-    internal view override
-    returns (string memory) {
-        return baseURI;
+        internal view override
+        returns (string memory) {
+            return baseURI;
     }
 
      /**
@@ -356,7 +365,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
     function setContractUri(string calldata _newContractURI)
         external
         onlyOwner {
-        _contractURI = _newContractURI;
+            _contractURI = _newContractURI;
     }
 
     /**
@@ -368,7 +377,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
     function setBaseUri(string calldata _newBaseURI)
         external
         onlyOwner {
-        baseURI = _newBaseURI;
+            baseURI = _newBaseURI;
     }
 
     /**
@@ -423,7 +432,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * royalty free weekends, etc, as well as fine tuning the 
      * royalty income model.
      */
-    function setTokenRoyalties(uint256 _tokenId, uint96 _newRoyalty)
+    function setTokenRoyalty(uint256 _tokenId, uint96 _newRoyalty)
         external
         onlyOwner
         tokenExists(_tokenId) {

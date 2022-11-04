@@ -21,23 +21,23 @@ contract C9SVG is IC9SVG, C9Shared {
     bytes constant flg_kor = "<defs><clipPath id='c9kor1'><path fill-opacity='.7' d='M-95.8-.4h682.7v512H-95.8z'/></clipPath></defs><g fill-rule='evenodd' clip-path='url(#c9kor1)' transform='translate(89.8 .4) scale(.94)'><path fill='#fff' d='M-95.8-.4H587v512H-95.8Z'/><g transform='rotate(-56.3 361.6 -101.3) scale(10.67)'><g id='c9kor2'><path id='c9kor3' d='M-6-26H6v2H-6Zm0 3H6v2H-6Zm0 3H6v2H-6Z'/><use href='#c9kor3' y='44'/></g><path stroke='#fff' d='M0 17v10'/><path fill='#c33' d='M0-12a12 12 0 0 1 0 24Z'/><path fill='#04a' d='M0-12a12 12 0 0 0 0 24A6 6 0 0 0 0 0Z'/><circle cy='-6' r='6' fill='#c33'/></g><g transform='rotate(-123.7 191.2 62.2) scale(10.67)'><use href='#c9kor2'/><path stroke='#fff' d='M0-23.5v3M0 17v3.5m0 3v3'/></g></g>";
     bytes constant flg_uk  = "<path fill='#026' d='M0 0h640v480H0z'/><path fill='#fff' d='m75 0 244 181L562 0h78v62L400 241l240 178v61h-80L320 301 81 480H0v-60l239-178L0 64V0h75z'/><path fill='#c12' d='m424 281 216 159v40L369 281h55zm-184 20 6 35L54 480H0l240-179zM640 0v3L391 191l2-44L590 0h50zM0 0l239 176h-60L0 42V0z'/><path fill='#fff' d='M241 0v480h160V0H241zM0 160v160h640V160H0z'/><path fill='#c12' d='M0 193v96h640v-96H0zM273 0v480h96V0h-96z'/>";
     bytes constant flg_us  = "<path fill='#fff' d='M0 0h640v480H0z'/><g id='c9uss'><path fill='#fff' d='m30.4 11 3.4 10.3h10.6l-8.6 6.3 3.3 10.3-8.7-6.4-8.6 6.3L25 27.6l-8.7-6.3h10.9z'/></g><g id='c9uso'><use href='#c9uss'/><use href='#c9uss' y='51.7'/><use href='#c9uss' y='103.4'/><use href='#c9uss' y='155.1'/><use href='#c9uss' y='206.8'/></g><g id='c9use'><use href='#c9uss' y='25.9'/><use href='#c9uss' y='77.6'/><use href='#c9uss' y='129.5'/><use href='#c9uss' y='181.4'/></g><g id='c9usa'><use href='#c9uso'/><use href='#c9use' x='30.4'/></g><path fill='#b02' d='M0 0h640v37H0zm0 73.9h640v37H0zm0 73.8h640v37H0zm0 73.8h640v37H0zm0 74h640v36.8H0zm0 73.7h640v37H0zM0 443h640V480H0z'/><path fill='#026' d='M0 0h364.8v259H0z'/><use href='#c9usa'/><use href='#c9usa' x='60.8'/><use href='#c9usa' x='121.6'/><use href='#c9usa' x='182.4'/><use href='#c9usa' x='243.2'/><use href='#c9uso' x='304'/>";
-    mapping(bytes1 => bytes2) stonum;
+    mapping(bytes1 => bytes2) stonum2;
     mapping(bytes1 => bytes5) stonum5;
 
     /**
      * @dev Sets up the mapping for compressed/mapped SVG input data.
      */
     constructor () {
-        stonum[0x61] = 0x2e35; // a->.5
-        stonum[0x41] = 0x3130; // A->10
-        stonum[0x42] = 0x3131; // B->11
-        stonum[0x43] = 0x3132; // C->12
-        stonum[0x44] = 0x3133; // D->13
-        stonum[0x45] = 0x3134; // E->14
-        stonum[0x46] = 0x3135; // F->15
-        stonum[0x47] = 0x3136; // G->16
-        stonum[0x48] = 0x3138; // H->18
-        stonum[0x49] = 0x3338; // I->38
+        stonum2[0x61] = 0x2e35; // a->.5
+        stonum2[0x41] = 0x3130; // A->10
+        stonum2[0x42] = 0x3131; // B->11
+        stonum2[0x43] = 0x3132; // C->12
+        stonum2[0x44] = 0x3133; // D->13
+        stonum2[0x45] = 0x3134; // E->14
+        stonum2[0x46] = 0x3135; // F->15
+        stonum2[0x47] = 0x3136; // G->16
+        stonum2[0x48] = 0x3138; // H->18
+        stonum2[0x49] = 0x3338; // I->38
         stonum5[0x55] = 0x322e363730; // U->2.670
         stonum5[0x56] = 0x342e353030; // V->4.500
         stonum5[0x57] = 0x352e353030; // W->5.500
@@ -227,7 +227,7 @@ contract C9SVG is IC9SVG, C9Shared {
         bytes memory entry = "     ";
         bytes memory tmp;
         bytes1 e0;
-        bytes2 m0;
+        bytes2 m2;
         bytes5 m5;
         uint8 j = 0;
         bool delims = false;
@@ -265,9 +265,9 @@ contract C9SVG is IC9SVG, C9Shared {
                 }
             } 
             else {
-                m0 = stonum[e0];
-                if (m0 != 0x0000) {
-                    output = bytes.concat(output, "<rect x='", m0, "'/>");
+                m2 = stonum2[e0];
+                if (m2 != 0x0000) {
+                    output = bytes.concat(output, "<rect x='", m2, "'/>");
                 }
                 else {
                     m5 = stonum5[e0];
@@ -472,7 +472,7 @@ contract C9SVG is IC9SVG, C9Shared {
         bytes memory entry = "      ";
         bytes memory tmp;
         bytes1 e0;
-        bytes2 m0;
+        bytes2 m2;
         bytes3[3] memory colors = [bytes3("111"), "007", "407"];
         bytes3 color;
 
@@ -496,11 +496,11 @@ contract C9SVG is IC9SVG, C9Shared {
 
             j = 0;
             e0 = entry[0];
-            m0 = stonum[e0];
+            m2 = stonum2[e0];
             bytes5 m5 = stonum5[e0];
             if (xflg) {
-                if (m0 != 0x0000) {
-                    output = bytes.concat(output, "x='", m0, "'");
+                if (m2 != 0x0000) {
+                    output = bytes.concat(output, "x='", m2, "'");
                 }
                 else {
                     output = m5 != 0x0000000000 ? bytes.concat(output, "x='", m5, "'") : bytes.concat(output, "x='", Helpers.concatTilSpace(entry, 0), "'");
@@ -515,8 +515,8 @@ contract C9SVG is IC9SVG, C9Shared {
                     let dst := add(tmp, 41)
                     mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), color))
                 }
-                if (m0 != 0x0000) {
-                    output = bytes.concat(output, " y='", m0, tmp);
+                if (m2 != 0x0000) {
+                    output = bytes.concat(output, " y='", m2, tmp);
                 }
                 else {
                     output = m5 != 0x0000000000 ? bytes.concat(output, " y='", m5, tmp) : bytes.concat(output, " y='", Helpers.concatTilSpace(entry, 0), tmp);
@@ -576,9 +576,9 @@ contract C9SVG is IC9SVG, C9Shared {
                 }
 
                 e0 = entry[k];
-                m0 = stonum[e0];
-                if (m0 != 0x0000) {
-                    output = bytes.concat(output, "x='", m0, "'");
+                m2 = stonum2[e0];
+                if (m2 != 0x0000) {
+                    output = bytes.concat(output, "x='", m2, "'");
                 }
                 else {
                     m5 = stonum5[e0];
@@ -596,8 +596,8 @@ contract C9SVG is IC9SVG, C9Shared {
      */
     function qrCodeSVGFull(bytes calldata _qrdata) internal view returns (bytes memory) {
         return bytes.concat(
-            "<svg version='1.1' class='qr' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 17'><style type='text/css'>.qr{opacity:0.89;} .qr rect{width:1px;height:1px;}</style><symbol id='d'><rect/><rect x='2'/></symbol><symbol id='j'><rect/><rect x='3'/></symbol><rect transform='scale(3)' x='0.67' y='0.67' fill='#111'/><rect x='0.5' y='0.5' style='width:6px;height:6px;fill:none;stroke:#111;'/>",
-            qrCodeSVG("d80dC0G0G1dB3F4dD5F6B7d08d58C8F90AFA0CGC0EBF0Gg2:5.5:4:4.5:6:7.5:7:4.5:8:7.5:8:6.5:B:5.5:C:5.5:G:e:"),
+            "<svg version='1.1' class='qr' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 17'><style type='text/css'>.qr{opacity:0.89;} .qr rect{width:1px;height:1px;}</style><symbol id='d'><rect height='1' width='1'/><rect x='2' height='1' width='1'/></symbol><symbol id='j'><rect height='1' width='1'/><rect x='3' height='1' width='1'/></symbol><rect transform='scale(3)' x='0.67' y='0.67' fill='#111'/><rect x='0.5' y='0.5' style='width:6px;height:6px;fill:none;stroke:#111;'/>",
+            qrCodeSVG("d80dC0G0G1dB3F4dD5F6B7d08d58C8F90AFA0CGC0EBF0Gg2:W:4:V:6:X:7:V:8:X:8:6.5:B:W:C:W:G:e:"),
             qrCodeSVG(_qrdata),
             "</svg>"
         );
