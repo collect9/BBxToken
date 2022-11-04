@@ -130,7 +130,6 @@ contract C9SVG is IC9SVG, C9Shared {
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _rgc2))
             dst := add(b, 2632)
             mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _classer))
-            
             // Edition
             let _edcheck := gt(_edition, 9)
             switch _edcheck case 0 {
@@ -139,14 +138,12 @@ contract C9SVG is IC9SVG, C9Shared {
                 dst := add(b, 2700)
             }
             mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _edition))
-
             // Mintid
             dst := add(b, 2703)
             mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), __mintid))
             // Royalty
             dst := add(b, 2498)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _royalty))
-            
             // Timestamps
             dst := add(b, 2736)
             let mask := shl(208, 0xFFFF00000000)

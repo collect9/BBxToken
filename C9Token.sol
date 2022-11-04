@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0 <0.9.0;
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/token/common/ERC2981.sol";
@@ -13,7 +12,7 @@ import "./C9Shared.sol";
 import "./C9SVG.sol";
 
 
-contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
+contract C9Token is ERC721Enumerable, ERC2981, Ownable {
     /**
      * @dev Flag that may enable IPFS artwork versions to be 
      displayed in the future.
@@ -31,7 +30,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
     mapping(uint256 => bool) tokenUpgraded;
     mapping(uint256 => bool) tokenUpgradedView;
     uint256 upgradePrice = 100000000000000000;
-    event EventUpgrade(
+    event Upgrade(
         address indexed buyer,
         uint256 indexed tokenId,
         uint256 indexed price
@@ -42,10 +41,6 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * construct the SVG.
      */
     mapping(uint256 => C9Shared.TokenInfo) tokens;
-    event EventMint(
-        address indexed to,
-        uint256 indexed tokenId
-    );
 
     /**
      * @dev Mapping that checks whether or not some combination of 
@@ -98,13 +93,13 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      */
     function _beforeTokenTransfer(address from, address to, uint256 tokenId)
         internal
-        override(ERC721, ERC721Enumerable) {
+        override(ERC721Enumerable) {
             super._beforeTokenTransfer(from, to, tokenId);
     }
 
     /**
      * @dev The token burning required for the redemption process.
-     * Override is because we need to remove tokens[tokenId].
+     * Require statement is the same as in ERC721Burnable.
      * Note the `attrComboExists` of the token is not removed, thus 
      * once the `edition` of any burned token cannot be replaced, but 
      * instead will keep incrementing.
@@ -114,15 +109,14 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * - `tokenId` must exist.
      * - token burner must be token owner.
      */
-    function burn(uint256 tokenId)
-        public
-        override(ERC721Burnable) {
-            require(_isApprovedOrOwner(msg.sender, tokenId), "BURNER not approved");
-            _burn(tokenId);
-            delete(tokens[tokenId]);
-            delete(tokenUpgraded[tokenId]);
-            delete(tokenUpgradedView[tokenId]);
-            _resetTokenRoyalty(tokenId);
+    function burn(uint256 _tokenId)
+        public {
+            require(_isApprovedOrOwner(msg.sender, _tokenId), "BURNER not approved");
+            _burn(_tokenId);
+            delete(tokens[_tokenId]);
+            delete(tokenUpgraded[_tokenId]);
+            delete(tokenUpgradedView[_tokenId]);
+            _resetTokenRoyalty(_tokenId);
     }
 
     /**
@@ -243,8 +237,6 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
             if (_input.mintid == 0) {
                 _mintId[_edition] = __mintId;
             }
-
-            emit EventMint(msg.sender, _uid);
     }
 
     /**
@@ -263,7 +255,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * @dev Required override.
     */
     function supportsInterface(bytes4 interfaceId)
-        public view override(ERC721, ERC721Enumerable, ERC2981)
+        public view override(ERC721Enumerable, ERC2981)
         returns (bool) {
             return super.supportsInterface(interfaceId);
     }
@@ -347,7 +339,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
             require(success, "Failed to send ETH");
             tokenUpgraded[_tokenId] = true;
             tokenUpgradedView[_tokenId] = true;
-            emit EventUpgrade(msg.sender, _tokenId, msg.value);
+            emit Upgrade(msg.sender, _tokenId, msg.value);
     }
 
     /**
@@ -459,7 +451,7 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
      * token has already been upgraded. Flag must be set 
      * back to true for upgraded view to show again.
      */
-    function setTokenBaseURIView(uint256 _tokenId, bool _flag)
+    function setTokenView(uint256 _tokenId, bool _flag)
         external
         tokenExists(_tokenId) {
             require(_isApprovedOrOwner(msg.sender, _tokenId), "VIEWER not approved");
@@ -470,6 +462,8 @@ contract C9Token is ERC721Enumerable, ERC721Burnable, ERC2981, Ownable {
     /**
      * @dev Allows upgradePrice to be modified. Default is 
      * 0.1ETH which may become too expensive in the future.
+     * Can also use chainlink aggregator to set a fixed 
+     * USD price.
      */
     function setTokenUpgradePrice(uint256 _price)
         external
