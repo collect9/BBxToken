@@ -10,10 +10,23 @@ interface IC9MetaData {
 }
 
 contract C9MetaData is C9Shared {
-    mapping(bool => bytes3) bool2str;
-    constructor () {
-        bool2str[true] = "YES";
-        bool2str[false] = "NO ";
+
+    /**
+     * @dev Moved because metaAttributes was getting a stack 
+     * too deep error with this portion of the code included.
+     */
+    function checkTushMarker(TokenInfo calldata token, bytes memory b, uint8 _offset) internal view {
+        if (token.markertush > 0) {
+            bytes4 _markertush = _vMarkers[token.markertush-1];
+            assembly {
+                let dst := add(b, 316)
+                mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), _markertush))
+                dst := add(b, 367)
+                mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), _markertush))
+                dst := add(add(b, 432), _offset)
+                mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), _markertush))
+            }
+        }
     }
 
     /**
@@ -35,11 +48,12 @@ contract C9MetaData is C9Shared {
         bytes memory _datap2 = ' ","description":'
             '"NFT certified ownership and possession rights for the following '
             'physical collectible: (1x qty) [                  ';
-        bytes memory _datap3 = ']'
+        bytes memory _datap3 = '] '
             'Beanie Baby(TM) professionally authenticated museum quality (MQ), '
             'uniquely identifiable by the authentication certificate id containing '
             'the series of numbers: XXXXXX. Redemption conditions apply. Visit the '
-            '[Collect9 website](https://collect9.io) for details. Please refresh '
+            '[Collect9 website](https://collect9.io) for details or use a MicroQR '
+            'code scanner on the NFT SVG image itself. Please refresh '
             'metadata to ensure status is VALID prior to offer or purchase."';
         assembly {
             let dst := add(_datap1, 73)
@@ -83,8 +97,9 @@ contract C9MetaData is C9Shared {
         bytes3 _cntrytush = _vFlags[token.tush];
         bytes2 _edition = Helpers.remove2Null(bytes2(Helpers.uintToBytes(token.edition)));
         bytes4 __mintId = Helpers.flip4Space(bytes4(Helpers.uintToBytes(token.mintid)));
-        bytes3 _upgraded = bool2str[upgraded];
         bytes10 _bgcolor = hex3ToColor[hex3[token.spec]];
+        bytes3 _upgraded = upgraded ? bytes3("YES") : bytes3("NO ");
+        bytes3 _redeemed = token.validity == 4 ? bytes3("YES") : bytes3("NO ");
 
         uint8 _offset = _cntrytag[2] == 0x20 ? 0 : 1;
         b = '","attributes":['
@@ -100,7 +115,8 @@ contract C9MetaData is C9Shared {
             '{"display_type":"number","trait_type":"Edition","value":  },'
             '{"display_type":"number","trait_type":"Edition Mint ID","value":    },'
             '{"trait_type":"Upgraded","value":"   "},'
-            '{"trait_type":"Background","value":"          "}'
+            '{"trait_type":"Background","value":"          "},'
+            '{"trait_type":"Redeemed","value":"   "}'
             ']}';
         assembly {
             let dst := add(b, 86)
@@ -142,19 +158,10 @@ contract C9MetaData is C9Shared {
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _upgraded))
             dst := add(b, 692)
             mstore(dst, or(and(mload(dst), not(shl(176, 0xFFFFFFFFFFFFFFFFFFFF))), _bgcolor))
+            dst := add(b, 739)
+            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _redeemed))
         }
-
-        if (token.markertush > 0) {
-            bytes4 _markertush = _vMarkers[token.markertush-1];
-            assembly {
-                let dst := add(b, 316)
-                mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), _markertush))
-                dst := add(b, 367)
-                mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), _markertush))
-                dst := add(add(b, 432), _offset)
-                mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), _markertush))
-            }
-        }
+        checkTushMarker(token, b, _offset);
     }
 
     function SmetaAttributes(TokenInfo calldata token) external view returns (string memory b) {

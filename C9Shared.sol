@@ -93,11 +93,12 @@ abstract contract C9Shared {
     /*
      * @dev Token validity flags.
      */   
-    bytes16[4] _vValidity = [
+    bytes16[5] _vValidity = [
         bytes16("PRE-RELEASE     "),
         "ROYALTIES DUE   ",
         "TRANSFER DUE    ",
-        "OTHER           "
+        "OTHER           ",
+        "REDEEMED        "
     ];
 
 }
