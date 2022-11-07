@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 import "./utils/Base64.sol";
 import "./utils/Helpers.sol";
+import "./utils/Pricer.sol";
 import "./C9MetaData.sol";
 import "./C9Shared.sol";
 import "./C9SVG.sol";
@@ -16,6 +17,11 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
     /**
      * @dev Flag that may enable IPFS artwork versions to be 
      displayed in the future.
+     */
+    bool public tokensUpgradable = false;
+
+    /**
+     * @dev Contract level meta data, and svgFlag.
      */
     string _contractURI = "https://collect9.io/metadata/Collect9RWARBBToken.json";
     string public baseURI;
@@ -29,7 +35,7 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
     address payable Owner;
     mapping(uint256 => bool) tokenUpgraded;
     mapping(uint256 => bool) tokenUpgradedView;
-    uint256 upgradePrice = 100000000000000000;
+    uint16 upgradePrice = 100;
     event Upgrade(
         address indexed buyer,
         uint256 indexed tokenId,
@@ -62,8 +68,9 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
     /**
      * @dev The meta and SVG contracts.
      */
-    address public _metaContract = 0x67B452Bbc156392db54c83C5181a70AD0Ca62DF0;
-    address public _svgContract = 0xf409b25d9B57aBaD6A9cB446fdaA86f230Ce6a5D;
+    address public _metaContract;
+    address public _svgContract;
+    address _priceFeedContract;
     
     /**
      * @dev The address to send royalties to. This is defined so that it 
@@ -74,13 +81,23 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
 
     /**
      * @dev The constructor sets the default royalty of the token 
-     * to 3.5%. Owner needs to be set because owner from ownable is not
-     * payable.
+     * to 5.0%. Owner needs to be set because default owner from 
+     * ownable is not payable. All addresses can be updated after 
+     * deployment.
      */
-    constructor() ERC721("Collect9 BBR NFTs", "C9xBB") {
-        Owner = payable(msg.sender);
-        _royaltiesTo = Owner;
-        _setDefaultRoyalty(_royaltiesTo, 500);
+    constructor(
+        address metaContract,
+        address svgContract,
+        address priceFeedContract
+        )
+        ERC721("Collect9 BBR NFTs", "C9xBB") {
+            Owner = payable(msg.sender);
+            _royaltiesTo = Owner;
+            _setDefaultRoyalty(_royaltiesTo, 500);
+            // Set default contracts
+            _metaContract = metaContract;
+            _priceFeedContract = priceFeedContract;
+            _svgContract = svgContract;
     }
 
     modifier tokenExists(uint256 _tokenId) {
@@ -285,14 +302,19 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
      * Requirements:
      *
      * - `tokenId` must exist.
+     *
+     * Notes:
+     * It seems like if the baseURI method fails after upgrade, OpenSea
+     * still displays the cached on-chain version.
     */
     function tokenURI(uint256 _tokenId)
         public view override
         tokenExists(_tokenId)
         returns (string memory) {
+            bool upgraded = tokenUpgraded[_tokenId];
             bytes memory meta = IC9MetaData(_metaContract).metaNameDesc(tokens[_tokenId]);
-            bytes memory attributes = IC9MetaData(_metaContract).metaAttributes(tokens[_tokenId]);
-            if (!svgOnly && tokenUpgraded[_tokenId] && tokenUpgradedView[_tokenId]) {
+            bytes memory attributes = IC9MetaData(_metaContract).metaAttributes(tokens[_tokenId], upgraded);
+            if (!svgOnly && upgraded && tokenUpgradedView[_tokenId]) {
                 return string(
                     abi.encodePacked(
                         'data:application/json;base64,',
@@ -331,15 +353,15 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
     function upgradeToken(uint256 _tokenId)
         public payable
         tokenExists(_tokenId) {
-            require(!svgOnly, "SVG only enabled");
+            require(!tokensUpgradable, "Upgrades are currently not enabled");
             require(_isApprovedOrOwner(msg.sender, _tokenId), "UPGRADER unauthorized");
             require(!tokenUpgraded[_tokenId], "Token already upgraded");
-            require(msg.value == upgradePrice, "Wrong amount of ETH");
+            require(msg.value == IEthPricer(_priceFeedContract).getTokenETHPrice(upgradePrice), "Wrong amount of ETH");
             (bool success,) = Owner.call{value: msg.value}("");
             require(success, "Failed to send ETH");
             tokenUpgraded[_tokenId] = true;
             tokenUpgradedView[_tokenId] = true;
-            emit Upgrade(msg.sender, _tokenId, msg.value);
+            emit Upgrade(msg.sender, _tokenId, upgradePrice);
     }
 
     /**
@@ -382,6 +404,17 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
         external
         onlyOwner {
             _metaContract = _address;
+    }
+
+    /**
+     * @dev Updates the meta data contract address.
+     * This will be most useful when trying to make a generic 
+     * SVG template that will include other collectible classes.
+     */
+    function setPriceFeedContract(address _address)
+        external
+        onlyOwner {
+            _priceFeedContract = _address;
     }
 
     /**
@@ -460,14 +493,20 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
     }
 
     /**
-     * @dev Allows upgradePrice to be modified. Default is 
-     * 0.1ETH which may become too expensive in the future.
-     * Can also use chainlink aggregator to set a fixed 
-     * USD price.
+     * @dev Allows upgradePrice to be modified and tuned.
      */
-    function setTokenUpgradePrice(uint256 _price)
+    function setTokenUpgradePrice(uint16 _price)
         external
         onlyOwner {
             upgradePrice = _price;
+    }
+
+    /**
+     * @dev Set token upgrade capability flag.
+     */
+    function setUpgradeFlag(bool _flag)
+        external
+        onlyOwner {
+            tokensUpgradable = _flag;
     }
 }

@@ -298,7 +298,6 @@ contract C9SVG is IC9SVG, C9Shared {
      */
     function checkForSpecialBg(uint8 _rtier, bytes memory b) internal view {
         bytes32 _filter_mod = "turbulence' baseFrequency='0.002";
-        bytes1 _octaves_mod = bytes1("4");
         bytes3 _feMatrix_mod = bytes3("0.9");
         bytes32[3] memory mods = [bytes32("1 1 0 0 0 1 0 0 0 0 0 1 0 0 0 0 "),
             "0 0 0 0 1 1 0 0 0 0 0 1 0 0 0 0 ",
@@ -308,7 +307,7 @@ contract C9SVG is IC9SVG, C9Shared {
                 let dst := add(b, 574)
                 mstore(dst, _filter_mod)
                 dst := add(b, 620)
-                mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), _octaves_mod))
+                mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "4"))
                 dst := add(b, 731)
                 mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _feMatrix_mod))
             }
@@ -329,7 +328,7 @@ contract C9SVG is IC9SVG, C9Shared {
      */
     function genTagsToAscii(uint8 _gentag, uint8 _tag) internal view returns(bytes7) {
         bytes3 __gentag = Helpers.uintToOrdinal(_gentag);
-        bytes3 _cntrytag = Helpers.checkTagForNulls(_vFlags[_tag]);
+        bytes3 _cntrytag = _vFlags[_tag];
         bytes memory _tmpout = "       ";
         assembly {
             let dst := add(_tmpout, 32)
@@ -346,23 +345,10 @@ contract C9SVG is IC9SVG, C9Shared {
      * @dev Returns styling and textual information based on token attributes input 
      * params `_spec` and `_rtier`.
      */
-    function getGradientColors(TokenInfo calldata _token) internal pure returns (bytes3, bytes16) {
+    function getGradientColors(TokenInfo calldata _token) internal view returns (bytes3, bytes16) {
         uint8 _spec = _token.spec;
         uint8 _rtier = _token.rtier;
         bytes3[11] memory spec_c2 = [bytes3("101"), "fc3", "bbb", "a74", "c0f", "c00", "0a0", "0cf", "eee", "cb8", "fff"];
-        bytes16[12] memory rtiers = [bytes16("T0 GHOST        "),
-            "T1 LEGENDARY    ",
-            "T2 HYPER RARE   ",
-            "T3 ULTRA RARE   ",
-            "T4 RARE         ",
-            "T5 UNCOMMON     ",
-            "T6 COMMON       ",
-            "T7 ABUNDANT     ",
-            "S0 PROTO UNIQUE ",
-            "S1 ODDITY RARE  ",
-            "S2 PROD HALT    ",
-            "S3 FINITE QTY   "
-        ];
         return (spec_c2[_spec], rtiers[_rtier]);
     }
 
