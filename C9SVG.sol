@@ -13,20 +13,103 @@ interface IC9SVG {
 }
 
 contract C9SVG is IC9SVG, C9Shared {
-    bytes constant flg_blk = "<pattern id='ptrn' width='.1' height='.1'><rect width='64' height='48' fill='#def' stroke='#000'/></pattern><path d='M0 0h640v480H0z' fill='url(#ptrn)'/>"; //blank flag
-    bytes constant flg_can = "<path fill='#fff' d='M0 0h640v480H0z'/><path fill='#d21' d='M-19.7 0h169.8v480H-19.7zm509.5 0h169.8v480H489.9zM201 232l-13.3 4.4 61.4 54c4.7 13.7-1.6 17.8-5.6 25l66.6-8.4-1.6 67 13.9-.3-3.1-66.6 66.7 8c-4.1-8.7-7.8-13.3-4-27.2l61.3-51-10.7-4c-8.8-6.8 3.8-32.6 5.6-48.9 0 0-35.7 12.3-38 5.8l-9.2-17.5-32.6 35.8c-3.5.9-5-.5-5.9-3.5l15-74.8-23.8 13.4c-2 .9-4 .1-5.2-2.2l-23-46-23.6 47.8c-1.8 1.7-3.6 1.9-5 .7L264 130.8l13.7 74.1c-1.1 3-3.7 3.8-6.7 2.2l-31.2-35.3c-4 6.5-6.8 17.1-12.2 19.5-5.4 2.3-23.5-4.5-35.6-7 4.2 14.8 17 39.6 9 47.7z'/>";
-    bytes constant flg_chn = "<g id='c9chn'><path fill='#ff0' d='M-.6.8 0-1 .6.8-1-.3h2z'/></g><path fill='#e12' d='M0 0h640v480H0z'/><use href='#c9chn' transform='matrix(72 0 0 72 120 120)'/><use href='#c9chn' transform='matrix(-12.3 -20.6 20.6 -12.3 240.3 48)'/><use href='#c9chn' transform='matrix(-3.4 -23.8 23.8 -3.4 288 96)'/><use href='#c9chn' transform='matrix(6.6 -23 23 6.6 288 168)'/><use href='#c9chn' transform='matrix(15 -18.7 18.7 15 240 216)'/>";
-    bytes constant flg_ger = "<path fill='#fc0' d='M0 320h640v160H0z'/><path d='M0 0h640v160H0z'/><path fill='#d00' d='M0 160h640v160H0z'/>";
-    bytes constant flg_ind = "<path fill='#e01' d='M0 0h640v249H0z'/><path fill='#fff' d='M0 240h640v240H0z'/>";
-    bytes constant flg_kor = "<defs><clipPath id='c9kor1'><path fill-opacity='.7' d='M-95.8-.4h682.7v512H-95.8z'/></clipPath></defs><g fill-rule='evenodd' clip-path='url(#c9kor1)' transform='translate(89.8 .4) scale(.94)'><path fill='#fff' d='M-95.8-.4H587v512H-95.8Z'/><g transform='rotate(-56.3 361.6 -101.3) scale(10.67)'><g id='c9kor2'><path id='c9kor3' d='M-6-26H6v2H-6Zm0 3H6v2H-6Zm0 3H6v2H-6Z'/><use href='#c9kor3' y='44'/></g><path stroke='#fff' d='M0 17v10'/><path fill='#c33' d='M0-12a12 12 0 0 1 0 24Z'/><path fill='#04a' d='M0-12a12 12 0 0 0 0 24A6 6 0 0 0 0 0Z'/><circle cy='-6' r='6' fill='#c33'/></g><g transform='rotate(-123.7 191.2 62.2) scale(10.67)'><use href='#c9kor2'/><path stroke='#fff' d='M0-23.5v3M0 17v3.5m0 3v3'/></g></g>";
-    bytes constant flg_uk  = "<path fill='#026' d='M0 0h640v480H0z'/><path fill='#fff' d='m75 0 244 181L562 0h78v62L400 241l240 178v61h-80L320 301 81 480H0v-60l239-178L0 64V0h75z'/><path fill='#c12' d='m424 281 216 159v40L369 281h55zm-184 20 6 35L54 480H0l240-179zM640 0v3L391 191l2-44L590 0h50zM0 0l239 176h-60L0 42V0z'/><path fill='#fff' d='M241 0v480h160V0H241zM0 160v160h640V160H0z'/><path fill='#c12' d='M0 193v96h640v-96H0zM273 0v480h96V0h-96z'/>";
-    bytes constant flg_us  = "<path fill='#fff' d='M0 0h640v480H0z'/><g id='c9uss'><path fill='#fff' d='m30.4 11 3.4 10.3h10.6l-8.6 6.3 3.3 10.3-8.7-6.4-8.6 6.3L25 27.6l-8.7-6.3h10.9z'/></g><g id='c9uso'><use href='#c9uss'/><use href='#c9uss' y='51.7'/><use href='#c9uss' y='103.4'/><use href='#c9uss' y='155.1'/><use href='#c9uss' y='206.8'/></g><g id='c9use'><use href='#c9uss' y='25.9'/><use href='#c9uss' y='77.6'/><use href='#c9uss' y='129.5'/><use href='#c9uss' y='181.4'/></g><g id='c9usa'><use href='#c9uso'/><use href='#c9use' x='30.4'/></g><path fill='#b02' d='M0 0h640v37H0zm0 73.9h640v37H0zm0 73.8h640v37H0zm0 73.8h640v37H0zm0 74h640v36.8H0zm0 73.7h640v37H0zM0 443h640V480H0z'/><path fill='#026' d='M0 0h364.8v259H0z'/><use href='#c9usa'/><use href='#c9usa' x='60.8'/><use href='#c9usa' x='121.6'/><use href='#c9usa' x='182.4'/><use href='#c9usa' x='243.2'/><use href='#c9uso' x='304'/>";
-    mapping(bytes1 => bytes2) stonum2;
-    mapping(bytes1 => bytes5) stonum5;
-
+    /**
+     * @dev Optimized SVG flags in storage.
+     */
+    bytes constant flg_blk = ""
+        "<pattern id='ptrn' width='.1' height='.1'>"
+        "<rect width='64' height='48' fill='#def' stroke='#000'/>"
+        "</pattern>"
+        "<path d='M0 0h640v480H0z' fill='url(#ptrn)'/>";
+    bytes constant flg_can = ""
+        "<path fill='#fff' d='M0 0h640v480H0z'/>"
+        "<path fill='#d21' d='M-19.7 0h169.8v480H-19.7zm509.5 0h169.8v480H489.9zM201 232l-13.3 4.4 61.4 54c4.7 13.7-1.6 "
+        "17.8-5.6 25l66.6-8.4-1.6 67 13.9-.3-3.1-66.6 66.7 8c-4.1-8.7-7.8-13.3-4-27.2l61.3-51-10.7-4c-8.8-6.8 3.8-32.6 "
+        "5.6-48.9 0 0-35.7 12.3-38 5.8l-9.2-17.5-32.6 35.8c-3.5.9-5-.5-5.9-3.5l15-74.8-23.8 13.4c-2 .9-4 .1-5.2-2.2l-23-46-23.6 "
+        "47.8c-1.8 1.7-3.6 1.9-5 .7L264 130.8l13.7 74.1c-1.1 3-3.7 3.8-6.7 2.2l-31.2-35.3c-4 6.5-6.8 17.1-12.2 19.5-5.4 "
+        "2.3-23.5-4.5-35.6-7 4.2 14.8 17 39.6 9 47.7z'/>";
+    bytes constant flg_chn = ""
+        "<g id='c9chn'>"
+        "<path fill='#ff0' d='M-.6.8 0-1 .6.8-1-.3h2z'/>"
+        "</g>"
+        "<path fill='#e12' d='M0 0h640v480H0z'/>"
+        "<use href='#c9chn' transform='matrix(72 0 0 72 120 120)'/>"
+        "<use href='#c9chn' transform='matrix(-12.3 -20.6 20.6 -12.3 240.3 48)'/>"
+        "<use href='#c9chn' transform='matrix(-3.4 -23.8 23.8 -3.4 288 96)'/>"
+        "<use href='#c9chn' transform='matrix(6.6 -23 23 6.6 288 168)'/>"
+        "<use href='#c9chn' transform='matrix(15 -18.7 18.7 15 240 216)'/>";
+    bytes constant flg_ger = ""
+        "<path fill='#fc0' d='M0 320h640v160H0z'/>"
+        "<path d='M0 0h640v160H0z'/>"
+        "<path fill='#d00' d='M0 160h640v160H0z'/>";
+    bytes constant flg_ind = ""
+        "<path fill='#e01' d='M0 0h640v249H0z'/>"
+        "<path fill='#fff' d='M0 240h640v240H0z'/>";
+    bytes constant flg_kor = ""
+        "<defs>"
+        "<clipPath id='c9kor1'>"
+        "<path fill-opacity='.7' d='M-95.8-.4h682.7v512H-95.8z'/>"
+        "</clipPath>"
+        "</defs>"
+        "<g fill-rule='evenodd' clip-path='url(#c9kor1)' transform='translate(89.8 .4) scale(.94)'>"
+        "<path fill='#fff' d='M-95.8-.4H587v512H-95.8Z'/>"
+        "<g transform='rotate(-56.3 361.6 -101.3) scale(10.67)'>"
+        "<g id='c9kor2'>"
+        "<path id='c9kor3' d='M-6-26H6v2H-6Zm0 3H6v2H-6Zm0 3H6v2H-6Z'/>"
+        "<use href='#c9kor3' y='44'/>"
+        "</g>"
+        "<path stroke='#fff' d='M0 17v10'/>"
+        "<path fill='#c33' d='M0-12a12 12 0 0 1 0 24Z'/>"
+        "<path fill='#04a' d='M0-12a12 12 0 0 0 0 24A6 6 0 0 0 0 0Z'/>"
+        "<circle cy='-6' r='6' fill='#c33'/>"
+        "</g>"
+        "<g transform='rotate(-123.7 191.2 62.2) scale(10.67)'>"
+        "<use href='#c9kor2'/>"
+        "<path stroke='#fff' d='M0-23.5v3M0 17v3.5m0 3v3'/>"
+        "</g>"
+        "</g>";
+    bytes constant flg_uk  = ""
+        "<path fill='#026' d='M0 0h640v480H0z'/>"
+        "<path fill='#fff' d='m75 0 244 181L562 0h78v62L400 241l240 178v61h-80L320 301 81 480H0v-60l239-178L0 64V0h75z'/>"
+        "<path fill='#c12' d='m424 281 216 159v40L369 281h55zm-184 20 6 35L54 480H0l240-179zM640 0v3L391 191l2-44L590 0h50zM0 0l239 176h-60L0 42V0z'/>"
+        "<path fill='#fff' d='M241 0v480h160V0H241zM0 160v160h640V160H0z'/>"
+        "<path fill='#c12' d='M0 193v96h640v-96H0zM273 0v480h96V0h-96z'/>";
+    bytes constant flg_us  = ""
+        "<path fill='#fff' d='M0 0h640v480H0z'/>"
+        "<g id='c9uss'>"
+        "<path fill='#fff' d='m30.4 11 3.4 10.3h10.6l-8.6 6.3 3.3 10.3-8.7-6.4-8.6 6.3L25 27.6l-8.7-6.3h10.9z'/>"
+        "</g>"
+        "<g id='c9uso'>"
+        "<use href='#c9uss'/>"
+        "<use href='#c9uss' y='51.7'/>"
+        "<use href='#c9uss' y='103.4'/>"
+        "<use href='#c9uss' y='155.1'/>"
+        "<use href='#c9uss' y='206.8'/>"
+        "</g>"
+        "<g id='c9use'>"
+        "<use href='#c9uss' y='25.9'/>"
+        "<use href='#c9uss' y='77.6'/>"
+        "<use href='#c9uss' y='129.5'/>"
+        "<use href='#c9uss' y='181.4'/>"
+        "</g>"
+        "<g id='c9usa'>"
+        "<use href='#c9uso'/>"
+        "<use href='#c9use' x='30.4'/>"
+        "</g>"
+        "<path fill='#b02' d='M0 0h640v37H0zm0 73.9h640v37H0zm0 73.8h640v37H0zm0 73.8h640v37H0zm0 74h640v36.8H0zm0 73.7h640v37H0zM0 443h640V480H0z'/>"
+        "<path fill='#026' d='M0 0h364.8v259H0z'/>"
+        "<use href='#c9usa'/>"
+        "<use href='#c9usa' x='60.8'/>"
+        "<use href='#c9usa' x='121.6'/>"
+        "<use href='#c9usa' x='182.4'/>"
+        "<use href='#c9usa' x='243.2'/>"
+        "<use href='#c9uso' x='304'/>";
+    
     /**
      * @dev Sets up the mapping for compressed/mapped SVG input data.
      */
+    mapping(bytes1 => bytes2) stonum2;
+    mapping(bytes1 => bytes5) stonum5;
     constructor () {
         stonum2[0x61] = 0x2e35; // a->.5
         stonum2[0x41] = 0x3130; // A->10
@@ -81,16 +164,22 @@ contract C9SVG is IC9SVG, C9Shared {
      */
     function addValidityInfo(TokenInfo calldata _token, bytes memory b) internal view {
         uint8 _validityIdx = _token.validity;
-        bytes16 _validity = "                ";
-        if (_validityIdx > 0) {
-            _validity = _vValidity[_validityIdx-1];
-        }
+        bytes16 _validity = _validityIdx > 0 ? _vValidity[_validityIdx-1] : bytes16("                ");
+
+        // Some default values that apply to most validity status
         bytes3 _clr = bytes3("b00");
         bytes2 _in = bytes2("IN");
-        bytes2 _marks = bytes2(">>");
+
+        // If valid, then set correct coloring and status
         if (_validityIdx == 1) {
-            _clr = bytes3("a0f");
-            _in = bytes2("  ");
+            _clr = "a0f";
+            _in = "  ";
+            uint256 _ds = block.timestamp - _token.mintstamp;
+            uint256 _nyrs = _ds/31556926;
+            if (_nyrs > 0) {
+                _clr = "0a0";
+                _validity = bytes16("REDEEMABLE");
+            }
         }
         assembly {
             let _vcheck := gt(_validityIdx, 0)
@@ -100,7 +189,7 @@ contract C9SVG is IC9SVG, C9Shared {
                 dst := add(b, 2432)
                 mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _in))
                 dst := add(b, 2440)
-                mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), _marks))
+                mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), ">>"))
                 dst := add(b, 2443)
                 mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _validity))
             }
@@ -174,35 +263,33 @@ contract C9SVG is IC9SVG, C9Shared {
      * tags. The provides the user with the information necessary to know 
      * what type of tag is present based on the SVG display alone.
      */
-    function addTushMarker(uint8 _markertush) internal view returns (bytes memory e) {
-        e = "<g transform='translate(532 708)' style='opacity:0.9; font-family:Tahoma; font-size:14;'><rect width='46' height='20' fill='#111' rx='5'/><text x='23' y='15' text-anchor='middle' fill='#ded'>    </text></g>";
+    // function addTushMarker(uint8 _markertush) internal view returns (bytes memory e) {
+    //     e = "<g transform='translate(532 708)' style='opacity:0.9; font-family:Tahoma; font-size:14;'>"
+    //         "<rect width='46' height='20' fill='#111' rx='5'/>"
+    //         "<text x='23' y='15' text-anchor='middle' fill='#ded'>    </text>"
+    //         "</g>";
+    //     bytes4 x = _vMarkers[_markertush-1];
+    //     assembly {
+    //         let dst := add(e, 223)
+    //         mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), x))
+    //     }
+    // }
+
+    function addTushMarker(uint8 _markertush, uint8 _gentag) internal view returns (bytes memory e) {
+        e = "<g transform='translate(555 726)' style='opacity:0.8; font-family:\"Brush Script MT\", cursive; font-size:24; font-weight:700'>"
+            "<text text-anchor='middle' fill='#222'>    </text>"
+            "</g>";
         bytes4 x = _vMarkers[_markertush-1];
+        bytes4 y = x == bytes4("CE  ") ? bytes4("c e ") : x == bytes4("EMBF") ? bytes4("embF") : x == bytes4("EMBS") ? bytes4("embS") : x;
         assembly {
-            let dst := add(e, 223)
-            mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), x))
+            let dst := add(e, 196)
+            mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), y))
+            switch _gentag case 0 {
+                dst := add(e, 191)
+                mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), "eee"))
+            }
         }
     }
-
-    // Maybe can make more efficient is not then remove.
-    // function addTushMarker(uint8 _markertush) internal pure returns (bytes memory e) {
-    //     e = "<g transform='translate(556 726)' style='opacity:0.9; font-family:Tahoma; font-size:11;'>";
-    //     if (_markertush-1 == 0) {
-    //         e = bytes.concat(e, "<polygon points='171 81 168 76 128 16 88 76 85 81 80 82 11 101 55 158 59 162 58 168 56 240 123 215 128 213 133 215 201 240 198 168 198 162 201 158 246 101 176 82 171 81' transform='translate(-15.5 -20.5) scale(.12)' fill='#222' stroke='#ddd' stroke-width='10'/><text text-anchor='middle' fill='#ddd'>4L</text>");
-    //     }
-    //     if (_markertush-1 == 1 || _markertush-1 == 2) {
-    //         e = bytes.concat(e, "<path d='M184,73l-45-7-20-40c-1-3-3-5-7-7-7-4-16-1-20,7l-20,40-45,7c-3,1-6,2-8,4-6,6-6,15,0,21l32,32-7,44c-1,3,0,6,1,10,4,7,12,10,20,6l40-21,40,21c3,2,6,2,9,2,8-2,14-9,12-17l-7-45,31-31c3-2,5-5,5-9,1-8-4-16-13-17Z' transform='translate(-16 -21) scale(.15)' fill='#600' stroke='#ddd' stroke-width='9'/><text text-anchor='middle' fill='#ddd'>");
-    //         if (_markertush-1 == 1) {
-    //             e = bytes.concat(e, "ES</text>");
-    //         }
-    //         else {
-    //             e = bytes.concat(e, "EF</text>");
-    //         }
-    //     }
-    //     if (_markertush-1 == 3) {
-    //         e = bytes.concat(e, "<circle cy='-4' r='12' fill='#222' stroke='#ddd' stroke-width='2'/><text text-anchor='middle' fill='#ddd'>CE</text>");
-    //     }
-    //     e = bytes.concat(e, "</g>");
-    // }
 
     /**
      * @dev The SVG output memory `b` is finished off with the variable sized parts of `_token`.
@@ -241,7 +328,10 @@ contract C9SVG is IC9SVG, C9Shared {
      * @dev Reconstructs mapped compressed representation `_data` into a barcode SVG.
      */
     function barCodeSVG(bytes calldata _data, bytes6 _id) internal view returns(bytes memory output) {
-        output = "<svg version='1.1' class='qr' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 264 100'><g transform='scale(3 100)'><rect x='13'/><rect x='21'/>";
+        output = "<svg version='1.1' class='qr' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 264 100'>"
+            "<g transform='scale(3 100)'>"
+            "<rect x='13'/>"
+            "<rect x='21'/>";
         bytes memory entry = "     ";
         bytes memory tmp;
         bytes1 e0;
@@ -298,7 +388,9 @@ contract C9SVG is IC9SVG, C9Shared {
             entry = "     ";
         }
         // Remainder of the barcode svg
-        tmp = "</g><text x='132' y='126' text-anchor='middle' font-family='Helvetica' font-size='28' fill='#111'>* XXXXXX  *</text></svg>";
+        tmp = "</g>"
+            "<text x='132' y='126' text-anchor='middle' font-family='Helvetica' font-size='28' fill='#111'>* XXXXXX  *</text>"
+            "</svg>";
         if (_id[0] != 0x30) {
             tmp[100] = 0x30;
             j = 1;
@@ -369,8 +461,7 @@ contract C9SVG is IC9SVG, C9Shared {
     function getGradientColors(TokenInfo calldata _token) internal view returns (bytes3, bytes16) {
         uint8 _spec = _token.spec;
         uint8 _rtier = _token.rtier;
-        bytes3[11] memory spec_c2 = [bytes3("101"), "fc3", "bbb", "a74", "c0f", "c00", "0a0", "0cf", "eee", "cb8", "fff"];
-        return (spec_c2[_spec], rtiers[_rtier]);
+        return (hex3[_spec], rtiers[_rtier]);
     }
 
     /**
@@ -599,8 +690,20 @@ contract C9SVG is IC9SVG, C9Shared {
      * @dev Constructs the SVG XML/HTML code from the fixed (hardcoded) and input `_qrdata`.
      */
     function qrCodeSVGFull(bytes calldata _qrdata) internal view returns (bytes memory) {
+        bytes memory b = "<svg version='1.1' class='qr' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 17'>"
+            "<style type='text/css'>.qr{opacity:0.89;} .qr rect{width:1px;height:1px;}</style>"
+            "<symbol id='d'>"
+            "<rect height='1' width='1'/>"
+            "<rect x='2' height='1' width='1'/>"
+            "</symbol>"
+            "<symbol id='j'>"
+            "<rect height='1' width='1'/>"
+            "<rect x='3' height='1' width='1'/>"
+            "</symbol>"
+            "<rect transform='scale(3)' x='0.67' y='0.67' fill='#111'/>"
+            "<rect x='0.5' y='0.5' style='width:6px;height:6px;fill:none;stroke:#111;'/>";
         return bytes.concat(
-            "<svg version='1.1' class='qr' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 17'><style type='text/css'>.qr{opacity:0.89;} .qr rect{width:1px;height:1px;}</style><symbol id='d'><rect height='1' width='1'/><rect x='2' height='1' width='1'/></symbol><symbol id='j'><rect height='1' width='1'/><rect x='3' height='1' width='1'/></symbol><rect transform='scale(3)' x='0.67' y='0.67' fill='#111'/><rect x='0.5' y='0.5' style='width:6px;height:6px;fill:none;stroke:#111;'/>",
+            b,
             qrCodeSVG("d80dC0G0G1dB3F4dD5F6B7d08d58C8F90AFA0CGC0EBF0Gg2:W:4:V:6:X:7:V:8:X:8:6.5:B:W:C:W:G:e:"),
             qrCodeSVG(_qrdata),
             "</svg>"
@@ -612,7 +715,79 @@ contract C9SVG is IC9SVG, C9Shared {
      * and owner `_address`.
      */
     function returnSVG(address _address, TokenInfo calldata _token) external view override returns (string memory) {
-        bytes memory b = "<svg version='1.1' class='c9svg' xmlns='http://www.w3.org/2000/svg' width='100%' height='100%' viewBox='0 0 630 880'><style type='text/css'>.c9svg{font-family:'Courier New';} .sXXXXXX{font-size:22px;} .mXXXXXX{font-size:32px;} .tXXXXXX{font-size:54px;font-weight:700;} .nXXXXXX{font-size:34px;font-weight:700;}</style><defs><radialGradient id='rgXXXXXX' cx='50%' cy='44%' r='50%' gradientUnits='userSpaceOnUse'><stop offset='25%' stop-color='#fff'/><stop offset='1' stop-color='#e66'/></radialGradient><filter id='noiser'><feTurbulence type='fractalNoise' baseFrequency='0.2' numOctaves='8'/><feComposite in2='SourceGraphic' operator='in'/><feColorMatrix values='1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0.2 0'/></filter></defs><rect rx='20' width='100%' height='100%' fill='url(#rgXXXXXX)'/><rect width='100%' height='100%' rx='20' filter='url(#noiser)'/><rect y='560' width='100%' height='22' fill='#ddf' fill-opacity='0.6'/><g style='fill:#ded;'><rect x='20' y='20' width='590' height='150' rx='10'/><rect x='20' y='740' width='590' height='120' rx='10'/></g><g transform='translate(470 6) scale(0.2)' fill-opacity='0.89'><a href='https://collect9.io' target='_blank'><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 276'><defs><radialGradient id='c9r1' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'><stop offset='25%' stop-color='#2fd'/><stop offset='1' stop-color='#0a6'/></radialGradient><radialGradient id='c9r2' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'><stop offset='25%' stop-color='#26f'/><stop offset='1' stop-color='#03a'/></radialGradient><radialGradient id='c9r3' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'><stop offset='25%' stop-color='#2ff'/><stop offset='1' stop-color='#0a9'/></radialGradient></defs><symbol id='c9p'><path d='M122.4,2,26,57.5a11,11,0,0,0,0,19.4h0a11,11,0,0,0,11,0l84-48.5V67L74.3,94.3a6,6,0,0,0,0,10L125,134a6,6,0,0,0,6,0l98.7-57a11,11,0,0,0,0-19.4L133.6,2A11,11,0,0,0,122.4,2Zm12,65V28.5l76,44-33.5,19.3Z'/></symbol><use href='#c9p' fill='url(#c9r2)'/><use href='#c9p' transform='translate(0 9.3) rotate(240 125 138)' fill='url(#c9r3)'/><use href='#c9p' transform='translate(9 4) rotate(120 125 138)' fill='url(#c9r1)'/></svg></a></g><g transform='translate(30 58)' class='mXXXXXX'><text>COLLECT9</text><text y='34'>RWA REDEEMABLE NFT</text><g class='sXXXXXX'><text y='74'>STATUS: <tspan font-weight='bold' fill='#080'>  VALID                    </tspan></text><text y='100'>EIP-2981: 3.50%</text></g></g><g transform='translate(30 768)' class='sXXXXXX'><text>CLASS: VINTAGE BEANIE BABY</text><text y='26'>RARITY TIER:                                 </text><text y='52'>ED NUM.MINT ID:   .    </text><text y='78'>NFT AGE:   YR   MO   D</text></g><text x='50%' y='576' fill='#999' text-anchor='middle'>a2a3c5f0f4ce432893d0beafc2f5b32607e68bb0</text><g text-anchor='middle'><text x='50%' y='645' class='nXXXXXX'>        |        </text><text x='50%' y='698' class='tXXXXXX'>";
+        bytes memory b = "<svg version='1.1' class='c9svg' xmlns='http://www.w3.org/2000/svg' width='100%' height='100%' viewBox='0 0 630 880'>"
+            "<style type='text/css'>"
+            ".c9svg{font-family:'Courier New';} "
+            ".sXXXXXX{font-size:22px;} "
+            ".mXXXXXX{font-size:32px;} "
+            ".tXXXXXX{font-size:54px;font-weight:700;} "
+            ".nXXXXXX{font-size:34px;font-weight:700;}"
+            "</style>"
+            "<defs>"
+            "<radialGradient id='rgXXXXXX' cx='50%' cy='44%' r='50%' gradientUnits='userSpaceOnUse'>"
+            "<stop offset='25%' stop-color='#fff'/>"
+            "<stop offset='1' stop-color='#e66'/>"
+            "</radialGradient>"
+            "<filter id='noiser'>"
+            "<feTurbulence type='fractalNoise' baseFrequency='0.2' numOctaves='8'/>"
+            "<feComposite in2='SourceGraphic' operator='in'/>"
+            "<feColorMatrix values='1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0.2 0'/>"
+            "</filter>"
+            "</defs>"
+            "<rect rx='20' width='100%' height='100%' fill='url(#rgXXXXXX)'/>"
+            "<rect width='100%' height='100%' rx='20' filter='url(#noiser)'/>"
+            "<rect y='560' width='100%' height='22' fill='#ddf' fill-opacity='0.6'/>"
+            "<g style='fill:#ded;'>"
+            "<rect x='20' y='20' width='590' height='150' rx='10'/>"
+            "<rect x='20' y='740' width='590' height='120' rx='10'/>"
+            "</g>"
+            "<g transform='translate(470 6) scale(0.2)' fill-opacity='0.89'>"
+            "<a href='https://collect9.io' target='_blank'>"
+            "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 276'>"
+            "<defs>"
+            "<radialGradient id='c9r1' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'>"
+            "<stop offset='25%' stop-color='#2fd'/>"
+            "<stop offset='1' stop-color='#0a6'/>"
+            "</radialGradient>"
+            "<radialGradient id='c9r2' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'>"
+            "<stop offset='25%' stop-color='#26f'/>"
+            "<stop offset='1' stop-color='#03a'/>"
+            "</radialGradient>"
+            "<radialGradient id='c9r3' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'>"
+            "<stop offset='25%' stop-color='#2ff'/>"
+            "<stop offset='1' stop-color='#0a9'/>"
+            "</radialGradient>"
+            "</defs>"
+            "<symbol id='c9p'>"
+            "<path d='M122.4,2,26,57.5a11,11,0,0,0,0,19.4h0a11,11,0,0,0,11,0l84-48.5V67L74.3,94.3a6,6,"
+            "0,0,0,0,10L125,134a6,6,0,0,0,6,0l98.7-57a11,11,0,0,0,0-19.4L133.6,2A11,11,0,0,0,122.4,"
+            "2Zm12,65V28.5l76,44-33.5,19.3Z'/>"
+            "</symbol>"
+            "<use href='#c9p' fill='url(#c9r2)'/>"
+            "<use href='#c9p' transform='translate(0 9.3) rotate(240 125 138)' fill='url(#c9r3)'/>"
+            "<use href='#c9p' transform='translate(9 4) rotate(120 125 138)' fill='url(#c9r1)'/>"
+            "</svg>"
+            "</a>"
+            "</g>"
+            "<g transform='translate(30 58)' class='mXXXXXX'>"
+            "<text>COLLECT9</text>"
+            "<text y='34'>RWA REDEEMABLE NFT</text>"
+            "<g class='sXXXXXX'>"
+            "<text y='74'>STATUS: <tspan font-weight='bold' fill='#080'>  VALID                    </tspan>"
+            "</text>"
+            "<text y='100'>EIP-2981: 3.50%</text>"
+            "</g>"
+            "</g>"
+            "<g transform='translate(30 768)' class='sXXXXXX'>"
+            "<text>CLASS: VINTAGE BEANIE BABY</text>"
+            "<text y='26'>RARITY TIER:                                 </text>"
+            "<text y='52'>ED NUM.MINT ID:   .    </text>"
+            "<text y='78'>NFT AGE:   YR   MO   D</text>"
+            "</g>"
+            "<text x='50%' y='576' fill='#999' text-anchor='middle'>                                        </text>"
+            "<g text-anchor='middle'>"
+            "<text x='50%' y='645' class='nXXXXXX'>        |        </text>"
+            "<text x='50%' y='698' class='tXXXXXX'>";
         bytes6 _id = Helpers.tokenIdToBytes(_token.id);
         addIds(_id, b);
         addTokenInfo(_token, b);
@@ -621,7 +796,7 @@ contract C9SVG is IC9SVG, C9Shared {
         checkForSpecialBg(_token.rtier, b);
         bytes memory e;
         if (_token.markertush > 0) {
-            e = addTushMarker(_token.markertush);
+            e = addTushMarker(_token.markertush, _token.gentag);
         }
         return string(bytes.concat(b, addVariableBytes(_token, _id), e, "</svg>"));
     }

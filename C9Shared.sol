@@ -97,7 +97,7 @@ abstract contract C9Shared {
         bytes16("PRE-RELEASE     "),
         "ROYALTIES DUE   ",
         "TRANSFER DUE    ",
-        "OTHER           ",
+        "OTHER DUE       ",
         "REDEEMED        "
     ];
 

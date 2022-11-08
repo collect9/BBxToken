@@ -21,7 +21,8 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
     bool public tokensUpgradable = false;
 
     /**
-     * @dev Contract level meta data, and svgFlag.
+     * @dev Contract level meta data, and svgFlag. A bit cheaper 
+     * to hardcode up front if known in advance.
      */
     string _contractURI = "https://collect9.io/metadata/Collect9RWARBBToken.json";
     string public baseURI;
@@ -35,7 +36,7 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
     address payable Owner;
     mapping(uint256 => bool) tokenUpgraded;
     mapping(uint256 => bool) tokenUpgradedView;
-    uint16 upgradePrice = 100;
+    uint16 upgradePrice = 100; //usd
     event Upgrade(
         address indexed buyer,
         uint256 indexed tokenId,
@@ -356,7 +357,8 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
             require(!tokensUpgradable, "Upgrades are currently not enabled");
             require(_isApprovedOrOwner(msg.sender, _tokenId), "UPGRADER unauthorized");
             require(!tokenUpgraded[_tokenId], "Token already upgraded");
-            require(msg.value == IEthPricer(_priceFeedContract).getTokenETHPrice(upgradePrice), "Wrong amount of ETH");
+            uint256 upgradeEthPrice = IC9EthPriceFeed(_priceFeedContract).getTokenETHPrice(upgradePrice);
+            require(msg.value == upgradeEthPrice, "Wrong amount of ETH");
             (bool success,) = Owner.call{value: msg.value}("");
             require(success, "Failed to send ETH");
             tokenUpgraded[_tokenId] = true;
