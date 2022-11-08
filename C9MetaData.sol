@@ -40,7 +40,6 @@ contract C9MetaData is C9Shared {
         bytes3 _cntrytag = _vFlags[token.tag];
         bytes3 _cntrytush = _vFlags[token.tush];
         uint8 x = _cntrytag[2] == 0x20 ? 0 : 1;
-
         bytes memory _name = bytes(token.name);
         bytes memory _datap1 = '{'
             '"external_url":"https://collect9.io/nft/      ",'
@@ -53,8 +52,11 @@ contract C9MetaData is C9Shared {
             'uniquely identifiable by the authentication certificate id containing '
             'the series of numbers: XXXXXX. Redemption conditions apply. Visit the '
             '[Collect9 website](https://collect9.io) for details or use a MicroQR '
-            'code scanner on the NFT SVG image itself. Please refresh '
-            'metadata to ensure status is VALID prior to offer or purchase."';
+            'code scanner on the NFT SVG image itself to visit its detailed landing '
+            'page. Please refresh metadata to ensure status is VALID prior to offer '
+            'or purchase. If an INVALID status displays, please contact Collect9 '
+            'prior to any offer or purchase to learn if the status may be corrected '
+            'to VALID afterwards."';
         assembly {
             let dst := add(_datap1, 73)
             mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _id))
@@ -89,7 +91,7 @@ contract C9MetaData is C9Shared {
     /**
      * @dev Constructs the json string containing the attributes of the token.
      */
-    function metaAttributes(TokenInfo calldata token, bool upgraded) public view returns (bytes memory b) {
+    function metaAttributes(TokenInfo calldata token, bool upgraded) external view returns (bytes memory b) {
         bytes16 _rclass = rtiers[token.rtier];
         bytes3 _gentag = Helpers.uintToOrdinal(token.gentag);
         bytes3 _gentush = Helpers.uintToOrdinal(token.gentush);
@@ -163,9 +165,4 @@ contract C9MetaData is C9Shared {
         }
         checkTushMarker(token, b, _offset);
     }
-
-    function SmetaAttributes(TokenInfo calldata token) external view returns (string memory b) {
-        return string(metaAttributes(token, true));
-    }
-
 }

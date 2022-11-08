@@ -183,6 +183,27 @@ contract C9SVG is IC9SVG, C9Shared {
         }
     }
 
+    // Maybe can make more efficient is not then remove.
+    // function addTushMarker(uint8 _markertush) internal pure returns (bytes memory e) {
+    //     e = "<g transform='translate(556 726)' style='opacity:0.9; font-family:Tahoma; font-size:11;'>";
+    //     if (_markertush-1 == 0) {
+    //         e = bytes.concat(e, "<polygon points='171 81 168 76 128 16 88 76 85 81 80 82 11 101 55 158 59 162 58 168 56 240 123 215 128 213 133 215 201 240 198 168 198 162 201 158 246 101 176 82 171 81' transform='translate(-15.5 -20.5) scale(.12)' fill='#222' stroke='#ddd' stroke-width='10'/><text text-anchor='middle' fill='#ddd'>4L</text>");
+    //     }
+    //     if (_markertush-1 == 1 || _markertush-1 == 2) {
+    //         e = bytes.concat(e, "<path d='M184,73l-45-7-20-40c-1-3-3-5-7-7-7-4-16-1-20,7l-20,40-45,7c-3,1-6,2-8,4-6,6-6,15,0,21l32,32-7,44c-1,3,0,6,1,10,4,7,12,10,20,6l40-21,40,21c3,2,6,2,9,2,8-2,14-9,12-17l-7-45,31-31c3-2,5-5,5-9,1-8-4-16-13-17Z' transform='translate(-16 -21) scale(.15)' fill='#600' stroke='#ddd' stroke-width='9'/><text text-anchor='middle' fill='#ddd'>");
+    //         if (_markertush-1 == 1) {
+    //             e = bytes.concat(e, "ES</text>");
+    //         }
+    //         else {
+    //             e = bytes.concat(e, "EF</text>");
+    //         }
+    //     }
+    //     if (_markertush-1 == 3) {
+    //         e = bytes.concat(e, "<circle cy='-4' r='12' fill='#222' stroke='#ddd' stroke-width='2'/><text text-anchor='middle' fill='#ddd'>CE</text>");
+    //     }
+    //     e = bytes.concat(e, "</g>");
+    // }
+
     /**
      * @dev The SVG output memory `b` is finished off with the variable sized parts of `_token`.
      * This is a bit messy but bytes concat seems to get the job done.
