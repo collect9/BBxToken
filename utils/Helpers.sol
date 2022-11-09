@@ -117,17 +117,10 @@ library Helpers {
             return bytes2(output);
     }
 
-    // https://ethereum.stackexchange.com/questions/62371/convert-a-string-to-a-uint256-with-error-handling
-    function strToUint(string memory str_)
+    function stringEqual(string memory _a, string memory _b)
         internal pure
-        returns (uint256 res, bool) {
-            for (uint256 i; i < bytes(str_).length; i++) {
-                if ((uint8(bytes(str_)[i]) - 48) < 0 || (uint8(bytes(str_)[i]) - 48) > 9) {
-                    return (0, false);
-                }
-                res += (uint8(bytes(str_)[i]) - 48) * 10**(bytes(str_).length - i - 1);
-            }
-            return (res, true);
+        returns (bool) {
+            return keccak256(bytes(_a)) == keccak256(bytes(_b));
     }
 
     // https://ethereum.stackexchange.com/questions/8346/convert-address-to-string

@@ -1,16 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0 <0.9.0;
-
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-
-interface IEthPricer {
+interface IC9EthPriceFeed {
     function getLatestETHUSDPrice() external view returns (uint256);
     function getTokenETHPrice(uint256 _tokenUSDPrice) external view returns (uint256 tokenETHPrice);
 }
 
-contract EthPricer is Ownable {
+contract C9EthPriceFeed is Ownable {
     AggregatorV3Interface internal priceFeed;
 
     /**

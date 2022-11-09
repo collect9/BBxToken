@@ -45,18 +45,20 @@ contract C9MetaData is C9Shared {
             '"external_url":"https://collect9.io/nft/      ",'
             '"name":"Collect9 NFT #       -         ';
         bytes memory _datap2 = ' ","description":'
-            '"NFT certified ownership and possession rights for the following '
+            '"Collect9 NFTs display 100% onchain SVG images. '
+            'This NFT offers certified ownership and possession rights for the following '
             'physical collectible: (1x qty) [                  ';
         bytes memory _datap3 = '] '
             'Beanie Baby(TM) professionally authenticated museum quality (MQ), '
             'uniquely identifiable by the authentication certificate id containing '
-            'the series of numbers: XXXXXX. Redemption conditions apply. Visit the '
+            'the series of numbers: XXXXXX. Physical redemption conditions apply. Visit the '
             '[Collect9 website](https://collect9.io) for details or use a MicroQR '
-            'code scanner on the NFT SVG image itself to visit its detailed landing '
-            'page. Please refresh metadata to ensure status is VALID prior to offer '
-            'or purchase. If an INVALID status displays, please contact Collect9 '
+            'code reader on the NFT SVG image to visit its [detailed landing '
+            'page](https://collect9.io/nft/000000) to see real images of the physical '
+            'collectible. **Please refresh metadata to ensure status is *VALID* prior to offer '
+            'or purchase**. If an *INVALID* status displays, please contact Collect9 '
             'prior to any offer or purchase to learn if the status may be corrected '
-            'to VALID afterwards."';
+            'to *VALID* afterwards."';
         assembly {
             let dst := add(_datap1, 73)
             mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _id))
@@ -66,17 +68,19 @@ contract C9MetaData is C9Shared {
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _gentag))
             dst := add(_datap1, 116)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _cntrytag))
-            dst := add(_datap2, 146)
+            dst := add(_datap2, 189)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _gentag))
-            dst := add(_datap2, 150)
+            dst := add(_datap2, 193)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _cntrytag))
-            dst := add(add(_datap2, 153), x)
+            dst := add(add(_datap2, 196), x)
             mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "/"))
-            dst := add(add(_datap2, 155), x)
+            dst := add(add(_datap2, 198), x)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _gentush))
-            dst := add(add(_datap2, 159), x)
+            dst := add(add(_datap2, 202), x)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _cntrytush))
             dst := add(_datap3, 193)
+            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _id))
+            dst := add(_datap3, 412)
             mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _id))
         }
         return bytes.concat(

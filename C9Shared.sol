@@ -96,8 +96,8 @@ abstract contract C9Shared {
     bytes16[5] _vValidity = [
         bytes16("PRE-RELEASE     "),
         "ROYALTIES DUE   ",
-        "TRANSFER DUE    ",
-        "OTHER DUE       ",
+        "ASSUMED LOST    ",
+        "OTHER           ",
         "REDEEMED        "
     ];
 

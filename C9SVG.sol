@@ -136,8 +136,8 @@ contract C9SVG is IC9SVG, C9Shared {
     function addAddress(address _address, bytes memory b) internal pure {
         (bytes32 _a1, bytes8 _a2) = Helpers.addressToB32B8(_address);
         assembly {
-            mstore(add(b, 2815), _a1)
-            let dst := add(b, 2847)
+            mstore(add(b, 2802), _a1)
+            let dst := add(b, 2834)
             mstore(dst, or(and(mload(dst), not(shl(192, 0xFFFFFFFFFFFFFFFF))), _a2))
         }
     }
@@ -148,12 +148,11 @@ contract C9SVG is IC9SVG, C9Shared {
      * SVGs may be displayed on the same page without CSS conflict.
      */
     function addIds(bytes6 _id, bytes memory b) internal pure {
-        uint16[11] memory offsets = [209, 235, 261, 303, 378, 809, 2287, 2365, 2559, 2916, 2978];
-        uint16 idx;
-        for(uint8 j; j<11; j++) {
-            idx = offsets[j];
-            assembly {
-                let dst := add(b, idx)
+        uint16[11] memory offsets = [182, 208, 234, 276, 351, 782, 2274, 2352, 2546, 2903, 2965];
+        assembly {
+            let dst := 0
+            for {let i := 0} lt(i, 11) {i := add(i, 1)} {
+                dst := add(b, mload(add(offsets, mul(32, i))))
                 mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _id))
             }
         }
@@ -184,13 +183,13 @@ contract C9SVG is IC9SVG, C9Shared {
         assembly {
             let _vcheck := gt(_validityIdx, 0)
             switch _vcheck case 1 {
-                let dst := add(b, 2427)
+                let dst := add(b, 2414)
                 mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _clr))
-                dst := add(b, 2432)
+                dst := add(b, 2419)
                 mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _in))
-                dst := add(b, 2440)
+                dst := add(b, 2427)
                 mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), ">>"))
-                dst := add(b, 2443)
+                dst := add(b, 2430)
                 mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _validity))
             }
         }
@@ -212,47 +211,47 @@ contract C9SVG is IC9SVG, C9Shared {
 
         assembly {
             // Name Font Size
-            let dst := add(b, 278)
+            let dst := add(b, 251)
             mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _namesize))
             // Colors
-            dst := add(b, 511)
+            dst := add(b, 484)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _rgc2))
-            dst := add(b, 2632)
+            dst := add(b, 2619)
             mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _classer))
             // Edition
             let _edcheck := gt(_edition, 9)
             switch _edcheck case 0 {
-                dst := add(b, 2701)
+                dst := add(b, 2688)
             } default {
-                dst := add(b, 2700)
+                dst := add(b, 2687)
             }
             mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _edition))
             // Mintid
-            dst := add(b, 2703)
+            dst := add(b, 2690)
             mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), __mintid))
             // Royalty
-            dst := add(b, 2498)
+            dst := add(b, 2485)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _royalty))
             // Timestamps
-            dst := add(b, 2736)
+            dst := add(b, 2723)
             let mask := shl(208, 0xFFFF00000000)
             let srcpart := and(_periods, mask)
             let destpart := and(mload(dst), not(mask))
             mstore(dst, or(destpart, srcpart))
-            dst := add(b, 2739)
+            dst := add(b, 2726)
             mask := shl(208, 0x0000FFFF0000)
             srcpart := and(_periods, mask)
             destpart := and(mload(dst), not(mask))
             mstore(dst, or(destpart, srcpart))
-            dst := add(b, 2742)
+            dst := add(b, 2729)
             mask := shl(208, 0x00000000FFFF)
             srcpart := and(_periods, mask)
             destpart := and(mload(dst), not(mask))
             mstore(dst, or(destpart, srcpart))
             // Gen Country Text
-            dst := add(b, 2924)
+            dst := add(b, 2911)
             mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tagtxt))
-            dst := add(b, 2934)
+            dst := add(b, 2921)
             mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tushtxt))
         }
     }
@@ -263,30 +262,25 @@ contract C9SVG is IC9SVG, C9Shared {
      * tags. The provides the user with the information necessary to know 
      * what type of tag is present based on the SVG display alone.
      */
-    // function addTushMarker(uint8 _markertush) internal view returns (bytes memory e) {
-    //     e = "<g transform='translate(532 708)' style='opacity:0.9; font-family:Tahoma; font-size:14;'>"
-    //         "<rect width='46' height='20' fill='#111' rx='5'/>"
-    //         "<text x='23' y='15' text-anchor='middle' fill='#ded'>    </text>"
-    //         "</g>";
-    //     bytes4 x = _vMarkers[_markertush-1];
-    //     assembly {
-    //         let dst := add(e, 223)
-    //         mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), x))
-    //     }
-    // }
-
     function addTushMarker(uint8 _markertush, uint8 _gentag) internal view returns (bytes memory e) {
-        e = "<g transform='translate(555 726)' style='opacity:0.8; font-family:\"Brush Script MT\", cursive; font-size:24; font-weight:700'>"
-            "<text text-anchor='middle' fill='#222'>    </text>"
-            "</g>";
-        bytes4 x = _vMarkers[_markertush-1];
-        bytes4 y = x == bytes4("CE  ") ? bytes4("c e ") : x == bytes4("EMBF") ? bytes4("embF") : x == bytes4("EMBS") ? bytes4("embS") : x;
-        assembly {
-            let dst := add(e, 196)
-            mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), y))
-            switch _gentag case 0 {
-                dst := add(e, 191)
-                mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), "eee"))
+        if (_markertush > 0) {
+            e = "<g transform='translate(555 726)' style='opacity:0.8; font-family:\"Brush Script MT\", cursive; font-size:24; font-weight:700'>"
+                "<text text-anchor='middle' fill='#222'>    </text>"
+                "</g>";
+            bytes4 x = _vMarkers[_markertush-1];
+            bytes4 y = x == bytes4("CE  ") ?
+                bytes4("c e ") :
+                x == bytes4("EMBF") ?
+                    bytes4("embF") :
+                    x == bytes4("EMBS") ?
+                        bytes4("embS") : x;
+            assembly {
+                let dst := add(e, 196)
+                mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), y))
+                switch _gentag case 0 {
+                    dst := add(e, 191)
+                    mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), "eee"))
+                }
             }
         }
     }
@@ -379,7 +373,9 @@ contract C9SVG is IC9SVG, C9Shared {
                 }
                 else {
                     m5 = stonum5[e0];
-                    output = m5 != 0x0000000000 ? bytes.concat(output, "<rect x='", m5, "'/>") : bytes.concat(output, "<rect x='", Helpers.concatTilSpace(entry, 0), "'/>");
+                    output = m5 != 0x0000000000 ? 
+                        bytes.concat(output, "<rect x='", m5, "'/>") : 
+                        bytes.concat(output, "<rect x='", Helpers.concatTilSpace(entry, 0), "'/>");
                 }
                 if (!delims) {
                     l += 1;
@@ -598,7 +594,9 @@ contract C9SVG is IC9SVG, C9Shared {
                     output = bytes.concat(output, "x='", m2, "'");
                 }
                 else {
-                    output = m5 != 0x0000000000 ? bytes.concat(output, "x='", m5, "'") : bytes.concat(output, "x='", Helpers.concatTilSpace(entry, 0), "'");
+                    output = m5 != 0x0000000000 ? 
+                        bytes.concat(output, "x='", m5, "'") : 
+                        bytes.concat(output, "x='", Helpers.concatTilSpace(entry, 0), "'");
                 }
                 xflg = false;
                 yflg = true;
@@ -614,7 +612,9 @@ contract C9SVG is IC9SVG, C9Shared {
                     output = bytes.concat(output, " y='", m2, tmp);
                 }
                 else {
-                    output = m5 != 0x0000000000 ? bytes.concat(output, " y='", m5, tmp) : bytes.concat(output, " y='", Helpers.concatTilSpace(entry, 0), tmp);
+                    output = m5 != 0x0000000000 ? 
+                        bytes.concat(output, " y='", m5, tmp) : 
+                        bytes.concat(output, " y='", Helpers.concatTilSpace(entry, 0), tmp);
                 } 
                 yflg = false;
             }
@@ -677,7 +677,9 @@ contract C9SVG is IC9SVG, C9Shared {
                 }
                 else {
                     m5 = stonum5[e0];
-                    output = m5 != 0x0000000000 ? bytes.concat(output, "x='", m5, "'") : bytes.concat(output, "x='", Helpers.concatTilSpace(entry, k), "'");
+                    output = m5 != 0x0000000000 ? 
+                        bytes.concat(output, "x='", m5, "'") : 
+                        bytes.concat(output, "x='", Helpers.concatTilSpace(entry, k), "'");
                 }          
                 k = 1;
                 yflg = true;
@@ -715,7 +717,7 @@ contract C9SVG is IC9SVG, C9Shared {
      * and owner `_address`.
      */
     function returnSVG(address _address, TokenInfo calldata _token) external view override returns (string memory) {
-        bytes memory b = "<svg version='1.1' class='c9svg' xmlns='http://www.w3.org/2000/svg' width='100%' height='100%' viewBox='0 0 630 880'>"
+        bytes memory b = "<svg version='1.1' class='c9svg' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 630 880'>"
             "<style type='text/css'>"
             ".c9svg{font-family:'Courier New';} "
             ".sXXXXXX{font-size:22px;} "
@@ -735,7 +737,7 @@ contract C9SVG is IC9SVG, C9Shared {
             "</filter>"
             "</defs>"
             "<rect rx='20' width='100%' height='100%' fill='url(#rgXXXXXX)'/>"
-            "<rect width='100%' height='100%' rx='20' filter='url(#noiser)'/>"
+            "<rect rx='20' width='100%' height='100%' filter='url(#noiser)'/>"
             "<rect y='560' width='100%' height='22' fill='#ddf' fill-opacity='0.6'/>"
             "<g style='fill:#ded;'>"
             "<rect x='20' y='20' width='590' height='150' rx='10'/>"
@@ -743,7 +745,7 @@ contract C9SVG is IC9SVG, C9Shared {
             "</g>"
             "<g transform='translate(470 6) scale(0.2)' fill-opacity='0.89'>"
             "<a href='https://collect9.io' target='_blank'>"
-            "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 276'>"
+            "<svg version='1.1' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 276'>"
             "<defs>"
             "<radialGradient id='c9r1' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'>"
             "<stop offset='25%' stop-color='#2fd'/>"
@@ -794,10 +796,12 @@ contract C9SVG is IC9SVG, C9Shared {
         addValidityInfo(_token, b);
         addAddress(_address, b);
         checkForSpecialBg(_token.rtier, b);
-        bytes memory e;
-        if (_token.markertush > 0) {
-            e = addTushMarker(_token.markertush, _token.gentag);
-        }
-        return string(bytes.concat(b, addVariableBytes(_token, _id), e, "</svg>"));
+        return string(
+            bytes.concat(b,
+                addVariableBytes(_token, _id),
+                addTushMarker(_token.markertush, _token.gentag),
+                "</svg>"
+            )
+        );
     }
 }

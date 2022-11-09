@@ -16,22 +16,26 @@ import "./C9SVG.sol";
 contract C9Token is ERC721Enumerable, ERC2981, Ownable {
     /**
      * @dev Flag that may enable IPFS artwork versions to be 
-     displayed in the future.
+     * displayed in the future. Is it set to false by default
+     * until upgrade capability is confirmed and ready. The 
+     * SVG only flag acts as a fail safe to return to SVG 
+     * only mode later on.
      */
     bool public tokensUpgradable = false;
+    bool public svgOnly = true;
+    string public baseURI;
 
     /**
-     * @dev Contract level meta data, and svgFlag. A bit cheaper 
-     * to hardcode up front if known in advance.
+     * @dev Contract level meta data for OpenSea.
      */
     string _contractURI = "https://collect9.io/metadata/Collect9RWARBBToken.json";
-    string public baseURI;
-    bool public svgOnly = true;
     
     /**
-     * @dev These have to do with a potential token upgrade path.
+     * @dev Potential token upgrade path params.
      * Upgraded involves setting token to point to baseURI and 
-     * display.
+     * display a .png version. Upgraded tokens may have 
+     * the tokenUpgradedView flag toggled to go back and 
+     * forth between SVG and PNG views.
      */
     address payable Owner;
     mapping(uint256 => bool) tokenUpgraded;
@@ -71,7 +75,7 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
      */
     address public _metaContract;
     address public _svgContract;
-    address _priceFeedContract;
+    address public _priceFeedContract;
     
     /**
      * @dev The address to send royalties to. This is defined so that it 
@@ -95,7 +99,6 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
             Owner = payable(msg.sender);
             _royaltiesTo = Owner;
             _setDefaultRoyalty(_royaltiesTo, 500);
-            // Set default contracts
             _metaContract = metaContract;
             _priceFeedContract = priceFeedContract;
             _svgContract = svgContract;
@@ -192,6 +195,7 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
                     _input.gentag,
                     _input.gentush,
                     _input.markertush,
+                    _input.spec,
                     _input.name
                 )
             );
@@ -212,10 +216,9 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
     function mint1(C9Shared.TokenInfo calldata _input)
         public
         onlyOwner {
-            //require(_input.tag < 8 && _input.tush < 8, "ERR tag tush");
             require(_input.royalty < 1000, "ERR royalty");
             uint256 _uid = uint256(_input.id); 
-
+            // Get the token edition number
             uint8 _edition = _input.edition;
             if (_edition == 0) {
                 bytes32 _data;
@@ -227,7 +230,7 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
                     }
                 }
             }
-
+            // Get the edition mint id
             uint16 __mintId = _input.mintid == 0 ? _mintId[_edition] + 1 : _input.mintid;
             tokens[_uid] = C9Shared.TokenInfo(
                 _input.validity,
@@ -313,49 +316,44 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
         tokenExists(_tokenId)
         returns (string memory) {
             bool upgraded = tokenUpgraded[_tokenId];
-            bytes memory meta = IC9MetaData(_metaContract).metaNameDesc(tokens[_tokenId]);
-            bytes memory attributes = IC9MetaData(_metaContract).metaAttributes(tokens[_tokenId], upgraded);
+
+            bytes memory image;
             if (!svgOnly && upgraded && tokenUpgradedView[_tokenId]) {
-                return string(
-                    abi.encodePacked(
-                        'data:application/json;base64,',
-                        Base64.encode(
-                            abi.encodePacked(
-                                meta,
-                                ',"image":"',
-                                baseURI, Strings.toString(_tokenId), '.png',
-                                attributes
-                            )
-                        )
-                    )
+                image = abi.encodePacked(
+                    ',"image":"',
+                    baseURI, Strings.toString(_tokenId), '.png'
                 );
             }
             else {
-                return string(
-                    abi.encodePacked(
-                        'data:application/json;base64,',
-                        Base64.encode(
-                            abi.encodePacked(
-                                meta,
-                                ',"image":"data:image/svg+xml;base64,',
-                                b64SVGImage(_tokenId),
-                                attributes
-                            )
-                        )
-                    )
+                image = abi.encodePacked(
+                    ',"image":"data:image/svg+xml;base64,',
+                    b64SVGImage(_tokenId)
                 );
             }
+
+            return string(
+                abi.encodePacked(
+                    'data:application/json;base64,',
+                    Base64.encode(
+                        abi.encodePacked(
+                            IC9MetaData(_metaContract).metaNameDesc(tokens[_tokenId]),
+                            image,
+                            IC9MetaData(_metaContract).metaAttributes(tokens[_tokenId], upgraded)
+                        )
+                    )
+                )
+            );
     }
 
     /**
      * @dev Allows the token holder to upgrade their token.
-     How to handle is user wants to still display SVG???
      */
     function upgradeToken(uint256 _tokenId)
-        public payable
+        external payable
         tokenExists(_tokenId) {
-            require(!tokensUpgradable, "Upgrades are currently not enabled");
             require(_isApprovedOrOwner(msg.sender, _tokenId), "UPGRADER unauthorized");
+            require(tokensUpgradable, "Upgrades are currently not enabled");
+            require(Helpers.stringEqual(baseURI, ""), "BaseURI not yet set");
             require(!tokenUpgraded[_tokenId], "Token already upgraded");
             uint256 upgradeEthPrice = IC9EthPriceFeed(_priceFeedContract).getTokenETHPrice(upgradePrice);
             require(msg.value == upgradeEthPrice, "Wrong amount of ETH");
@@ -376,14 +374,6 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
             return baseURI;
     }
 
-     /**
-     * @dev Updates the contractURI.
-     */
-    function setContractUri(string calldata _newContractURI)
-        external
-        onlyOwner {
-            _contractURI = _newContractURI;
-    }
 
     /**
      * @dev Updates the baseURI.
@@ -395,6 +385,26 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
         external
         onlyOwner {
             baseURI = _newBaseURI;
+    }
+
+     /**
+     * @dev Updates the contractURI.
+     */
+    function setContractUri(string calldata _newContractURI)
+        external
+        onlyOwner {
+            _contractURI = _newContractURI;
+    }
+
+    /**
+     * @dev Allows the contract owner to update the global royalties 
+     * receving address and amount.
+     */
+    function setDefaultRoyalties(address _address, uint96 _defaultRoyalty)
+        external
+        onlyOwner {
+            _royaltiesTo = _address;
+            _setDefaultRoyalty(_royaltiesTo, _defaultRoyalty);
     }
 
     /**
@@ -417,16 +427,6 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
         external
         onlyOwner {
             _priceFeedContract = _address;
-    }
-
-    /**
-     * @dev Allows the contract owner to update the royalties 
-     * receving address.
-     */
-    function setRoyaltiesAddress(address _address)
-        external
-        onlyOwner {
-            _royaltiesTo = _address;
     }
 
     /**
@@ -456,16 +456,18 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
     /**
      * @dev Allows the contract owner to update the royalties 
      * per token basis, within limits.
-     * This will be useful in the future for potentially having 
-     * royalty free weekends, etc, as well as fine tuning the 
-     * royalty income model.
+     * This may be useful if Collect9 eventually tokenizes 
+     * on behalf of others.
      */
-    function setTokenRoyalty(uint256 _tokenId, uint96 _newRoyalty)
+    function setTokenRoyalty(uint256 _tokenId, uint96 _newRoyalty, address _royaltyAddress)
         external
         onlyOwner
         tokenExists(_tokenId) {
             require(_newRoyalty < 1000, "Royalty too high"); // Limit max royalty to 10%
-            _setTokenRoyalty(_tokenId, _royaltiesTo, _newRoyalty);
+            tokens[_tokenId].royalty = uint16(_newRoyalty);
+            _royaltyAddress != address(0) ?
+                _setTokenRoyalty(_tokenId, _royaltyAddress, _newRoyalty) :
+                _setTokenRoyalty(_tokenId, _royaltiesTo, _newRoyalty);
     }
 
     /**
@@ -489,13 +491,14 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
     function setTokenView(uint256 _tokenId, bool _flag)
         external
         tokenExists(_tokenId) {
-            require(_isApprovedOrOwner(msg.sender, _tokenId), "VIEWER not approved");
+            require(_isApprovedOrOwner(msg.sender, _tokenId), "Unauthorized token view setter");
             require(tokenUpgraded[_tokenId], "Token not yet upgraded");
+            require(tokenUpgraded[_tokenId] != _flag, "Token view already set to this mode");
             tokenUpgradedView[_tokenId] = _flag;
     }
 
     /**
-     * @dev Allows upgradePrice to be modified and tuned.
+     * @dev Allows upgradePrice to be tuned.
      */
     function setTokenUpgradePrice(uint16 _price)
         external
