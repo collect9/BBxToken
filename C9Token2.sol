@@ -3,15 +3,16 @@ pragma solidity >=0.8.0 <0.9.0;
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/token/common/ERC2981.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
+
+import "./C9MetaData.sol";
+import "./C9OwnerControl.sol";
+import "./C9Redeemer.sol";
+import "./C9Shared.sol";
+import "./C9SVG.sol";
 
 import "./utils/Base64.sol";
 import "./utils/Helpers.sol";
 import "./utils/Pricer.sol";
-import "./C9MetaData.sol";
-import "./C9Redeemer.sol";
-import "./C9Shared.sol";
-import "./C9SVG.sol";
 
 
 interface IC9Token {
@@ -20,7 +21,8 @@ interface IC9Token {
 }
 
 
-contract C9Token is IC9Token, ERC721Enumerable, ERC2981, AccessControl {
+contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant REDEEMER_ROLE = keccak256("REDEEMER_ROLE");
     /**
      * @dev Flag that may enable IPFS artwork versions to be 
@@ -52,7 +54,6 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, AccessControl {
      * the tokenUpgradedView flag toggled to go back and 
      * forth between SVG and PNG views.
      */
-    address payable public owner;
     mapping(uint256 => bool) _tokenUpgraded;
     mapping(uint256 => bool) _tokenUpgradedView;
     uint16 public upgradePrice = 100;
@@ -75,17 +76,11 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, AccessControl {
     );
 
     /**
-     * @dev 2 step ownership transfer like from Ownable2Step.
+     * @dev Fail-safe pause in case something is wrong with the 
+     * contract. Pausing will allow for a seemless upgrade or 
+     * migration to an updated contract.
      */
-    address public pendingOwner;
-    event OwnershipTransferStarted(
-        address indexed previousOwner,
-        address indexed newOwner
-    );
-    event OwnershipTransferred(
-        address indexed previousOwner,
-        address indexed newOwner
-    );
+    
 
     /**
      * @dev Structure that holds all of the token info required to 
@@ -137,13 +132,11 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, AccessControl {
         address _priceFeedContract
         )
         ERC721("Collect9 BBR NFTs", "C9B") {
-            owner = payable(msg.sender);
-            royaltyAddress = owner;
             metaContract = _metaContract;
             priceFeedContract = _priceFeedContract;
             svgContract = _svgContract;
+            royaltyAddress = owner;
             _setDefaultRoyalty(royaltyAddress, 500);
-            _grantRole(DEFAULT_ADMIN_ROLE, owner);
     }
 
     modifier limitRoyalty(uint16 _royalty) {
@@ -168,8 +161,8 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, AccessControl {
         internal
         override(ERC721Enumerable) {
             super._beforeTokenTransfer(from, to, tokenId);
-            require(!_tokenRedemptionLock[tokenId], "Token is currently being redeemed");
-            require(_tokens[tokenId].validity != 5, "Token has already been redeemed");
+            require(!_tokenRedemptionLock[tokenId], "Token is locked: currently being redeemed");
+            require(_tokens[tokenId].validity != 5, "Token is locked: has already been redeemed");
     }
 
     function supportsInterface(bytes4 interfaceId)
@@ -197,6 +190,7 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, AccessControl {
             delete _tokens[_tokenId];
             delete _tokenUpgraded[_tokenId];
             delete _tokenUpgradedView[_tokenId];
+            delete _tokenRedemptionLock[_tokenId];
             _resetTokenRoyalty(_tokenId);
     }
 
@@ -364,7 +358,7 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, AccessControl {
         senderApproved(_tokenId) {
             require(_tokens[_tokenId].validity == 0, "Token must be marked VALID for redemption");
             _tokenRedemptionLock[_tokenId] = true;
-            emit RedemptionEvent(msg.sender, _tokenId, "STARTED");
+            emit RedemptionEvent(msg.sender, _tokenId, "START");
     }
 
     /**
@@ -401,10 +395,9 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, AccessControl {
         public view override
         tokenExists(_tokenId)
         returns (string memory) {
-            bool upgraded = _tokenUpgraded[_tokenId];
-
+            bool _upgraded = _tokenUpgraded[_tokenId];
             bytes memory image;
-            if (!svgOnly && upgraded && _tokenUpgradedView[_tokenId]) {
+            if (!svgOnly && _upgraded && _tokenUpgradedView[_tokenId]) {
                 image = abi.encodePacked(
                     ',"image":"',
                     _baseURI(), Strings.toString(_tokenId), '.png'
@@ -424,7 +417,7 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, AccessControl {
                         abi.encodePacked(
                             IC9MetaData(metaContract).metaNameDesc(_tokens[_tokenId]),
                             image,
-                            IC9MetaData(metaContract).metaAttributes(_tokens[_tokenId], upgraded)
+                            IC9MetaData(metaContract).metaAttributes(_tokens[_tokenId], _upgraded)
                         )
                     )
                 )
@@ -443,7 +436,7 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, AccessControl {
             require(!_tokenUpgraded[_tokenId], "Token already upgraded");
             uint256 upgradeEthPrice = IC9EthPriceFeed(priceFeedContract).getTokenETHPrice(upgradePrice);
             require(msg.value == upgradeEthPrice, "Wrong amount of ETH");
-            (bool success,) = owner.call{value: msg.value}("");
+            (bool success,) = payable(owner).call{value: msg.value}("");
             require(success, "Failed to send ETH");
             _tokenUpgraded[_tokenId] = true;
             _tokenUpgradedView[_tokenId] = true;
@@ -594,70 +587,5 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, AccessControl {
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
             tokensUpgradable = _flag;
-    }
-
-    /**
-     * @dev It will not be possible to call `onlyRole(DEFAULT_ADMIN_ROLE)` 
-     * functions anymore, unless there are other accounts with that role.
-     *
-     * NOTE: If the renouncer is the original contract owner, the contract 
-     * is left without an owner.
-     */
-    function renounceRole(bytes32 role, address account)
-        public override {
-            require(account == msg.sender, "AccessControl: can only renounce roles for self");
-            if (account == owner) {
-                owner = payable(address(0));
-            }
-            _revokeRole(role, account);
-    }
-
-    /**
-     * @dev Override that makes it impossible for other admins 
-     * to revoke the admin rights of the original contract deployer.
-     */
-    function revokeRole(bytes32 role, address account)
-        public override
-        onlyRole(DEFAULT_ADMIN_ROLE) {
-            require(account != owner, "AccessControl: cannot revoke owner");
-            _revokeRole(role, account);
-    }
-
-    /**
-     * @dev Transfers ownership of the contract to a new account (`newOwner`).
-     * Internal function without access restriction. This is meant to make AccessControl 
-     * functionally equivalent to Ownable.
-     */
-    function _transferOwnership(address _newOwner)
-        internal {
-            delete pendingOwner;
-            address oldOwner = owner;
-            owner = payable(_newOwner);
-            emit OwnershipTransferred(oldOwner, _newOwner);
-    }
-
-    /**
-     * @dev Transfers ownership of the contract to a new account (`newOwner`).
-     * Can only be called by the current owner. This is meant to make AccessControl 
-     * functionally equivalent to Ownable.
-     */
-    function transferOwnership(address _newOwner)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE) {
-            require(_newOwner != address(0), "Transfer Ownership: new owner is the zero address");
-            pendingOwner = _newOwner;
-            grantRole(DEFAULT_ADMIN_ROLE, _newOwner);
-            emit OwnershipTransferStarted(owner, _newOwner);
-    }
-
-    /**
-     * @dev The new owner accepts the ownership transfer. The original owner will
-     * still need to renounceRole DEFAULT_ADMIN_ROLE to fully complete 
-     * this process, unless original owner wishes to remain in that role.
-     */
-    function acceptOwnership()
-        external {
-            require(pendingOwner == msg.sender, "Transfer Ownership: Accepter is not the pending owner");
-            _transferOwnership(msg.sender);
     }
 }

@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0 <0.9.0;
-import "@openzeppelin/contracts/access/AccessControl.sol";
 import "./C9Token2.sol";
 import "./utils/Pricer.sol";
 
@@ -9,25 +8,33 @@ interface IC9Redeemer {
     function storeRedemptionInfo(uint256 _tokenId, string calldata _info) external;
 }
 
-contract C9Redeemer is IC9Redeemer, AccessControl {
-    bytes32 public constant NFTCONTRACT_ROLE = keccak256("NFTCONTRACT_ROLE");
-    mapping(uint256 => string) private _redemptionInfo;
-    mapping(uint256 => uint256) private _redemptionCode;
-    mapping(uint256 => bool) private _redemptionVerified;
-    address public priceFeedContract;
-    address public tokenContract;
+// Need to make sure steps don't get submitted twice so add require statements 
+// checking if _redemptionCode already exists, etc.
 
+contract C9Redeemer is IC9Redeemer, C9OwnerControl {
+    bytes32 public constant NFTCONTRACT_ROLE = keccak256("NFTCONTRACT_ROLE");
+    
+    mapping(uint256 => uint256) private _redemptionCode;
+    mapping(uint256 => string) private _redemptionInfo;
+    mapping(uint256 => bool) private _redemptionVerified;
     event RedemptionEvent(
         address indexed tokenOwner,
         uint256 indexed tokenId,
         string indexed status
     );
 
+    address public priceFeedContract;
+    address public tokenContract;
+
+    /**
+     * @dev priceFeed and tokenContracts will already exist 
+     * before the deployment of this one.
+     */
     constructor(address _priceFeedContract, address _tokenContract) {
-            _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-            _grantRole(NFTCONTRACT_ROLE, _tokenContract);
-            priceFeedContract = _priceFeedContract;
-            tokenContract = _tokenContract;
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(NFTCONTRACT_ROLE, _tokenContract);
+        priceFeedContract = _priceFeedContract;
+        tokenContract = _tokenContract;
     }
 
     modifier isOwner(uint256 _tokenId) {
@@ -54,7 +61,10 @@ contract C9Redeemer is IC9Redeemer, AccessControl {
             removeRedemptionInfo(_tokenId);
     }
 
-    // 4. User submits one last confirmation to lock the token forever and have item shipped
+    /**
+     * @dev Step 4. User submits one last confirmation to lock the token 
+     * forever and have physical item shipped to them.
+     */
     function finishRedemption(uint256 _tokenId)
         external
         isOwner(_tokenId)
@@ -63,7 +73,10 @@ contract C9Redeemer is IC9Redeemer, AccessControl {
             removeRedemptionInfo(_tokenId);
     }
 
-    // 2. Admin retrieves info, sends email with code
+    /**
+     * @dev Step 2. Admin/backend retrieves info, sends email 
+     * with code. 
+     */
     function getRedemptionInfo(uint256 _tokenId)
         external view
         onlyRole(DEFAULT_ADMIN_ROLE)
@@ -91,28 +104,40 @@ contract C9Redeemer is IC9Redeemer, AccessControl {
             ) % 10**12;
     }
 
+    /**
+     * @dev Removes any redemption info after redemption is finished 
+     * or if token own calls this contract (from the token contract) 
+     * having caneled redemption.
+     */
     function removeRedemptionInfo(uint256 _tokenId) internal {
         delete _redemptionCode[_tokenId];
         delete _redemptionInfo[_tokenId];
         delete _redemptionVerified[_tokenId];
     }
 
-    // 1. User submits info and waits for email
+    /**
+     * @dev Step 1. User submits info and waits for email.
+     */
     function storeRedemptionInfo(uint256 _tokenId, string calldata _info)
         external override
         isOwner(_tokenId)
         redemptionStarted(_tokenId) {
-            _redemptionInfo[_tokenId] = _info; // some kind of encrypted info
+            _redemptionInfo[_tokenId] = _info; // encrypted info
             _redemptionCode[_tokenId] = randomCode(); // generate random code
             emit RedemptionEvent(msg.sender, _tokenId, "STORED");
     }
 
-    // 3. User verifies information by submitting confirmation code as payment amount
+    /**
+     * @dev Step 3. User verifies information by submitting 
+     * confirmation code as payment amount.
+     */
     function userVerifyRedemption(uint256 _tokenId)
         external payable
         isOwner(_tokenId)
         redemptionStarted(_tokenId) {
             require(msg.value == _redemptionCode[_tokenId], "Incorrect amount of ETH sent to verify redemption info");
+            (bool success,) = payable(msg.sender).call{value: msg.value}("");
+            require(success, "Unable to send verification ETH");
             _redemptionVerified[_tokenId] = true;
             emit RedemptionEvent(msg.sender, _tokenId, "VERIFIED");
     }
