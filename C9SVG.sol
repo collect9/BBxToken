@@ -136,8 +136,8 @@ contract C9SVG is IC9SVG, C9Shared {
     function addAddress(address _address, bytes memory b) internal pure {
         (bytes32 _a1, bytes8 _a2) = Helpers.addressToB32B8(_address);
         assembly {
-            mstore(add(b, 2802), _a1)
-            let dst := add(b, 2834)
+            mstore(add(b, 2907), _a1)
+            let dst := add(b, 2939)
             mstore(dst, or(and(mload(dst), not(shl(192, 0xFFFFFFFFFFFFFFFF))), _a2))
         }
     }
@@ -148,7 +148,7 @@ contract C9SVG is IC9SVG, C9Shared {
      * SVGs may be displayed on the same page without CSS conflict.
      */
     function addIds(bytes6 _id, bytes memory b) internal pure {
-        uint16[11] memory offsets = [182, 208, 234, 276, 351, 782, 2274, 2352, 2546, 2903, 2965];
+        uint16[11] memory offsets = [182, 208, 234, 276, 351, 887, 2379, 2457, 2651, 3008, 3070];
         assembly {
             let dst := 0
             for {let i := 0} lt(i, 11) {i := add(i, 1)} {
@@ -167,12 +167,8 @@ contract C9SVG is IC9SVG, C9Shared {
 
         // Some default values that apply to most validity status
         bytes3 _clr = bytes3("b00");
-        bytes2 _in = bytes2("IN");
-
-        // If valid, then set correct coloring and status
         if (_validityIdx == 1) {
             _clr = "a0f";
-            _in = "  ";
             uint256 _ds = block.timestamp - _token.mintstamp;
             uint256 _nyrs = _ds/31556926;
             if (_nyrs > 0) {
@@ -181,17 +177,23 @@ contract C9SVG is IC9SVG, C9Shared {
             }
         }
         assembly {
-            let _vcheck := gt(_validityIdx, 0)
-            switch _vcheck case 1 {
-                let dst := add(b, 2414)
+            if gt(_validityIdx, 0) {
+                let dst := add(b, 2519)
                 mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _clr))
-                dst := add(b, 2419)
-                mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _in))
-                dst := add(b, 2427)
+                dst := add(b, 2532)
                 mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), ">>"))
-                dst := add(b, 2430)
+                dst := add(b, 2535)
                 mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _validity))
+                if gt(_validityIdx, 1) {
+                    dst := add(b, 2524)
+                    mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), "IN"))
+                }
             }
+            if eq(_validityIdx, 5) {
+                let dst := add(b, 783)
+                mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "0"))
+            }
+
         }
     }
 
@@ -216,42 +218,42 @@ contract C9SVG is IC9SVG, C9Shared {
             // Colors
             dst := add(b, 484)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _rgc2))
-            dst := add(b, 2619)
+            dst := add(b, 2724)
             mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _classer))
             // Edition
             let _edcheck := gt(_edition, 9)
             switch _edcheck case 0 {
-                dst := add(b, 2688)
+                dst := add(b, 2793)
             } default {
-                dst := add(b, 2687)
+                dst := add(b, 2792)
             }
             mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _edition))
             // Mintid
-            dst := add(b, 2690)
+            dst := add(b, 2795)
             mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), __mintid))
             // Royalty
-            dst := add(b, 2485)
+            dst := add(b, 2590)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _royalty))
             // Timestamps
-            dst := add(b, 2723)
+            dst := add(b, 2828)
             let mask := shl(208, 0xFFFF00000000)
             let srcpart := and(_periods, mask)
             let destpart := and(mload(dst), not(mask))
             mstore(dst, or(destpart, srcpart))
-            dst := add(b, 2726)
+            dst := add(b, 2831)
             mask := shl(208, 0x0000FFFF0000)
             srcpart := and(_periods, mask)
             destpart := and(mload(dst), not(mask))
             mstore(dst, or(destpart, srcpart))
-            dst := add(b, 2729)
+            dst := add(b, 2834)
             mask := shl(208, 0x00000000FFFF)
             srcpart := and(_periods, mask)
             destpart := and(mload(dst), not(mask))
             mstore(dst, or(destpart, srcpart))
             // Gen Country Text
-            dst := add(b, 2911)
+            dst := add(b, 3016)
             mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tagtxt))
-            dst := add(b, 2921)
+            dst := add(b, 3026)
             mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tushtxt))
         }
     }
@@ -735,7 +737,11 @@ contract C9SVG is IC9SVG, C9Shared {
             "<feComposite in2='SourceGraphic' operator='in'/>"
             "<feColorMatrix values='1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0.2 0'/>"
             "</filter>"
+            "<filter id='grayscale'>"
+            "<feColorMatrix type='saturate' values='1.0'/>"
+            "</filter>"
             "</defs>"
+            "<g filter='url(#grayscale)'>"
             "<rect rx='20' width='100%' height='100%' fill='url(#rgXXXXXX)'/>"
             "<rect rx='20' width='100%' height='100%' filter='url(#noiser)'/>"
             "<rect y='560' width='100%' height='22' fill='#ddf' fill-opacity='0.6'/>"
@@ -800,7 +806,7 @@ contract C9SVG is IC9SVG, C9Shared {
             bytes.concat(b,
                 addVariableBytes(_token, _id),
                 addTushMarker(_token.markertush, _token.gentag),
-                "</svg>"
+                "</g></svg>"
             )
         );
     }

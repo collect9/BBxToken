@@ -3,17 +3,25 @@ pragma solidity >=0.8.0 <0.9.0;
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/token/common/ERC2981.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 
 import "./utils/Base64.sol";
 import "./utils/Helpers.sol";
 import "./utils/Pricer.sol";
 import "./C9MetaData.sol";
+import "./C9Redeemer.sol";
 import "./C9Shared.sol";
 import "./C9SVG.sol";
 
 
-contract C9Token is ERC721Enumerable, ERC2981, Ownable {
+interface IC9Token {
+    function tokenRedemptionLock(uint256 _tokenId) external view returns(bool);
+    function redeemFinish(uint256 _tokenId) external;
+}
+
+
+contract C9Token is IC9Token, ERC721Enumerable, ERC2981, AccessControl {
+    bytes32 public constant REDEEMER_ROLE = keccak256("REDEEMER_ROLE");
     /**
      * @dev Flag that may enable IPFS artwork versions to be 
      * displayed in the future. Is it set to false by default
@@ -21,15 +29,22 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
      * SVG only flag acts as a fail safe to return to SVG 
      * only mode later on.
      */
-    bool public tokensUpgradable = false;
+    bool public tokensUpgradable;
     bool public svgOnly = true;
-    string public baseURI;
+    string private __baseURI = "";
+    function _baseURI() internal view override returns(string memory) {
+        return __baseURI;
+    }
 
     /**
-     * @dev Contract level meta data for OpenSea.
+     * @dev Contract-level meta data for OpenSea.
+     * OpenSea: https://docs.opensea.io/docs/contract-level-metadata
      */
-    string _contractURI = "https://collect9.io/metadata/Collect9RWARBBToken.json";
-    
+    string private _contractURI = "https://collect9.io/metadata/Collect9RWARBBToken.json";
+    function contractURI() public view returns (string memory) {
+        return _contractURI;
+    }
+     
     /**
      * @dev Potential token upgrade path params.
      * Upgraded involves setting token to point to baseURI and 
@@ -37,21 +52,46 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
      * the tokenUpgradedView flag toggled to go back and 
      * forth between SVG and PNG views.
      */
-    address payable Owner;
-    mapping(uint256 => bool) tokenUpgraded;
-    mapping(uint256 => bool) tokenUpgradedView;
-    uint16 upgradePrice = 100; //usd
-    event Upgrade(
+    address payable public owner;
+    mapping(uint256 => bool) _tokenUpgraded;
+    mapping(uint256 => bool) _tokenUpgradedView;
+    uint16 public upgradePrice = 100;
+    event Upgraded(
         address indexed buyer,
         uint256 indexed tokenId,
         uint256 indexed price
     );
+    mapping(uint256 => bool) private _tokenRedemptionLock;
+    function tokenRedemptionLock(uint256 _tokenId)
+        external view override
+        tokenExists(_tokenId)
+        returns(bool) {
+            return _tokenRedemptionLock[_tokenId];
+    }
+    event RedemptionEvent(
+        address indexed tokenOwner,
+        uint256 indexed tokenId,
+        string indexed status
+    );
+
+    /**
+     * @dev 2 step ownership transfer like from Ownable2Step.
+     */
+    address public pendingOwner;
+    event OwnershipTransferStarted(
+        address indexed previousOwner,
+        address indexed newOwner
+    );
+    event OwnershipTransferred(
+        address indexed previousOwner,
+        address indexed newOwner
+    );
 
     /**
      * @dev Structure that holds all of the token info required to 
-     * construct the SVG.
+     * construct the 100% on chain SVG.
      */
-    mapping(uint256 => C9Shared.TokenInfo) tokens;
+    mapping(uint256 => C9Shared.TokenInfo) _tokens;
 
     /**
      * @dev Mapping that checks whether or not some combination of 
@@ -59,7 +99,7 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
      * responsible for determining whether or not to increment 
      * the editionID.
      */
-    mapping(bytes32 => bool) attrComboExists;
+    mapping(bytes32 => bool) _attrComboExists;
 
     /**
      * @dev _mintId stores the minting ID number for up to 96 editions.
@@ -73,16 +113,17 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
     /**
      * @dev The meta and SVG contracts.
      */
-    address public _metaContract;
-    address public _svgContract;
-    address public _priceFeedContract;
-    
+    address public metaContract;
+    address public priceFeedContract;
+    address public redemptionContract;
+    address public svgContract;
+
     /**
      * @dev The address to send royalties to. This is defined so that it 
      * may be changed or updated later on to a non-owner address if
      * desired.
      */
-    address _royaltiesTo;
+    address public royaltyAddress;
 
     /**
      * @dev The constructor sets the default royalty of the token 
@@ -91,32 +132,50 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
      * deployment.
      */
     constructor(
-        address metaContract,
-        address svgContract,
-        address priceFeedContract
+        address _metaContract,
+        address _svgContract,
+        address _priceFeedContract
         )
         ERC721("Collect9 BBR NFTs", "C9B") {
-            Owner = payable(msg.sender);
-            _royaltiesTo = Owner;
-            _setDefaultRoyalty(_royaltiesTo, 500);
-            _metaContract = metaContract;
-            _priceFeedContract = priceFeedContract;
-            _svgContract = svgContract;
+            owner = payable(msg.sender);
+            royaltyAddress = owner;
+            metaContract = _metaContract;
+            priceFeedContract = _priceFeedContract;
+            svgContract = _svgContract;
+            _setDefaultRoyalty(royaltyAddress, 500);
+            _grantRole(DEFAULT_ADMIN_ROLE, owner);
+    }
+
+    modifier limitRoyalty(uint16 _royalty) {
+        require(_royalty < 1000, "Royalty set too high");
+        _;
     }
 
     modifier tokenExists(uint256 _tokenId) {
-        require(_exists(_tokenId), "QRY null token");
+        require(_exists(_tokenId), "Qry non-existent token");
+        _;
+    }
+
+    modifier senderApproved(uint256 _tokenId) {
+        require(_isApprovedOrOwner(msg.sender, _tokenId), "Not approved");
         _;
     }
 
     /**
-     * @dev Required override.
+     * @dev Required overrides.
      */
     function _beforeTokenTransfer(address from, address to, uint256 tokenId)
         internal
         override(ERC721Enumerable) {
             super._beforeTokenTransfer(from, to, tokenId);
-            require(tokens[tokenId].validity != 4, "Token has already been redeemed");
+            require(!_tokenRedemptionLock[tokenId], "Token is currently being redeemed");
+            require(_tokens[tokenId].validity != 5, "Token has already been redeemed");
+    }
+
+    function supportsInterface(bytes4 interfaceId)
+        public view override(ERC721Enumerable, ERC2981, AccessControl)
+        returns (bool) {
+            return super.supportsInterface(interfaceId);
     }
 
     /**
@@ -132,12 +191,12 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
      * - token burner must be token owner.
      */
     function burn(uint256 _tokenId)
-        public {
-            require(_isApprovedOrOwner(msg.sender, _tokenId), "BURNER not approved");
+        public
+        senderApproved(_tokenId) {
             _burn(_tokenId);
-            delete(tokens[_tokenId]);
-            delete(tokenUpgraded[_tokenId]);
-            delete(tokenUpgradedView[_tokenId]);
+            delete _tokens[_tokenId];
+            delete _tokenUpgraded[_tokenId];
+            delete _tokenUpgradedView[_tokenId];
             _resetTokenRoyalty(_tokenId);
     }
 
@@ -146,7 +205,7 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
      */
     function burnAll()
         public
-        onlyOwner {
+        onlyRole(DEFAULT_ADMIN_ROLE) {
             uint256 totalSupply = totalSupply();
             for (uint256 i; i<totalSupply; i++) {
                 burn(tokenByIndex(0));
@@ -167,16 +226,6 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
         tokenExists(_tokenId)
         returns (string memory) {
             return Base64.encode(bytes(svgImage(_tokenId)));
-    }
-
-    /**
-     * @dev Contract-level meta data for OpenSea.
-     * OpenSea: https://docs.opensea.io/docs/contract-level-metadata
-     */
-    function contractURI()
-        public view
-        returns (string memory) {
-            return _contractURI;
     }
 
     /**
@@ -216,16 +265,16 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
     */
     function mint1(C9Shared.TokenInfo calldata _input)
         public
-        onlyOwner {
-            require(_input.royalty < 1000, "ERR royalty");
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        limitRoyalty(_input.royalty) {
             uint256 _uid = uint256(_input.id); 
             // Get the token edition number
             uint8 _edition = _input.edition;
             if (_edition == 0) {
                 bytes32 _data;
-                for (uint8 i=1; i<100; i++) {
+                for (uint8 i=1; i<97; i++) {
                     _data = getPhysicalHash(_input, i);
-                    if (!attrComboExists[_data]) {
+                    if (!_attrComboExists[_data]) {
                         _edition = i;
                         break;
                     }
@@ -233,7 +282,8 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
             }
             // Get the edition mint id
             uint16 __mintId = _input.mintid == 0 ? _mintId[_edition] + 1 : _input.mintid;
-            tokens[_uid] = C9Shared.TokenInfo(
+            // Store token meta data
+            _tokens[_uid] = C9Shared.TokenInfo(
                 _input.validity,
                 _edition,
                 _input.tag,
@@ -251,11 +301,12 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
                 _input.qrdata,
                 _input.bardata
             );
-
-            _setTokenRoyalty(_uid, _royaltiesTo, _input.royalty);
+            // Set royalty info
+            _setTokenRoyalty(_uid, royaltyAddress, _input.royalty);
+            // Mint token
             _mint(msg.sender, _uid);
-            
-            attrComboExists[getPhysicalHash(_input, _edition)] = true;
+            // Store attribute combo
+            _attrComboExists[getPhysicalHash(_input, _edition)] = true;
             if (_input.mintid == 0) {
                 _mintId[_edition] = __mintId;
             }
@@ -267,19 +318,53 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
     */
     function mintN(C9Shared.TokenInfo[] calldata _input, uint8 N)
         external
-        onlyOwner {
+        onlyRole(DEFAULT_ADMIN_ROLE) {
             for (uint8 i; i<N; i++) {
                 mint1(_input[i]);
             }
     }
 
     /**
-     * @dev Required override.
-    */
-    function supportsInterface(bytes4 interfaceId)
-        public view override(ERC721Enumerable, ERC2981)
-        returns (bool) {
-            return super.supportsInterface(interfaceId);
+     * @dev Allows user to cancel redemption process and resume 
+     * token movement exchange capabilities.
+     */
+    function redeemCancel(uint256 _tokenId)
+        external
+        tokenExists(_tokenId)
+        senderApproved(_tokenId) {
+            IC9Redeemer(redemptionContract).cancelRedemption(_tokenId);
+            delete _tokenRedemptionLock[_tokenId];
+            emit RedemptionEvent(msg.sender, _tokenId, "CANCEL");
+    }
+
+    /**
+     * @dev Redeemer function that can only be accessed by the external 
+     * contract calling it. That contract calling it will be assigned 
+     * to the redeemer role. Once the token validity is set to 5, it is 
+     * not possible to change it back.
+     */
+    function redeemFinish(uint256 _tokenId)
+        external override
+        onlyRole(REDEEMER_ROLE)
+        tokenExists(_tokenId) {
+            require(_tokenRedemptionLock[_tokenId], "Token has not begun redemption process");
+            _tokens[_tokenId].validity = 5;
+            _tokens[_tokenId].mintstamp = uint56(block.timestamp);
+            emit RedemptionEvent(ownerOf(_tokenId), _tokenId, "FINISH");
+    }
+
+    /**
+     * @dev Starts the redemption process. Only the token holder can start.
+     * Once started, the token is locked from further exchange. The user 
+     * can still cancel the process before finishing.
+     */
+    function redeemStart(uint256 _tokenId)
+        external
+        tokenExists(_tokenId)
+        senderApproved(_tokenId) {
+            require(_tokens[_tokenId].validity == 0, "Token must be marked VALID for redemption");
+            _tokenRedemptionLock[_tokenId] = true;
+            emit RedemptionEvent(msg.sender, _tokenId, "STARTED");
     }
 
     /**
@@ -295,7 +380,7 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
         public view
         tokenExists(_tokenId)
         returns (string memory) {
-            return IC9SVG(_svgContract).returnSVG(ownerOf(_tokenId), tokens[_tokenId]);
+            return IC9SVG(svgContract).returnSVG(ownerOf(_tokenId), _tokens[_tokenId]);
     }
 
     /**
@@ -316,13 +401,13 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
         public view override
         tokenExists(_tokenId)
         returns (string memory) {
-            bool upgraded = tokenUpgraded[_tokenId];
+            bool upgraded = _tokenUpgraded[_tokenId];
 
             bytes memory image;
-            if (!svgOnly && upgraded && tokenUpgradedView[_tokenId]) {
+            if (!svgOnly && upgraded && _tokenUpgradedView[_tokenId]) {
                 image = abi.encodePacked(
                     ',"image":"',
-                    baseURI, Strings.toString(_tokenId), '.png'
+                    _baseURI(), Strings.toString(_tokenId), '.png'
                 );
             }
             else {
@@ -337,9 +422,9 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
                     'data:application/json;base64,',
                     Base64.encode(
                         abi.encodePacked(
-                            IC9MetaData(_metaContract).metaNameDesc(tokens[_tokenId]),
+                            IC9MetaData(metaContract).metaNameDesc(_tokens[_tokenId]),
                             image,
-                            IC9MetaData(_metaContract).metaAttributes(tokens[_tokenId], upgraded)
+                            IC9MetaData(metaContract).metaAttributes(_tokens[_tokenId], upgraded)
                         )
                     )
                 )
@@ -354,25 +439,15 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
         tokenExists(_tokenId) {
             require(_isApprovedOrOwner(msg.sender, _tokenId), "UPGRADER unauthorized");
             require(tokensUpgradable, "Upgrades are currently not enabled");
-            require(Helpers.stringEqual(baseURI, ""), "BaseURI not yet set");
-            require(!tokenUpgraded[_tokenId], "Token already upgraded");
-            uint256 upgradeEthPrice = IC9EthPriceFeed(_priceFeedContract).getTokenETHPrice(upgradePrice);
+            require(Helpers.stringEqual(_baseURI(), ""), "baseURI not set");
+            require(!_tokenUpgraded[_tokenId], "Token already upgraded");
+            uint256 upgradeEthPrice = IC9EthPriceFeed(priceFeedContract).getTokenETHPrice(upgradePrice);
             require(msg.value == upgradeEthPrice, "Wrong amount of ETH");
-            (bool success,) = Owner.call{value: msg.value}("");
+            (bool success,) = owner.call{value: msg.value}("");
             require(success, "Failed to send ETH");
-            tokenUpgraded[_tokenId] = true;
-            tokenUpgradedView[_tokenId] = true;
-            emit Upgrade(msg.sender, _tokenId, upgradePrice);
-    }
-
-    /**
-     * @dev Base URI for computing {tokenURI}. If set, the resulting URI for each
-     * token will be the concatenation of the `baseURI` and the `tokenId`.
-     */
-    function _baseURI()
-        internal view override
-        returns (string memory) {
-            return baseURI;
+            _tokenUpgraded[_tokenId] = true;
+            _tokenUpgradedView[_tokenId] = true;
+            emit Upgraded(msg.sender, _tokenId, upgradePrice);
     }
 
     /**
@@ -383,8 +458,8 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
      */
     function setBaseUri(string calldata _newBaseURI)
         external
-        onlyOwner {
-            baseURI = _newBaseURI;
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            __baseURI = _newBaseURI;
     }
 
      /**
@@ -392,7 +467,7 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
      */
     function setContractUri(string calldata _newContractURI)
         external
-        onlyOwner {
+        onlyRole(DEFAULT_ADMIN_ROLE) {
             _contractURI = _newContractURI;
     }
 
@@ -400,11 +475,12 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
      * @dev Allows the contract owner to update the global royalties 
      * receving address and amount.
      */
-    function setDefaultRoyalties(address _address, uint96 _defaultRoyalty)
+    function setDefaultRoyalties(address _address, uint16 _defaultRoyalty)
         external
-        onlyOwner {
-            _royaltiesTo = _address;
-            _setDefaultRoyalty(_royaltiesTo, _defaultRoyalty);
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        limitRoyalty(_defaultRoyalty) {
+            royaltyAddress = _address;
+            _setDefaultRoyalty(royaltyAddress, _defaultRoyalty);
     }
 
     /**
@@ -414,8 +490,8 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
      */
     function setMetaContract(address _address)
         external
-        onlyOwner {
-            _metaContract = _address;
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            metaContract = _address;
     }
 
     /**
@@ -425,8 +501,8 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
      */
     function setPriceFeedContract(address _address)
         external
-        onlyOwner {
-            _priceFeedContract = _address;
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            priceFeedContract = _address;
     }
 
     /**
@@ -438,8 +514,8 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
      */
     function setSVGContract(address _address)
         external
-        onlyOwner {
-            _svgContract = _address;
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            svgContract = _address;
     }
 
     /**
@@ -447,9 +523,9 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
      * version (false). If set to true, it is still possible 
      * to retrieve the SVG image by calling svgImage(_tokenId).
      */
-    function setSVGFlag(bool _flag)
+    function setSvgOnly(bool _flag)
         external
-        onlyOwner {
+        onlyRole(DEFAULT_ADMIN_ROLE) {
             svgOnly = _flag;
     }
 
@@ -459,15 +535,19 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
      * This may be useful if Collect9 eventually tokenizes 
      * on behalf of others.
      */
-    function setTokenRoyalty(uint256 _tokenId, uint96 _newRoyalty, address _royaltyAddress)
-        external
-        onlyOwner
-        tokenExists(_tokenId) {
-            require(_newRoyalty < 1000, "Royalty too high"); // Limit max royalty to 10%
-            tokens[_tokenId].royalty = uint16(_newRoyalty);
-            _royaltyAddress != address(0) ?
-                _setTokenRoyalty(_tokenId, _royaltyAddress, _newRoyalty) :
-                _setTokenRoyalty(_tokenId, _royaltiesTo, _newRoyalty);
+    function setTokenRoyalty(
+        uint256 _tokenId,
+        uint16 _newRoyalty,
+        address _royaltyAddress
+    )
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE)
+    limitRoyalty(_newRoyalty)
+    tokenExists(_tokenId) {
+        _tokens[_tokenId].royalty = _newRoyalty;
+        _royaltyAddress != address(0) ?
+            _setTokenRoyalty(_tokenId, _royaltyAddress, _newRoyalty) :
+            _setTokenRoyalty(_tokenId, royaltyAddress, _newRoyalty);
     }
 
     /**
@@ -476,11 +556,12 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
      * only a display flag to let users know of the token's 
      * status.
      */
-    function setTokenValidity(uint256 _tokenId, uint8 _vFlag)
+    function setTokenValidity(uint256 _tokenId, uint8 _vId)
         external
-        onlyOwner
+        onlyRole(DEFAULT_ADMIN_ROLE)
         tokenExists(_tokenId) {
-            tokens[_tokenId].validity = _vFlag;
+            require(_vId < 5, "Must set _vId<5");
+            _tokens[_tokenId].validity = _vId;
     }
 
     /**
@@ -492,9 +573,9 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
         external
         tokenExists(_tokenId) {
             require(_isApprovedOrOwner(msg.sender, _tokenId), "Unauthorized token view setter");
-            require(tokenUpgraded[_tokenId], "Token not yet upgraded");
-            require(tokenUpgraded[_tokenId] != _flag, "Token view already set to this mode");
-            tokenUpgradedView[_tokenId] = _flag;
+            require(_tokenUpgraded[_tokenId], "Token not yet upgraded");
+            require(_tokenUpgraded[_tokenId] != _flag, "Token view already set to this mode");
+            _tokenUpgradedView[_tokenId] = _flag;
     }
 
     /**
@@ -502,16 +583,81 @@ contract C9Token is ERC721Enumerable, ERC2981, Ownable {
      */
     function setTokenUpgradePrice(uint16 _price)
         external
-        onlyOwner {
+        onlyRole(DEFAULT_ADMIN_ROLE) {
             upgradePrice = _price;
     }
 
     /**
      * @dev Set token upgrade capability flag.
      */
-    function setUpgradeFlag(bool _flag)
+    function setTokensUpgradable(bool _flag)
         external
-        onlyOwner {
+        onlyRole(DEFAULT_ADMIN_ROLE) {
             tokensUpgradable = _flag;
+    }
+
+    /**
+     * @dev It will not be possible to call `onlyRole(DEFAULT_ADMIN_ROLE)` 
+     * functions anymore, unless there are other accounts with that role.
+     *
+     * NOTE: If the renouncer is the original contract owner, the contract 
+     * is left without an owner.
+     */
+    function renounceRole(bytes32 role, address account)
+        public override {
+            require(account == msg.sender, "AccessControl: can only renounce roles for self");
+            if (account == owner) {
+                owner = payable(address(0));
+            }
+            _revokeRole(role, account);
+    }
+
+    /**
+     * @dev Override that makes it impossible for other admins 
+     * to revoke the admin rights of the original contract deployer.
+     */
+    function revokeRole(bytes32 role, address account)
+        public override
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            require(account != owner, "AccessControl: cannot revoke owner");
+            _revokeRole(role, account);
+    }
+
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     * Internal function without access restriction. This is meant to make AccessControl 
+     * functionally equivalent to Ownable.
+     */
+    function _transferOwnership(address _newOwner)
+        internal {
+            delete pendingOwner;
+            address oldOwner = owner;
+            owner = payable(_newOwner);
+            emit OwnershipTransferred(oldOwner, _newOwner);
+    }
+
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     * Can only be called by the current owner. This is meant to make AccessControl 
+     * functionally equivalent to Ownable.
+     */
+    function transferOwnership(address _newOwner)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            require(_newOwner != address(0), "Transfer Ownership: new owner is the zero address");
+            pendingOwner = _newOwner;
+            grantRole(DEFAULT_ADMIN_ROLE, _newOwner);
+            emit OwnershipTransferStarted(owner, _newOwner);
+    }
+
+    /**
+     * @dev The new owner accepts the ownership transfer. The original owner will
+     * still need to renounceRole DEFAULT_ADMIN_ROLE to fully complete 
+     * this process, unless original owner wishes to remain in that role.
+     */
+    function acceptOwnership()
+        external {
+            require(pendingOwner == msg.sender, "Transfer Ownership: Accepter is not the pending owner");
+            _transferOwnership(msg.sender);
     }
 }
