@@ -36,6 +36,7 @@ abstract contract C9OwnerControl is AccessControl {
     );
 
     constructor() {
+        owner = msg.sender;
         _grantRole(DEFAULT_ADMIN_ROLE, owner);
     }
 

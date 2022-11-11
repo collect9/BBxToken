@@ -12,7 +12,7 @@ import "./C9SVG.sol";
 
 import "./utils/Base64.sol";
 import "./utils/Helpers.sol";
-import "./utils/Pricer.sol";
+import "./utils/EthPricer.sol";
 
 
 interface IC9Token {
@@ -22,7 +22,6 @@ interface IC9Token {
 
 
 contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant REDEEMER_ROLE = keccak256("REDEEMER_ROLE");
     /**
      * @dev Flag that may enable IPFS artwork versions to be 
@@ -328,7 +327,7 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
         senderApproved(_tokenId) {
             IC9Redeemer(redemptionContract).cancelRedemption(_tokenId);
             delete _tokenRedemptionLock[_tokenId];
-            emit RedemptionEvent(msg.sender, _tokenId, "CANCEL");
+            emit RedemptionEvent(msg.sender, _tokenId, "TOKEN UNLOCK");
     }
 
     /**
@@ -344,7 +343,7 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
             require(_tokenRedemptionLock[_tokenId], "Token has not begun redemption process");
             _tokens[_tokenId].validity = 5;
             _tokens[_tokenId].mintstamp = uint56(block.timestamp);
-            emit RedemptionEvent(ownerOf(_tokenId), _tokenId, "FINISH");
+            emit RedemptionEvent(ownerOf(_tokenId), _tokenId, "FINISHED");
     }
 
     /**
@@ -358,7 +357,8 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
         senderApproved(_tokenId) {
             require(_tokens[_tokenId].validity == 0, "Token must be marked VALID for redemption");
             _tokenRedemptionLock[_tokenId] = true;
-            emit RedemptionEvent(msg.sender, _tokenId, "START");
+            IC9Redeemer(redemptionContract).genRedemptionCode(_tokenId);
+            emit RedemptionEvent(msg.sender, _tokenId, "TOKEN LOCK");
     }
 
     /**
