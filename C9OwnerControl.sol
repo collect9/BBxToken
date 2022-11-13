@@ -25,14 +25,21 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 * NOTE: If multiple addresses are granted DEFAULT_ADMIN_ROLE, 
 * they cannot revoke owner. Only owner can renounce itself.
 */
+
+error InvalidAddress(address);
+error UnauthorizedCaller(address expected, address caller);
+
 abstract contract C9OwnerControl is AccessControl {
     address public owner;
     address public pendingOwner;
 
-    event OwnershipTransfer(
+    event OwnershipTransferComplete(
         address indexed previousOwner,
-        address indexed newOwner,
-        string indexed status
+        address indexed newOwner
+    );
+    event OwnershipTransferInit(
+        address indexed previousOwner,
+        address indexed newOwner
     );
 
     constructor() {
@@ -49,10 +56,7 @@ abstract contract C9OwnerControl is AccessControl {
      */
     function renounceRole(bytes32 role, address account)
         public override {
-            require(account == msg.sender, "AccessControl: can only renounce roles for self");
-            if (account == owner) {
-                owner = payable(address(0));
-            }
+            if (account != msg.sender) revert UnauthorizedCaller(account, msg.sender);
             _revokeRole(role, account);
     }
 
@@ -63,7 +67,7 @@ abstract contract C9OwnerControl is AccessControl {
     function revokeRole(bytes32 role, address account)
         public override
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            require(account != owner, "AccessControl: cannot revoke owner");
+            if (account == owner) revert UnauthorizedCaller(owner, msg.sender);
             _revokeRole(role, account);
     }
 
@@ -77,7 +81,7 @@ abstract contract C9OwnerControl is AccessControl {
             delete pendingOwner;
             address oldOwner = owner;
             owner = _newOwner;
-            emit OwnershipTransfer(oldOwner, _newOwner, "COMPLETED");
+            emit OwnershipTransferComplete(oldOwner, _newOwner);
     }
 
     /**
@@ -88,10 +92,10 @@ abstract contract C9OwnerControl is AccessControl {
     function transferOwnership(address _newOwner)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            require(_newOwner != address(0), "Transfer Ownership: new owner cannot be zero address");
+            if (_newOwner == address(0)) revert InvalidAddress(_newOwner);
             pendingOwner = _newOwner;
             grantRole(DEFAULT_ADMIN_ROLE, _newOwner);
-            emit OwnershipTransfer(owner, _newOwner, "INITIATED");
+            emit OwnershipTransferInit(owner, _newOwner);
     }
 
     /**
@@ -101,7 +105,7 @@ abstract contract C9OwnerControl is AccessControl {
      */
     function acceptOwnership()
         external {
-            require(pendingOwner == msg.sender, "Transfer Ownership: Accepter is not the pending owner");
+            if (pendingOwner != msg.sender) revert UnauthorizedCaller(pendingOwner, msg.sender);
             _transferOwnership(msg.sender);
     }
 }

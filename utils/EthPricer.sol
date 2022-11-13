@@ -3,6 +3,8 @@ pragma solidity >=0.8.0 <0.9.0;
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+error DatedPrice(uint256);
+
 interface IC9EthPriceFeed {
     function getLatestETHUSDPrice() external view returns (uint256);
     function getTokenETHPrice(uint256 _tokenUSDPrice) external view returns (uint256 tokenETHPrice);
@@ -30,7 +32,8 @@ contract C9EthPriceFeed is Ownable {
         public view
         returns (uint256) {
             (,int256 price,,uint256 timeStamp,) = priceFeed.latestRoundData();
-            require(block.timestamp - timeStamp < 3600, "Price feed not recent enough, try again later.");
+            uint256 _ds = block.timestamp - timeStamp;
+            if (_ds > 3600) revert DatedPrice(_ds);
             return uint256(price);
     }
 

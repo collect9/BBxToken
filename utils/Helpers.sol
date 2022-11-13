@@ -38,11 +38,11 @@ library Helpers {
             return (uint8(b) < 10) ? bytes1(uint8(b) + 0x30) : bytes1(uint8(b) + 0x57);
     }
 
-    function concatTilSpace(bytes memory entry, uint8 offset)
+    function concatTilSpace(bytes memory entry, uint256 offset)
         internal pure
         returns(bytes memory output) {
             bytes1 e0;
-            for (uint8 j; j<entry.length; j++) {
+            for (uint256 j; j<entry.length; j++) {
                 e0 = entry[j+offset];
                 if (e0 == 0x20) { //space
                     break;
@@ -65,7 +65,7 @@ library Helpers {
 
     function flipSpace(bytes memory input, uint8 o0)
         internal pure {
-            uint8 o1 = 1+o0;
+            uint256 o1 = 1+o0;
             if (input[o1] == 0x00) {
                 input[o1] = input[o0];
                 input[o0] = 0x20;
@@ -91,7 +91,7 @@ library Helpers {
         internal pure
         returns (bytes4) {
             bytes memory output = new bytes(4);
-            for(uint8 i; i<4; i++) {
+            for (uint256 i; i<4; i++) {
                 if (input[i] == 0x00) {
                     output[i] = 0x20;
                 }
@@ -106,7 +106,7 @@ library Helpers {
         internal pure
         returns (bytes2) {
             bytes memory output = new bytes(2);
-            for(uint8 i; i<2; i++) {
+            for (uint256 i; i<2; i++) {
                 if (input[i] == 0x00) {
                     output[i] = 0x20;
                 }
@@ -144,8 +144,8 @@ library Helpers {
             bytes memory output = new bytes(6);
             output[0] = bytes1("0");
             bytes32 _bid = uintToBytes(_id);
-            uint8 _offset = _bid[5] == 0x00 ? 1 : 0;
-            for (uint8 j=0; j<6-_offset; j++) {
+            uint256 _offset = _bid[5] == 0x00 ? 1 : 0;
+            for (uint256 j=0; j<6-_offset; j++) {
                 output[j+_offset] = _bid[j];
             }
             return bytes6(output);

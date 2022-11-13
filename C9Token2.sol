@@ -14,10 +14,26 @@ import "./utils/Base64.sol";
 import "./utils/Helpers.sol";
 import "./utils/EthPricer.sol";
 
+error EditionOverflow(uint8 edition);
+error IncorrectEthAmount(uint256 expected, uint256 received);
+error InvalidTokenId(uint256 tokenId);
+error InvalidVId(uint8 vId);
+error PayementFailure(address sender, address receiver, uint256 amount);
+error RedemptionPending(uint256 tokenId, bool status);
+error RoyaltyTooHigh(uint16 royalty);
+error ValAlreadySet();
+error TokenNotValid(uint256 tokenId);
+error TokenPreRelease(uint256 tokenId, bool status);
+error TokenUpgraded(uint256 tokenId, bool status);
+error TokenRedeemed(uint256 tokenId);
+error TokensUpgradable(bool status);
+error Unauthorized(address caller, address owner);
 
 interface IC9Token {
-    function tokenRedemptionLock(uint256 _tokenId) external view returns(bool);
+    function ownerOf(uint256 _tokenId) external view returns (address);
+    function preRedeemableDone(uint256 _tokenId) external view returns(bool);
     function redeemFinish(uint256 _tokenId) external;
+    function tokenRedemptionLock(uint256 _tokenId) external view returns(bool);
 }
 
 
@@ -61,18 +77,28 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
         uint256 indexed tokenId,
         uint256 indexed price
     );
-    mapping(uint256 => bool) private _tokenRedemptionLock;
+
+    uint32 public _redeemablePeriod = 31556926; //seconds
+    mapping(uint256 => bool) private _tokenLock;
     function tokenRedemptionLock(uint256 _tokenId)
         external view override
         tokenExists(_tokenId)
         returns(bool) {
-            return _tokenRedemptionLock[_tokenId];
+            return _tokenLock[_tokenId];
     }
-    event RedemptionEvent(
+    event RedemptionCancel(
         address indexed tokenOwner,
-        uint256 indexed tokenId,
-        string indexed status
+        uint256 indexed tokenId
     );
+    event RedemptionFinish(
+        address indexed tokenOwner,
+        uint256 indexed tokenId
+    );
+    event RedemptionStart(
+        address indexed tokenOwner,
+        uint256 indexed tokenId
+    );
+
 
     /**
      * @dev Fail-safe pause in case something is wrong with the 
@@ -109,7 +135,7 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      */
     address public metaContract;
     address public priceFeedContract;
-    address public redemptionContract;
+    address public redeemerContract;
     address public svgContract;
 
     /**
@@ -138,18 +164,31 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
             _setDefaultRoyalty(royaltyAddress, 500);
     }
 
+    modifier addressNotSame(address _old, address _new) {
+        if (_old == _new) revert ValAlreadySet();
+        _;
+    }
+
+    modifier inRedemption(uint256 _tokenId, bool status) {
+        if (_tokenLock[_tokenId] != status)  revert RedemptionPending(_tokenId, !status);
+        if (_tokens[_tokenId].validity == 4) revert TokenRedeemed(_tokenId);
+        _;
+    }
+
     modifier limitRoyalty(uint16 _royalty) {
-        require(_royalty < 1000, "Royalty set too high");
+        if (_royalty > 999) revert RoyaltyTooHigh(_royalty);
+        _;
+    }
+
+    modifier isOwner(uint256 _tokenId) {
+        address _tokenOwner = ownerOf(_tokenId);
+        if (msg.sender != _tokenOwner) revert Unauthorized(msg.sender, _tokenOwner);
+        if (_tokens[_tokenId].validity == 2) _tokens[_tokenId].validity = 0;
         _;
     }
 
     modifier tokenExists(uint256 _tokenId) {
-        require(_exists(_tokenId), "Qry non-existent token");
-        _;
-    }
-
-    modifier senderApproved(uint256 _tokenId) {
-        require(_isApprovedOrOwner(msg.sender, _tokenId), "Not approved");
+        if (!_exists(_tokenId)) revert InvalidTokenId(_tokenId);
         _;
     }
 
@@ -158,10 +197,9 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      */
     function _beforeTokenTransfer(address from, address to, uint256 tokenId)
         internal
-        override(ERC721Enumerable) {
+        override(ERC721Enumerable)
+        inRedemption(tokenId, false) {
             super._beforeTokenTransfer(from, to, tokenId);
-            require(!_tokenRedemptionLock[tokenId], "Token is locked: currently being redeemed");
-            require(_tokens[tokenId].validity != 5, "Token is locked: has already been redeemed");
     }
 
     function supportsInterface(bytes4 interfaceId)
@@ -184,12 +222,12 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      */
     function burn(uint256 _tokenId)
         public
-        senderApproved(_tokenId) {
+        isOwner(_tokenId) {
             _burn(_tokenId);
             delete _tokens[_tokenId];
+            delete _tokenLock[_tokenId];
             delete _tokenUpgraded[_tokenId];
             delete _tokenUpgradedView[_tokenId];
-            delete _tokenRedemptionLock[_tokenId];
             _resetTokenRoyalty(_tokenId);
     }
 
@@ -265,13 +303,16 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
             uint8 _edition = _input.edition;
             if (_edition == 0) {
                 bytes32 _data;
-                for (uint8 i=1; i<97; i++) {
-                    _data = getPhysicalHash(_input, i);
+                for (uint8 i; i<_mintId.length; i++) {
+                    _data = getPhysicalHash(_input, i+1);
                     if (!_attrComboExists[_data]) {
-                        _edition = i;
+                        _edition = i+1;
                         break;
                     }
                 }
+            }
+            if (_edition > _mintId.length-1) {
+                revert EditionOverflow(_edition);
             }
             // Get the edition mint id
             uint16 __mintId = _input.mintid == 0 ? _mintId[_edition] + 1 : _input.mintid;
@@ -289,7 +330,7 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
                 __mintId,
                 _input.royalty,
                 _input.id,
-                uint56(block.timestamp),
+                uint48(block.timestamp),
                 _input.name,
                 _input.qrdata,
                 _input.bardata
@@ -318,32 +359,53 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
     }
 
     /**
+     * @dev Returns whether or not the token pre-release period 
+     * has ended.
+     */
+    function preRedeemableDone(uint256 _tokenId)
+        public view override
+        tokenExists(_tokenId)
+        returns (bool) {
+            return block.timestamp - _tokens[_tokenId].mintstamp > _redeemablePeriod;
+    }
+
+    /**
+     * @dev Required override for IC9Token that the redeemer uses.
+     */
+    function ownerOf(uint256 tokenId)
+        public view override(ERC721, IC9Token)
+        returns (address) {
+            return super.ownerOf(tokenId);
+    }
+
+    /**
      * @dev Allows user to cancel redemption process and resume 
      * token movement exchange capabilities.
      */
     function redeemCancel(uint256 _tokenId)
         external
         tokenExists(_tokenId)
-        senderApproved(_tokenId) {
-            IC9Redeemer(redemptionContract).cancelRedemption(_tokenId);
-            delete _tokenRedemptionLock[_tokenId];
-            emit RedemptionEvent(msg.sender, _tokenId, "TOKEN UNLOCK");
+        isOwner(_tokenId)
+        inRedemption(_tokenId, true) {
+            IC9Redeemer(redeemerContract).cancelRedemption(_tokenId);
+            delete _tokenLock[_tokenId];
+            emit RedemptionCancel(msg.sender, _tokenId);
     }
 
     /**
      * @dev Redeemer function that can only be accessed by the external 
      * contract calling it. That contract calling it will be assigned 
-     * to the redeemer role. Once the token validity is set to 5, it is 
+     * to the redeemer role. Once the token validity is set to 4, it is 
      * not possible to change it back.
      */
     function redeemFinish(uint256 _tokenId)
         external override
         onlyRole(REDEEMER_ROLE)
-        tokenExists(_tokenId) {
-            require(_tokenRedemptionLock[_tokenId], "Token has not begun redemption process");
-            _tokens[_tokenId].validity = 5;
-            _tokens[_tokenId].mintstamp = uint56(block.timestamp);
-            emit RedemptionEvent(ownerOf(_tokenId), _tokenId, "FINISHED");
+        tokenExists(_tokenId)
+        inRedemption(_tokenId, true) {
+            _tokens[_tokenId].validity = 4;
+            _tokens[_tokenId].mintstamp = uint48(block.timestamp);
+            emit RedemptionFinish(ownerOf(_tokenId), _tokenId);
     }
 
     /**
@@ -354,11 +416,16 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
     function redeemStart(uint256 _tokenId)
         external
         tokenExists(_tokenId)
-        senderApproved(_tokenId) {
-            require(_tokens[_tokenId].validity == 0, "Token must be marked VALID for redemption");
-            _tokenRedemptionLock[_tokenId] = true;
-            IC9Redeemer(redemptionContract).genRedemptionCode(_tokenId);
-            emit RedemptionEvent(msg.sender, _tokenId, "TOKEN LOCK");
+        isOwner(_tokenId) {
+            if (_tokens[_tokenId].validity != 0) {
+                revert TokenNotValid(_tokenId);
+            }
+            if (!preRedeemableDone(_tokenId)) {
+                revert TokenPreRelease(_tokenId, true);
+            }
+            _tokenLock[_tokenId] = true;
+            IC9Redeemer(redeemerContract).startRedemption(_tokenId);
+            emit RedemptionStart(msg.sender, _tokenId);
     }
 
     /**
@@ -429,15 +496,27 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      */
     function upgradeToken(uint256 _tokenId)
         external payable
-        tokenExists(_tokenId) {
-            require(_isApprovedOrOwner(msg.sender, _tokenId), "UPGRADER unauthorized");
-            require(tokensUpgradable, "Upgrades are currently not enabled");
-            require(Helpers.stringEqual(_baseURI(), ""), "baseURI not set");
-            require(!_tokenUpgraded[_tokenId], "Token already upgraded");
+        tokenExists(_tokenId)
+        isOwner(_tokenId) {
+            if (!tokensUpgradable) {
+                // Tokens are not upgradable
+                revert TokensUpgradable(false);
+            }
+            if (_tokenUpgraded[_tokenId]) {
+                // This token is already upgraded
+                revert TokenUpgraded(_tokenId, true);
+            } 
             uint256 upgradeEthPrice = IC9EthPriceFeed(priceFeedContract).getTokenETHPrice(upgradePrice);
-            require(msg.value == upgradeEthPrice, "Wrong amount of ETH");
+            if (msg.value == upgradeEthPrice) {
+                // Incorrect amount of Eth from caller
+                revert IncorrectEthAmount(upgradeEthPrice, msg.value);
+            }
+
             (bool success,) = payable(owner).call{value: msg.value}("");
-            require(success, "Failed to send ETH");
+            if(!success) {
+                // Payment did not go through
+                revert PayementFailure(msg.sender, owner, msg.value);
+            }
             _tokenUpgraded[_tokenId] = true;
             _tokenUpgradedView[_tokenId] = true;
             emit Upgraded(msg.sender, _tokenId, upgradePrice);
@@ -483,7 +562,8 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      */
     function setMetaContract(address _address)
         external
-        onlyRole(DEFAULT_ADMIN_ROLE) {
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        addressNotSame(metaContract, _address) {
             metaContract = _address;
     }
 
@@ -494,8 +574,30 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      */
     function setPriceFeedContract(address _address)
         external
-        onlyRole(DEFAULT_ADMIN_ROLE) {
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        addressNotSame(priceFeedContract, _address) {
             priceFeedContract = _address;
+    }
+
+    /**
+     * @dev Gets or sets the global token redeemable period.
+     */
+    function setRedeemablePeriod(uint32 _period)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            if (_redeemablePeriod == _period) revert ValAlreadySet();
+            _redeemablePeriod = _period;
+    }
+
+    /**
+     * @dev Updates the redemption data contract address.
+     */
+    function setRedeemerContract(address _address)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        addressNotSame(redeemerContract, _address) {
+            redeemerContract = _address;
+            _grantRole(REDEEMER_ROLE, redeemerContract);
     }
 
     /**
@@ -507,7 +609,8 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      */
     function setSVGContract(address _address)
         external
-        onlyRole(DEFAULT_ADMIN_ROLE) {
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        addressNotSame(svgContract, _address) {
             svgContract = _address;
     }
 
@@ -519,6 +622,7 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
     function setSvgOnly(bool _flag)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
+            if (svgOnly == _flag) revert ValAlreadySet();
             svgOnly = _flag;
     }
 
@@ -553,7 +657,9 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
         tokenExists(_tokenId) {
-            require(_vId < 5, "Must set _vId<5");
+            if (_tokens[_tokenId].validity == 4)    revert TokenRedeemed(_tokenId);
+            if (_vId > 3)                           revert InvalidVId(_vId);
+            if (_tokens[_tokenId].validity == _vId) revert ValAlreadySet();
             _tokens[_tokenId].validity = _vId;
     }
 
@@ -564,10 +670,10 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      */
     function setTokenView(uint256 _tokenId, bool _flag)
         external
-        tokenExists(_tokenId) {
-            require(_isApprovedOrOwner(msg.sender, _tokenId), "Unauthorized token view setter");
-            require(_tokenUpgraded[_tokenId], "Token not yet upgraded");
-            require(_tokenUpgraded[_tokenId] != _flag, "Token view already set to this mode");
+        tokenExists(_tokenId)
+        isOwner(_tokenId) {
+            if (!_tokenUpgraded[_tokenId])         revert TokenUpgraded(_tokenId, false);
+            if (_tokenUpgraded[_tokenId] == _flag) revert ValAlreadySet();
             _tokenUpgradedView[_tokenId] = _flag;
     }
 
@@ -577,6 +683,7 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
     function setTokenUpgradePrice(uint16 _price)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
+            if (upgradePrice == _price) revert ValAlreadySet();
             upgradePrice = _price;
     }
 
@@ -586,6 +693,7 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
     function setTokensUpgradable(bool _flag)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
+            if (tokensUpgradable == _flag) revert ValAlreadySet();
             tokensUpgradable = _flag;
     }
 }

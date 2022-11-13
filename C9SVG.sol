@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0 <0.9.0;
-import "./utils/Helpers.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
 import "./C9Shared.sol";
+import "./C9Token2.sol";
+import "./utils/Helpers.sol";
 
 
 /**
@@ -12,7 +15,7 @@ interface IC9SVG {
     function returnSVG(address _address, C9Shared.TokenInfo calldata _token) external view returns (string memory);
 }
 
-contract C9SVG is IC9SVG, C9Shared {
+contract C9SVG is IC9SVG, C9Shared, Ownable {
     /**
      * @dev Optimized SVG flags in storage.
      */
@@ -105,6 +108,8 @@ contract C9SVG is IC9SVG, C9Shared {
         "<use href='#c9usa' x='243.2'/>"
         "<use href='#c9uso' x='304'/>";
     
+    address private tokenContract;
+
     /**
      * @dev Sets up the mapping for compressed/mapped SVG input data.
      */
@@ -163,37 +168,49 @@ contract C9SVG is IC9SVG, C9Shared {
      */
     function addValidityInfo(TokenInfo calldata _token, bytes memory b) internal view {
         uint8 _validityIdx = _token.validity;
-        bytes16 _validity = _validityIdx > 0 ? _vValidity[_validityIdx-1] : bytes16("                ");
-
-        // Some default values that apply to most validity status
-        bytes3 _clr = bytes3("b00");
-        if (_validityIdx == 1) {
-            _clr = "a0f";
-            uint256 _ds = block.timestamp - _token.mintstamp;
-            uint256 _nyrs = _ds/31556926;
-            if (_nyrs > 0) {
-                _clr = "0a0";
-                _validity = bytes16("REDEEMABLE");
+        bytes3 _clr;
+        bytes16 _validity = _vValidity[_validityIdx];
+        bool _lock = false;
+        if (_validityIdx == 0) {
+            bool redeemable = IC9Token(tokenContract).preRedeemableDone(_token.id);
+            if (!redeemable) {
+                _clr = "a0f"; // purple
+                _validity = "PRE-REDEEMABLE  ";
             }
-        }
-        assembly {
-            if gt(_validityIdx, 0) {
-                let dst := add(b, 2519)
-                mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _clr))
-                dst := add(b, 2532)
-                mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), ">>"))
-                dst := add(b, 2535)
-                mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _validity))
-                if gt(_validityIdx, 1) {
-                    dst := add(b, 2524)
-                    mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), "IN"))
+            else {
+                // If validity 0 and locked == getting reedemed
+                _lock = IC9Token(tokenContract).tokenRedemptionLock(_token.id);
+                if (_lock) {
+                    _clr = "b50"; // orange
+                    _validity = "PENDING REDEEM  ";
+                }
+                else {
+                    _clr = "0a0"; // green
                 }
             }
-            if eq(_validityIdx, 5) {
-                let dst := add(b, 783)
-                mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "0"))
+        }
+        else {
+            _clr = "b00"; // red, invalid
+        }
+        assembly {
+            let dst := add(b, 2519)
+            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _clr))
+            if gt(_validityIdx, 0) {
+                dst := add(b, 2524)
+                mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), "IN"))
             }
-
+            if eq(_lock, true) {
+                dst := add(b, 2524)
+                mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), " LOCKED"))
+            }
+            dst := add(b, 2532)
+            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), ">>"))
+            dst := add(b, 2535)
+            mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _validity))
+            if eq(_validityIdx, 4) {
+                dst := add(b, 783)
+                mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "0")) // grayscale
+            }
         }
     }
 
@@ -209,7 +226,7 @@ contract C9SVG is IC9SVG, C9Shared {
         bytes4 __mintid = Helpers.flip4Space(bytes4(Helpers.uintToBytes(_token.mintid)));
         bytes4 _royalty = Helpers.bpsToPercent(_token.royalty);
         bytes2 _edition = Helpers.flip2Space(Helpers.remove2Null(bytes2(Helpers.uintToBytes(_token.edition))));
-        bytes2 _namesize = getNameSize(uint8(bytes(_token.name).length));
+        bytes2 _namesize = getNameSize(uint256(bytes(_token.name).length));
 
         assembly {
             // Name Font Size
@@ -333,10 +350,10 @@ contract C9SVG is IC9SVG, C9Shared {
         bytes1 e0;
         bytes2 m2;
         bytes5 m5;
-        uint8 j = 0;
+        uint256 j = 0;
+        uint256 l = 0;
         bool delims = false;
-        uint l = 0;
-        for(uint16 i; i<_data.length+l; i++) {
+        for(uint256 i; i<_data.length+l; i++) {
             if(!delims && j < 2) {
                 entry[j] = _data[i-l];
                 j += 1;
@@ -409,7 +426,6 @@ contract C9SVG is IC9SVG, C9Shared {
      */
     function checkForSpecialBg(uint8 _rtier, bytes memory b) internal view {
         bytes32 _filter_mod = "turbulence' baseFrequency='0.002";
-        bytes3 _feMatrix_mod = bytes3("0.9");
         bytes32[3] memory mods = [bytes32("1 1 0 0 0 1 0 0 0 0 0 1 0 0 0 0 "),
             "0 0 0 0 1 1 0 0 0 0 0 1 0 0 0 0 ",
             "0 0 0 0 0 1 0 0 0 0 0 1 1 1 0 0 "];
@@ -420,7 +436,7 @@ contract C9SVG is IC9SVG, C9Shared {
                 dst := add(b, 620)
                 mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "4"))
                 dst := add(b, 731)
-                mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _feMatrix_mod))
+                mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), "0.9"))
             }
             uint256 psrand = block.timestamp % 4;
             if (psrand < 4) {
@@ -467,7 +483,7 @@ contract C9SVG is IC9SVG, C9Shared {
      * this function returns the font size of text depending on input `len` 
      * so that it stays contained.
      */
-    function getNameSize(uint8 len) internal pure returns(bytes2) {
+    function getNameSize(uint256 len) internal pure returns(bytes2) {
         if (len < 11) {
             return "52";
         }
@@ -475,8 +491,8 @@ contract C9SVG is IC9SVG, C9Shared {
             return "30";
         }
         else {
-            uint8 adjuster = (len-10)*3;
-            uint8 fontsize = 52 - adjuster;
+            uint256 adjuster = (len-10)*3;
+            uint256 fontsize = 52 - adjuster;
             return bytes2(Helpers.uintToBytes(fontsize));
         }
     }
@@ -572,10 +588,10 @@ contract C9SVG is IC9SVG, C9Shared {
         bool delims = false;
         bool xflg = false;
         bool yflg = false;
-        uint8 j = 0;
-        uint8 k = 1;
-        uint8 l = 0;
-        for(uint16 i; i<_data.length-2; i++) {
+        uint256 j = 0;
+        uint256 k = 1;
+        uint256 l = 0;
+        for(uint256 i; i<_data.length-2; i++) {
             if(!delims) {
                 entry[j] = _data[i+l];
             }
@@ -809,5 +825,14 @@ contract C9SVG is IC9SVG, C9Shared {
                 "</g></svg>"
             )
         );
+    }
+
+    /**
+     * @dev Updates the token contract address.
+     */
+    function setTokenContract(address _address)
+        external
+        onlyOwner {
+            tokenContract = _address;
     }
 }
