@@ -1,84 +1,71 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0 <0.9.0;
+pragma solidity >=0.8.7 <0.9.0;
+import "./C9OwnerControl.sol";
 import "./C9Token2.sol";
+import "./utils/EthPricer.sol";
 
-error CodeMismatch(bool admin);
-error IncorrectRedemptionStep(uint256 tokenId, uint32 expected, uint8 tried);
-
-interface IC9Redeemer {
+interface IC9Redeemer {    
     function cancelRedemption(uint256 _tokenId) external;
     function getRedemptionStep(uint256 _tokenId) external view returns (uint32);
     function startRedemption(uint256 _tokenId) external;
 }
 
-/*
-2. Final value fee - maybe make it part of the confirmation step? If the code is 
-a small amount of wei, then final value fee can be combined with it... i.e if 
-fee is 0.01 ETH, then confirmation will be 0.01 ETH + CONFIRMATION AMOUNT... i,e.
-0.0100001583728458524.... but how to enforce the 0.01 part which will vary?
-
-Can also make it based on token insured value that can be stored. But it needs to 
-be capped otherwise users can abuse an make token unredeemed due to very high FVF.
-However if that happens this contract can always be upgraded.
-*/
-
 contract C9Redeemer is IC9Redeemer, C9OwnerControl {
-    bytes32 public constant INFOVIEWER_ROLE = keccak256("INFOVIEWER_ROLE");
     bytes32 public constant NFTCONTRACT_ROLE = keccak256("NFTCONTRACT_ROLE");
     
     mapping(uint256 => uint32) _redemptionCode;
     mapping(uint256 => uint8) _redemptionStep;
+    uint16 _minRedeemPrice = 20; // min uninsured handling & shipping costs
+    bool _frozen;
 
-    event RedeemerAdminVerify(
+    event RedeemerAdminApprove(
+        uint256 indexed tokenId,
         address indexed tokenOwner,
-        uint256 indexed tokenId
+        uint8 indexed redemptionStep
     );
     event RedeemerCancel(
+        uint256 indexed tokenId,
         address indexed tokenOwner,
-        uint256 indexed tokenId
-    );
-    event RedeemerFinalize(
-        address indexed tokenOwner,
-        uint256 indexed tokenId
+        uint8 indexed redemptionStep
     );
     event RedeemerGenCode(
-        address indexed tokenOwner,
-        uint256 indexed tokenId
+        uint256 indexed tokenId,
+        address indexed tokenOwner
     );
     event RedeemerInit(
+        uint256 indexed tokenId,
+        address indexed tokenOwner
+    );
+    event RedeemerUserFinalize(
+        uint256 indexed tokenId,
         address indexed tokenOwner,
-        uint256 indexed tokenId
+        uint256 indexed fees
     );
     event RedeemerUserVerify(
-        address indexed tokenOwner,
-        uint256 indexed tokenId
+        uint256 indexed tokenId,
+        address indexed tokenOwner
     );
 
-    address private viewerAddress;
     address public tokenContract;
-    /**
-     * @dev priceFeed and tokenContracts will already exist 
-     * before the deployment of this one.
-     */
-    constructor() {
-        _grantRole(INFOVIEWER_ROLE, msg.sender); //remove later
-    }
+
+    constructor(){}
 
     modifier isOwner(uint256 _tokenId) {
         address _tokenOwner = IC9Token(tokenContract).ownerOf(_tokenId);
-        if(msg.sender != _tokenOwner) revert Unauthorized(msg.sender, _tokenOwner);
+        if (msg.sender != _tokenOwner) revert("C9Redeemer: unauthorized");
         _;
     }
 
     modifier redemptionStep(uint256 _tokenId, uint8 _step) {
+        if (_frozen) revert("C9Redeemer: redeemer frozen");
         uint32 _expected = _redemptionStep[_tokenId];
-        if(_step != _expected) revert IncorrectRedemptionStep(_tokenId, _expected, _step);
+        if (_step != _expected) revert("C9Redeemer: wrong redemption step");
         _;
     }
 
     modifier tokenLock(uint256 _tokenId) {
-        bool _lock = IC9Token(tokenContract).tokenRedemptionLock(_tokenId);
-        if(_lock != true) revert RedemptionPending(_tokenId, false);
+        bool _lock = IC9Token(tokenContract).tokenLocked(_tokenId);
+        if (_lock != true) revert("C9Redeemer: token not locked for redemption");
         _;
     }
 
@@ -92,7 +79,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         onlyRole(NFTCONTRACT_ROLE)
         tokenLock(_tokenId) {
             removeRedemptionInfo(_tokenId);
-            emit RedeemerCancel(msg.sender, _tokenId);
+            emit RedeemerCancel(_tokenId, msg.sender, _redemptionStep[_tokenId]);
     }
 
     /**
@@ -101,7 +88,6 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
      */
     function getRedemptionStep(uint256 _tokenId)
         external view override
-        onlyRole(INFOVIEWER_ROLE)
         returns (uint32) {
             return _redemptionStep[_tokenId];
     }
@@ -125,7 +111,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         tokenLock(_tokenId)
         redemptionStep(_tokenId, 0) {
             _redemptionStep[_tokenId] = 1;
-            emit RedeemerInit(msg.sender, _tokenId);
+            emit RedeemerInit(_tokenId, msg.sender);
     }
 
     /**
@@ -150,7 +136,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             ) % 10**6;
             _redemptionCode[_tokenId] = _randomCode;
             _redemptionStep[_tokenId] = 2;
-            emit RedeemerGenCode(msg.sender, _tokenId);
+            emit RedeemerGenCode(_tokenId, msg.sender);
     }
 
     /**
@@ -158,7 +144,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
      */
     function adminGetRedemptionCode(uint256 _tokenId)
         external view
-        onlyRole(INFOVIEWER_ROLE)
+        onlyRole(DEFAULT_ADMIN_ROLE)
         tokenLock(_tokenId)
         redemptionStep(_tokenId, 2)
         returns (uint32) {
@@ -171,14 +157,15 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
      */
     function adminVerifyRedemptionCode(uint256 _tokenId, uint32 _code)
         external
-        onlyRole(INFOVIEWER_ROLE)
+        onlyRole(DEFAULT_ADMIN_ROLE)
         tokenLock(_tokenId)
         redemptionStep(_tokenId, 2) {
-            if (_code == _redemptionCode[_tokenId]) {
-                revert CodeMismatch(true);
+            if (_code != _redemptionCode[_tokenId]) {
+                revert("C9Redeemer: code incorrect");
             }
             _redemptionStep[_tokenId] = 3;
-            emit RedeemerAdminVerify(msg.sender, _tokenId);
+            address _tokenOwner = IC9Token(tokenContract).ownerOf(_tokenId);
+            emit RedeemerAdminApprove(_tokenId, _tokenOwner, 2);
     }
 
     /**
@@ -190,31 +177,55 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         isOwner(_tokenId)
         tokenLock(_tokenId)
         redemptionStep(_tokenId, 3) {
-            if (_code == _redemptionCode[_tokenId]) {
-                revert CodeMismatch(false);
+            if (_code != _redemptionCode[_tokenId]) {
+                revert("C9Redeemer: code incorrect");
             }
             _redemptionStep[_tokenId] = 4;
-            emit RedeemerUserVerify(msg.sender, _tokenId);
+            emit RedeemerUserVerify(_tokenId, msg.sender);
     }
 
     /**
      * @dev Step 4. User submits one last confirmation to lock the token 
      * forever and have physical item shipped to them. There will be a final 
-     * fee to pay at this step to cover shipping and insurance costs.
+     * fee to pay at this step to cover shipping and insurance costs. 
+     * Fee will need to be done externally, any internal implementation 
+     * risks being unreliable without easy access to recent external data. 
+     * At best, a minimum enforcement amount is set to be payable. To 
+     * prevent users underpaying, an aminFinalApproval call is done.
      */
-    function finishRedemption(uint256 _tokenId)
+    function userFinishRedemption(uint256 _tokenId)
         external payable
         isOwner(_tokenId)
         tokenLock(_tokenId)
         redemptionStep(_tokenId, 4) {
-            require(msg.value > 0, "C9Redeemer: no eth sent");
+            address _contractPriceFeed = C9Token(tokenContract).contractPriceFeed();
+            uint256 _minRedeemWei = IC9EthPriceFeed(_contractPriceFeed).getTokenWeiPrice(_minRedeemPrice);
+            if (msg.value < _minRedeemWei) {
+                revert("C9Redeemer: incorrect payment amount");
+            }
             (bool success,) = payable(owner).call{value: msg.value}("");
             if (!success) {
-                revert PayementFailure(msg.sender, owner, msg.value);
+                revert("C9Redeemer: payment failure");
             }
+            _redemptionStep[_tokenId] = 5;
+            emit RedeemerUserFinalize(_tokenId, msg.sender, msg.value);
+    }
+
+    /**
+     * @dev Step 5. Admin final approval. Admin verifies that all 
+     * redemption fees have been paid. Beyond this step, the redemption 
+     * user will receive tracking information by the email they provided 
+     * in a prior step.
+     */
+    function adminFinalApproval(uint256 _tokenId)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        tokenLock(_tokenId)
+        redemptionStep(_tokenId, 5) {
+            address _tokenOwner = IC9Token(tokenContract).ownerOf(_tokenId);
             IC9Token(tokenContract).redeemFinish(_tokenId);
             removeRedemptionInfo(_tokenId);
-            emit RedeemerFinalize(msg.sender, _tokenId);
+            emit RedeemerAdminApprove(_tokenId, _tokenOwner, 5);
     }
 
     /**
@@ -223,17 +234,24 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     function setTokenContract(address _address)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
+            if (tokenContract == _address) {
+                revert("C9Redeemer: address already set");
+            }
             tokenContract = _address;
             _grantRole(NFTCONTRACT_ROLE, tokenContract);
     }
 
     /**
-     * @dev Updates the token contract address.
+     * @dev Flag that sets global toggle to freeze redemption. 
+     * Users may still cancel redemption and unlock their 
+     * token if in the process.
      */
-    function setViewerContract(address _address)
+    function toggleFreeze(bool _toggle)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            viewerAddress = _address;
-            _grantRole(INFOVIEWER_ROLE, viewerAddress);
+            if (_frozen == _toggle) {
+                revert("C9Redeemer: bool already set");
+            }
+            _frozen = _toggle;
     }
 }

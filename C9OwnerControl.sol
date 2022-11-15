@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0 <0.9.0;
+pragma solidity >=0.8.7 <0.9.0;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
 /**
-* @dev UNTESTED in production mode as of 11.10.2022. Use at your 
-* own discretion!
-*
 * This contract is meant to act as a combination of 
 * AccessControl and Ownable (2 step).
 *
@@ -25,9 +22,6 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 * NOTE: If multiple addresses are granted DEFAULT_ADMIN_ROLE, 
 * they cannot revoke owner. Only owner can renounce itself.
 */
-
-error InvalidAddress(address);
-error UnauthorizedCaller(address expected, address caller);
 
 abstract contract C9OwnerControl is AccessControl {
     address public owner;
@@ -56,7 +50,7 @@ abstract contract C9OwnerControl is AccessControl {
      */
     function renounceRole(bytes32 role, address account)
         public override {
-            if (account != msg.sender) revert UnauthorizedCaller(account, msg.sender);
+            if (account != msg.sender) revert("C9OwnerControl: unauthorized");//Unauthorized(msg.sender, account);
             _revokeRole(role, account);
     }
 
@@ -67,7 +61,7 @@ abstract contract C9OwnerControl is AccessControl {
     function revokeRole(bytes32 role, address account)
         public override
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (account == owner) revert UnauthorizedCaller(owner, msg.sender);
+            if (account == owner) revert("C9OwnerControl: unauthorized");//Unauthorized(msg.sender, owner);
             _revokeRole(role, account);
     }
 
@@ -92,7 +86,7 @@ abstract contract C9OwnerControl is AccessControl {
     function transferOwnership(address _newOwner)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (_newOwner == address(0)) revert InvalidAddress(_newOwner);
+            if (_newOwner == address(0)) revert("C9OwnerControl: Invalid address");//InvalidAddress(_newOwner);
             pendingOwner = _newOwner;
             grantRole(DEFAULT_ADMIN_ROLE, _newOwner);
             emit OwnershipTransferInit(owner, _newOwner);
@@ -105,7 +99,7 @@ abstract contract C9OwnerControl is AccessControl {
      */
     function acceptOwnership()
         external {
-            if (pendingOwner != msg.sender) revert UnauthorizedCaller(pendingOwner, msg.sender);
+            if (pendingOwner != msg.sender) revert("C9OwnerControl: Unauthorized");//(pendingOwner, msg.sender);
             _transferOwnership(msg.sender);
     }
 }

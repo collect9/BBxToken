@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0 <0.9.0;
+pragma solidity >=0.8.7 <0.9.0;
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/token/common/ERC2981.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
 import "./C9MetaData.sol";
 import "./C9OwnerControl.sol";
@@ -14,28 +14,14 @@ import "./utils/Base64.sol";
 import "./utils/Helpers.sol";
 import "./utils/EthPricer.sol";
 
-error EditionOverflow(uint8 edition);
-error IncorrectEthAmount(uint256 expected, uint256 received);
-error InvalidTokenId(uint256 tokenId);
-error InvalidVId(uint8 vId);
-error PayementFailure(address sender, address receiver, uint256 amount);
-error RedemptionPending(uint256 tokenId, bool status);
-error RoyaltyTooHigh(uint16 royalty);
-error ValAlreadySet();
-error TokenNotValid(uint256 tokenId);
-error TokenPreRelease(uint256 tokenId, bool status);
-error TokenUpgraded(uint256 tokenId, bool status);
-error TokenRedeemed(uint256 tokenId);
-error TokensUpgradable(bool status);
-error Unauthorized(address caller, address owner);
-
 interface IC9Token {
     function ownerOf(uint256 _tokenId) external view returns (address);
-    function preRedeemableDone(uint256 _tokenId) external view returns(bool);
+    function preRedeemable(uint256 _tokenId) external view returns(bool);
     function redeemFinish(uint256 _tokenId) external;
-    function tokenRedemptionLock(uint256 _tokenId) external view returns(bool);
+    function redeemStart(uint256 _tokenId) external;
+    function tokenLocked(uint256 _tokenId) external view returns(bool);
+    function tokenUpgraded(uint256 _tokenId) external view returns(bool);
 }
-
 
 contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
     bytes32 public constant REDEEMER_ROLE = keccak256("REDEEMER_ROLE");
@@ -46,11 +32,10 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      * SVG only flag acts as a fail safe to return to SVG 
      * only mode later on.
      */
-    bool public tokensUpgradable;
     bool public svgOnly = true;
-    string private __baseURI = "";
+    string[2] private __baseURI;
     function _baseURI() internal view override returns(string memory) {
-        return __baseURI;
+        return __baseURI[0];
     }
 
     /**
@@ -58,8 +43,9 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      * OpenSea: https://docs.opensea.io/docs/contract-level-metadata
      */
     string private _contractURI = "https://collect9.io/metadata/Collect9RWARBBToken.json";
-    function contractURI() public view returns (string memory) {
-        return _contractURI;
+    function contractURI()
+        external view returns (string memory) {
+            return _contractURI;
     }
      
     /**
@@ -69,22 +55,32 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      * the tokenUpgradedView flag toggled to go back and 
      * forth between SVG and PNG views.
      */
-    mapping(uint256 => bool) _tokenUpgraded;
-    mapping(uint256 => bool) _tokenUpgradedView;
-    uint16 public upgradePrice = 100;
+    bool public tokensUpgradable;
+    mapping(uint256 => bool) private _tokenUpgraded;
+    function tokenUpgraded(uint256 _tokenId)
+        public view override
+        tokenExists(_tokenId)
+        returns (bool) {
+            return _tokenUpgraded[_tokenId];
+    }
+    mapping(uint256 => bool) private _tokenImgView;
+    uint16 public tokensUpgradePrice = 100; //usd
     event Upgraded(
         address indexed buyer,
         uint256 indexed tokenId,
         uint256 indexed price
     );
 
-    uint32 public _redeemablePeriod = 31556926; //seconds
-    mapping(uint256 => bool) private _tokenLock;
-    function tokenRedemptionLock(uint256 _tokenId)
-        external view override
+    /**
+     * @dev Redemption definitions.
+     */
+    uint32 public preReleasePeriod = 31556926; //seconds
+    mapping(uint256 => bool) private _tokenLocked;
+    function tokenLocked(uint256 _tokenId)
+        public view override
         tokenExists(_tokenId)
         returns(bool) {
-            return _tokenLock[_tokenId];
+            return _tokenLocked[_tokenId];
     }
     event RedemptionCancel(
         address indexed tokenOwner,
@@ -99,19 +95,11 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
         uint256 indexed tokenId
     );
 
-
-    /**
-     * @dev Fail-safe pause in case something is wrong with the 
-     * contract. Pausing will allow for a seemless upgrade or 
-     * migration to an updated contract.
-     */
-    
-
     /**
      * @dev Structure that holds all of the token info required to 
      * construct the 100% on chain SVG.
      */
-    mapping(uint256 => C9Shared.TokenInfo) _tokens;
+    mapping(uint256 => C9Shared.TokenInfo) private _tokens;
 
     /**
      * @dev Mapping that checks whether or not some combination of 
@@ -119,7 +107,7 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      * responsible for determining whether or not to increment 
      * the editionID.
      */
-    mapping(bytes32 => bool) _attrComboExists;
+    mapping(bytes32 => bool) private _attrComboExists;
 
     /**
      * @dev _mintId stores the minting ID number for up to 96 editions.
@@ -128,22 +116,15 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      * for packed storage purposes as it takes up the same space as 7x 
      * uint256.
      */
-    uint16[96] _mintId;
+    uint16[96] private _mintId;
 
     /**
      * @dev The meta and SVG contracts.
      */
-    address public metaContract;
-    address public priceFeedContract;
-    address public redeemerContract;
-    address public svgContract;
-
-    /**
-     * @dev The address to send royalties to. This is defined so that it 
-     * may be changed or updated later on to a non-owner address if
-     * desired.
-     */
-    address public royaltyAddress;
+    address public contractMeta;
+    address public contractPriceFeed;
+    address public contractRedeemer;
+    address public contractSVG;
 
     /**
      * @dev The constructor sets the default royalty of the token 
@@ -152,43 +133,49 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      * deployment.
      */
     constructor(
-        address _metaContract,
-        address _svgContract,
-        address _priceFeedContract
+        address metaContract_,
+        address priceFeedContract_,
+        address redeemerContract_,
+        address svgContract_
         )
-        ERC721("Collect9 BBR NFTs", "C9B") {
-            metaContract = _metaContract;
-            priceFeedContract = _priceFeedContract;
-            svgContract = _svgContract;
-            royaltyAddress = owner;
-            _setDefaultRoyalty(royaltyAddress, 500);
+        ERC721("Collect9 NFTs", "C9T") {
+            contractMeta = metaContract_;
+            contractPriceFeed = priceFeedContract_;
+            contractRedeemer = redeemerContract_;
+            contractSVG = svgContract_;
+            _setDefaultRoyalty(owner, 500);
     }
 
     modifier addressNotSame(address _old, address _new) {
-        if (_old == _new) revert ValAlreadySet();
+        if (_old == _new) revert("C9Token: set address same");
         _;
     }
 
     modifier inRedemption(uint256 _tokenId, bool status) {
-        if (_tokenLock[_tokenId] != status)  revert RedemptionPending(_tokenId, !status);
-        if (_tokens[_tokenId].validity == 4) revert TokenRedeemed(_tokenId);
-        _;
-    }
-
-    modifier limitRoyalty(uint16 _royalty) {
-        if (_royalty > 999) revert RoyaltyTooHigh(_royalty);
+        if (_tokens[_tokenId].validity == 4) revert("C9Token: token already redeemed");
+        if (tokenLocked(_tokenId) != status) revert("C9Token: redemption status disallowed");
         _;
     }
 
     modifier isOwner(uint256 _tokenId) {
         address _tokenOwner = ownerOf(_tokenId);
-        if (msg.sender != _tokenOwner) revert Unauthorized(msg.sender, _tokenOwner);
+        if (msg.sender != _tokenOwner) revert("C9Token: unauthorized");
         if (_tokens[_tokenId].validity == 2) _tokens[_tokenId].validity = 0;
         _;
     }
 
+    modifier limitRoyalty(uint256 _royalty) {
+        if (_royalty > 999) revert("C9Token: royalty set too high");
+        _;
+    }
+
+    modifier notRedeemed(uint256 _tokenId) {
+        if (_tokens[_tokenId].validity == 4) revert("C9Token: token already redeemed");
+        _;
+    }
+
     modifier tokenExists(uint256 _tokenId) {
-        if (!_exists(_tokenId)) revert InvalidTokenId(_tokenId);
+        if (!_exists(_tokenId)) revert("C9Token: non-existent token id");
         _;
     }
 
@@ -200,10 +187,12 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
         override(ERC721Enumerable)
         inRedemption(tokenId, false) {
             super._beforeTokenTransfer(from, to, tokenId);
+            if (_tokens[tokenId].validity == 2) _tokens[tokenId].validity = 0;
     }
 
     function supportsInterface(bytes4 interfaceId)
-        public view override(ERC721Enumerable, ERC2981, AccessControl)
+        public view
+        override(AccessControl, ERC721Enumerable, ERC2981)
         returns (bool) {
             return super.supportsInterface(interfaceId);
     }
@@ -225,9 +214,9 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
         isOwner(_tokenId) {
             _burn(_tokenId);
             delete _tokens[_tokenId];
-            delete _tokenLock[_tokenId];
+            delete _tokenLocked[_tokenId];
             delete _tokenUpgraded[_tokenId];
-            delete _tokenUpgradedView[_tokenId];
+            delete _tokenImgView[_tokenId];
             _resetTokenRoyalty(_tokenId);
     }
 
@@ -265,7 +254,7 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      * Note that if the token is burned, the edition cannot be replaced but 
      * instead will keep incrementing.
      */
-    function getPhysicalHash(C9Shared.TokenInfo calldata _input, uint8 _edition)
+    function getPhysicalHash(C9Shared.TokenInfo calldata _input, uint256 _edition)
         internal pure
         returns (bytes32) {
             return keccak256(
@@ -298,12 +287,14 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
         public
         onlyRole(DEFAULT_ADMIN_ROLE)
         limitRoyalty(_input.royalty) {
-            uint256 _uid = uint256(_input.id); 
-            // Get the token edition number
-            uint8 _edition = _input.edition;
+            uint256 _uid = uint256(_input.id);
+            if (_uid == 0) {
+                revert ("C9TokenMint: cert id cannot be 0");
+            }
+            uint256 _edition = _input.edition;
             if (_edition == 0) {
                 bytes32 _data;
-                for (uint8 i; i<_mintId.length; i++) {
+                for (uint256 i; i<_mintId.length; i++) {
                     _data = getPhysicalHash(_input, i+1);
                     if (!_attrComboExists[_data]) {
                         _edition = i+1;
@@ -312,14 +303,17 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
                 }
             }
             if (_edition > _mintId.length-1) {
-                revert EditionOverflow(_edition);
+                revert("C9TokenMint: edition overlow");
             }
             // Get the edition mint id
-            uint16 __mintId = _input.mintid == 0 ? _mintId[_edition] + 1 : _input.mintid;
+            uint256 __mintId = _input.mintid == 0 ? _mintId[_edition] + 1 : _input.mintid;
+            if (__mintId == 0) {
+                revert("C9TokenMint: mint id cannot be 0");
+            }
             // Store token meta data
             _tokens[_uid] = C9Shared.TokenInfo(
                 _input.validity,
-                _edition,
+                uint8(_edition),
                 _input.tag,
                 _input.tush,
                 _input.gentag,
@@ -327,7 +321,7 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
                 _input.markertush,
                 _input.spec,
                 _input.rtier,
-                __mintId,
+                uint16(__mintId),
                 _input.royalty,
                 _input.id,
                 uint48(block.timestamp),
@@ -336,13 +330,14 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
                 _input.bardata
             );
             // Set royalty info
-            _setTokenRoyalty(_uid, royaltyAddress, _input.royalty);
+            (address _royaltyAddress,) = royaltyInfo(0, 10000); 
+            _setTokenRoyalty(_uid, _royaltyAddress, _input.royalty);
             // Mint token
             _mint(msg.sender, _uid);
             // Store attribute combo
             _attrComboExists[getPhysicalHash(_input, _edition)] = true;
             if (_input.mintid == 0) {
-                _mintId[_edition] = __mintId;
+                _mintId[_edition] = uint16(__mintId);
             }
     }
 
@@ -350,10 +345,10 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      * @dev Helps makes the overall minting process faster and cheaper 
      * on average per mint.
     */
-    function mintN(C9Shared.TokenInfo[] calldata _input, uint8 N)
+    function mintN(C9Shared.TokenInfo[] calldata _input, uint256 N)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            for (uint8 i; i<N; i++) {
+            for (uint256 i; i<N; i++) {
                 mint1(_input[i]);
             }
     }
@@ -362,11 +357,11 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      * @dev Returns whether or not the token pre-release period 
      * has ended.
      */
-    function preRedeemableDone(uint256 _tokenId)
+    function preRedeemable(uint256 _tokenId)
         public view override
         tokenExists(_tokenId)
         returns (bool) {
-            return block.timestamp - _tokens[_tokenId].mintstamp > _redeemablePeriod;
+            return block.timestamp-_tokens[_tokenId].mintstamp < preReleasePeriod;
     }
 
     /**
@@ -387,8 +382,8 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
         tokenExists(_tokenId)
         isOwner(_tokenId)
         inRedemption(_tokenId, true) {
-            IC9Redeemer(redeemerContract).cancelRedemption(_tokenId);
-            delete _tokenLock[_tokenId];
+            IC9Redeemer(contractRedeemer).cancelRedemption(_tokenId);
+            delete _tokenLocked[_tokenId];
             emit RedemptionCancel(msg.sender, _tokenId);
     }
 
@@ -414,17 +409,18 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      * can still cancel the process before finishing.
      */
     function redeemStart(uint256 _tokenId)
-        external
+        external override
         tokenExists(_tokenId)
-        isOwner(_tokenId) {
+        isOwner(_tokenId)
+        inRedemption(_tokenId, false) {
             if (_tokens[_tokenId].validity != 0) {
-                revert TokenNotValid(_tokenId);
+                revert("C9Token: token status not valid");
             }
-            if (!preRedeemableDone(_tokenId)) {
-                revert TokenPreRelease(_tokenId, true);
+            if (preRedeemable(_tokenId)) {
+                revert("C9Token: token pre-redeemable period not yet finished");
             }
-            _tokenLock[_tokenId] = true;
-            IC9Redeemer(redeemerContract).startRedemption(_tokenId);
+            _tokenLocked[_tokenId] = true;
+            IC9Redeemer(contractRedeemer).startRedemption(_tokenId);
             emit RedemptionStart(msg.sender, _tokenId);
     }
 
@@ -441,7 +437,7 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
         public view
         tokenExists(_tokenId)
         returns (string memory) {
-            return IC9SVG(svgContract).returnSVG(ownerOf(_tokenId), _tokens[_tokenId]);
+            return IC9SVG(contractSVG).returnSVG(ownerOf(_tokenId), _tokens[_tokenId]);
     }
 
     /**
@@ -462,18 +458,23 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
         public view override
         tokenExists(_tokenId)
         returns (string memory) {
-            bool _upgraded = _tokenUpgraded[_tokenId];
             bytes memory image;
-            if (!svgOnly && _upgraded && _tokenUpgradedView[_tokenId]) {
-                image = abi.encodePacked(
-                    ',"image":"',
-                    _baseURI(), Strings.toString(_tokenId), '.png'
-                );
-            }
-            else {
+            bool _upgraded = tokenUpgraded(_tokenId);
+            bool _ipfsView = _tokenImgView[_tokenId];
+
+            if (svgOnly || !_ipfsView) {
+                // Onchain SVG
                 image = abi.encodePacked(
                     ',"image":"data:image/svg+xml;base64,',
                     b64SVGImage(_tokenId)
+                );
+            }
+            else {
+                // Token upgraded, get view URI
+                uint256 _view = _tokens[_tokenId].validity == 4 ? 1 : 0;
+                image = abi.encodePacked(
+                    ',"image":"',
+                    __baseURI[_view], Strings.toString(_tokenId), '.png'
                 );
             }
 
@@ -482,9 +483,9 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
                     'data:application/json;base64,',
                     Base64.encode(
                         abi.encodePacked(
-                            IC9MetaData(metaContract).metaNameDesc(_tokens[_tokenId]),
+                            IC9MetaData(contractMeta).metaNameDesc(_tokens[_tokenId]),
                             image,
-                            IC9MetaData(metaContract).metaAttributes(_tokens[_tokenId], _upgraded)
+                            IC9MetaData(contractMeta).metaAttributes(_tokens[_tokenId], _upgraded)
                         )
                     )
                 )
@@ -499,27 +500,24 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
         tokenExists(_tokenId)
         isOwner(_tokenId) {
             if (!tokensUpgradable) {
-                // Tokens are not upgradable
-                revert TokensUpgradable(false);
+                revert("C9TokenUpgrade: tokens not upgradable");
             }
-            if (_tokenUpgraded[_tokenId]) {
-                // This token is already upgraded
-                revert TokenUpgraded(_tokenId, true);
+            if (tokenUpgraded(_tokenId)) {
+                revert("C9TokenUpgrade: token already upgraded");
+            }
+            if (preRedeemable(_tokenId)) {
+                revert("C9TokenUpgrade: token not upgradable during its pre-redeemable period");
             } 
-            uint256 upgradeEthPrice = IC9EthPriceFeed(priceFeedContract).getTokenETHPrice(upgradePrice);
-            if (msg.value == upgradeEthPrice) {
-                // Incorrect amount of Eth from caller
-                revert IncorrectEthAmount(upgradeEthPrice, msg.value);
+            uint256 upgradeWeiPrice = IC9EthPriceFeed(contractPriceFeed).getTokenWeiPrice(tokensUpgradePrice);
+            if (msg.value != upgradeWeiPrice) {
+                revert("C9TokenUpgrade: incorrect payment amount");
             }
-
             (bool success,) = payable(owner).call{value: msg.value}("");
             if(!success) {
-                // Payment did not go through
-                revert PayementFailure(msg.sender, owner, msg.value);
+                revert("C9TokenUpgrade: payment failure");
             }
             _tokenUpgraded[_tokenId] = true;
-            _tokenUpgradedView[_tokenId] = true;
-            emit Upgraded(msg.sender, _tokenId, upgradePrice);
+            emit Upgraded(msg.sender, _tokenId, tokensUpgradePrice);
     }
 
     /**
@@ -528,10 +526,13 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      * but if a future upgrade allows for artwork on IPFS, the 
      * contract will need to set the IPFS location.
      */
-    function setBaseUri(string calldata _newBaseURI)
+    function setBaseUri(string calldata _newBaseURI, uint256 _idx)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            __baseURI = _newBaseURI;
+            if (Helpers.stringEqual(__baseURI[_idx], _newBaseURI)) {
+                revert("C9Token: uri already set");
+            }
+            __baseURI[_idx] = _newBaseURI;
     }
 
      /**
@@ -540,6 +541,9 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
     function setContractUri(string calldata _newContractURI)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
+            if (Helpers.stringEqual(_contractURI, _newContractURI)) {
+                revert("C9Token: uri already set");
+            }
             _contractURI = _newContractURI;
     }
 
@@ -547,12 +551,15 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      * @dev Allows the contract owner to update the global royalties 
      * receving address and amount.
      */
-    function setDefaultRoyalties(address _address, uint16 _defaultRoyalty)
+    function setDefaultRoyalties(address _address, uint256 _defaultRoyalty)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
         limitRoyalty(_defaultRoyalty) {
-            royaltyAddress = _address;
-            _setDefaultRoyalty(royaltyAddress, _defaultRoyalty);
+            (address _royaltyAddress, uint256 _salePrice) = royaltyInfo(0, 10000);
+            if (_address == _royaltyAddress && _salePrice == _defaultRoyalty) {
+                revert("C9Token: default royalty vals already set");
+            }
+            _setDefaultRoyalty(_address, uint96(_defaultRoyalty));
     }
 
     /**
@@ -560,11 +567,11 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      * This will be most useful when trying to make a generic 
      * SVG template that will include other collectible classes.
      */
-    function setMetaContract(address _address)
+    function setContractMeta(address _address)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
-        addressNotSame(metaContract, _address) {
-            metaContract = _address;
+        addressNotSame(contractMeta, _address) {
+            contractMeta = _address;
     }
 
     /**
@@ -572,32 +579,34 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      * This will be most useful when trying to make a generic 
      * SVG template that will include other collectible classes.
      */
-    function setPriceFeedContract(address _address)
+    function setContractPriceFeed(address _address)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
-        addressNotSame(priceFeedContract, _address) {
-            priceFeedContract = _address;
+        addressNotSame(contractPriceFeed, _address) {
+            contractPriceFeed = _address;
     }
 
     /**
      * @dev Gets or sets the global token redeemable period.
      */
-    function setRedeemablePeriod(uint32 _period)
+    function setPreReleasePeriod(uint32 _period)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (_redeemablePeriod == _period) revert ValAlreadySet();
-            _redeemablePeriod = _period;
+            if (preReleasePeriod == _period) {
+                revert("C9Token: period already set");
+            }
+            preReleasePeriod = _period;
     }
 
     /**
      * @dev Updates the redemption data contract address.
      */
-    function setRedeemerContract(address _address)
+    function setContractRedeemer(address _address)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
-        addressNotSame(redeemerContract, _address) {
-            redeemerContract = _address;
-            _grantRole(REDEEMER_ROLE, redeemerContract);
+        addressNotSame(contractRedeemer, _address) {
+            contractRedeemer = _address;
+            _grantRole(REDEEMER_ROLE, contractRedeemer);
     }
 
     /**
@@ -607,11 +616,11 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      * This will be most useful when trying to make a generic 
      * SVG template that will include other collectible classes.
      */
-    function setSVGContract(address _address)
+    function setContractSVG(address _address)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
-        addressNotSame(svgContract, _address) {
-            svgContract = _address;
+        addressNotSame(contractSVG, _address) {
+            contractSVG = _address;
     }
 
     /**
@@ -622,7 +631,9 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
     function setSvgOnly(bool _flag)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (svgOnly == _flag) revert ValAlreadySet();
+            if (svgOnly == _flag) {
+                revert("C9Token: bool already set");
+            }
             svgOnly = _flag;
     }
 
@@ -634,17 +645,19 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      */
     function setTokenRoyalty(
         uint256 _tokenId,
-        uint16 _newRoyalty,
-        address _royaltyAddress
+        uint256 _newRoyalty,
+        address _customRoyaltyAddress
     )
     external
     onlyRole(DEFAULT_ADMIN_ROLE)
     limitRoyalty(_newRoyalty)
-    tokenExists(_tokenId) {
-        _tokens[_tokenId].royalty = _newRoyalty;
+    tokenExists(_tokenId)
+    notRedeemed(_tokenId) {
+        _tokens[_tokenId].royalty = uint16(_newRoyalty);
+        (address _royaltyAddress,) = royaltyInfo(0, 100);
         _royaltyAddress != address(0) ?
-            _setTokenRoyalty(_tokenId, _royaltyAddress, _newRoyalty) :
-            _setTokenRoyalty(_tokenId, royaltyAddress, _newRoyalty);
+            _setTokenRoyalty(_tokenId, _customRoyaltyAddress, uint96(_newRoyalty)) :
+            _setTokenRoyalty(_tokenId, _royaltyAddress, uint96(_newRoyalty));
     }
 
     /**
@@ -656,10 +669,10 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
     function setTokenValidity(uint256 _tokenId, uint8 _vId)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
-        tokenExists(_tokenId) {
-            if (_tokens[_tokenId].validity == 4)    revert TokenRedeemed(_tokenId);
-            if (_vId > 3)                           revert InvalidVId(_vId);
-            if (_tokens[_tokenId].validity == _vId) revert ValAlreadySet();
+        tokenExists(_tokenId)
+        notRedeemed(_tokenId) {
+            if (_vId > 3)                           revert("C9Token: invalid vId");
+            if (_tokens[_tokenId].validity == _vId) revert("C9Token: vId already set");
             _tokens[_tokenId].validity = _vId;
     }
 
@@ -668,23 +681,25 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
      * token has already been upgraded. Flag must be set 
      * back to true for upgraded view to show again.
      */
-    function setTokenView(uint256 _tokenId, bool _flag)
+    function setTokenImgView(uint256 _tokenId, bool _flag)
         external
         tokenExists(_tokenId)
         isOwner(_tokenId) {
-            if (!_tokenUpgraded[_tokenId])         revert TokenUpgraded(_tokenId, false);
-            if (_tokenUpgraded[_tokenId] == _flag) revert ValAlreadySet();
-            _tokenUpgradedView[_tokenId] = _flag;
+            if (!tokenUpgraded(_tokenId))          revert("C9Token: token is not upgraded");
+            if (_tokenImgView[_tokenId] == _flag)  revert("C9Token: view already set");
+            _tokenImgView[_tokenId] = _flag;
     }
 
     /**
      * @dev Allows upgradePrice to be tuned.
      */
-    function setTokenUpgradePrice(uint16 _price)
+    function setTokensUpgradePrice(uint16 _price)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (upgradePrice == _price) revert ValAlreadySet();
-            upgradePrice = _price;
+            if (tokensUpgradePrice == _price) {
+                revert("C9Token: price already set");
+            }
+            tokensUpgradePrice = _price;
     }
 
     /**
@@ -693,7 +708,9 @@ contract C9Token is IC9Token, ERC721Enumerable, ERC2981, C9OwnerControl {
     function setTokensUpgradable(bool _flag)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (tokensUpgradable == _flag) revert ValAlreadySet();
+            if (tokensUpgradable == _flag) {
+                revert("C9Token: bool already set");
+            }
             tokensUpgradable = _flag;
     }
 }

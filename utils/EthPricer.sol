@@ -1,16 +1,14 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0 <0.9.0;
+pragma solidity >=0.8.7 <0.9.0;
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-error DatedPrice(uint256);
-
 interface IC9EthPriceFeed {
     function getLatestETHUSDPrice() external view returns (uint256);
-    function getTokenETHPrice(uint256 _tokenUSDPrice) external view returns (uint256 tokenETHPrice);
+    function getTokenWeiPrice(uint256 _tokenUSDPrice) external view returns (uint256 tokenETHPrice);
 }
 
-contract C9EthPriceFeed is Ownable {
+contract C9EthPriceFeed is IC9EthPriceFeed, Ownable {
     AggregatorV3Interface internal priceFeed;
 
     /**
@@ -29,11 +27,11 @@ contract C9EthPriceFeed is Ownable {
      * Front end will need to convert to proper decimals.
      */
     function getLatestETHUSDPrice()
-        public view
+        public view override
         returns (uint256) {
             (,int256 price,,uint256 timeStamp,) = priceFeed.latestRoundData();
             uint256 _ds = block.timestamp - timeStamp;
-            if (_ds > 3600) revert DatedPrice(_ds);
+            if (_ds > 3600) revert("C9EthPriceFeed: price outdated");//C9Errors.DatedPrice(_ds);
             return uint256(price);
     }
 
@@ -41,8 +39,8 @@ contract C9EthPriceFeed is Ownable {
      * Converts the token USD price to ETH wei integer format.
      * The front-end will need to convert this into ETH decimal format.
      */
-    function getTokenETHPrice(uint256 _tokenUSDPrice)
-        external view
+    function getTokenWeiPrice(uint256 _tokenUSDPrice)
+        external view override
         returns (uint256 tokenETHPrice) {
             uint256 tokenUSDPrice = _tokenUSDPrice*10**18;
             uint256 etherPriceUSD = getLatestETHUSDPrice()*10**10;

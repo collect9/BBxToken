@@ -1,16 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0 <0.9.0;
+pragma solidity >=0.8.7 <0.9.0;
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 import "./C9Shared.sol";
 import "./C9Token2.sol";
 import "./utils/Helpers.sol";
 
-
-/**
-* @dev A validity flag has been added, in the event royalties are 
-* not paid then the token is no longer redeemable.
-*/
 interface IC9SVG {
     function returnSVG(address _address, C9Shared.TokenInfo calldata _token) external view returns (string memory);
 }
@@ -109,7 +104,6 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
         "<use href='#c9uso' x='304'/>";
     
     address private tokenContract;
-
     /**
      * @dev Sets up the mapping for compressed/mapped SVG input data.
      */
@@ -172,17 +166,17 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
         bytes16 _validity = _vValidity[_validityIdx];
         bool _lock = false;
         if (_validityIdx == 0) {
-            bool redeemable = IC9Token(tokenContract).preRedeemableDone(_token.id);
-            if (!redeemable) {
+            bool _preRedeemable = IC9Token(tokenContract).preRedeemable(_token.id);
+            if (_preRedeemable) {
                 _clr = "a0f"; // purple
                 _validity = "PRE-REDEEMABLE  ";
             }
             else {
                 // If validity 0 and locked == getting reedemed
-                _lock = IC9Token(tokenContract).tokenRedemptionLock(_token.id);
+                _lock = IC9Token(tokenContract).tokenLocked(_token.id);
                 if (_lock) {
                     _clr = "b50"; // orange
-                    _validity = "PENDING REDEEM  ";
+                    _validity = "REDEEM PENDING  ";
                 }
                 else {
                     _clr = "0a0"; // green
@@ -227,7 +221,6 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
         bytes4 _royalty = Helpers.bpsToPercent(_token.royalty);
         bytes2 _edition = Helpers.flip2Space(Helpers.remove2Null(bytes2(Helpers.uintToBytes(_token.edition))));
         bytes2 _namesize = getNameSize(uint256(bytes(_token.name).length));
-
         assembly {
             // Name Font Size
             let dst := add(b, 251)
@@ -320,7 +313,6 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
             let dst := add(gbarcode, 64)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), x))
         }
-        
         vb = bytes.concat(
             bytes(_token.name),
             "</text></g><g transform='translate(20 621) scale(0.17)'>",
@@ -333,8 +325,22 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
             gbarcode,
             href,
             barCodeSVG(bytes(_token.bardata), _id),
-            "</a></g>"
+            "</a></g>",
+            addUpgradeText(_token)
         );
+    }
+
+    /**
+     * @dev If token has been upgraded, add text that shows it has.
+     */
+    function addUpgradeText(TokenInfo calldata _token) internal view returns(bytes memory upgradedText) {
+        upgradedText = "<text x='190' y='58' style='font-family: \"Brush Script MT\", cursive;' font-size='22'>        </text>";
+        if (IC9Token(tokenContract).tokenUpgraded(_token.id)) {
+            assembly {
+                let dst := add(upgradedText, 117)
+                mstore(dst, or(and(mload(dst), not(shl(192, 0xFFFFFFFFFFFFFFFF))), "upgraded"))
+            }
+        }
     }
 
     /**
@@ -833,6 +839,7 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
     function setTokenContract(address _address)
         external
         onlyOwner {
+            if (tokenContract == _address) revert("C9Token: val already set");//C9Errors.ValAlreadySet();
             tokenContract = _address;
     }
 }
