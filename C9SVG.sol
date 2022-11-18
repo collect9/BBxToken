@@ -197,6 +197,10 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
                 dst := add(b, 2524)
                 mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), " LOCKED"))
             }
+            if gt(_validityIdx, 3) {
+                dst := add(b, 2524)
+                mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), "   DEAD"))
+            }
             dst := add(b, 2532)
             mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), ">>"))
             dst := add(b, 2535)

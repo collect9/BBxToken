@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.7 <0.9.0;
 import "./C9OwnerControl.sol";
+import "./C9Register.sol";
 import "./C9Token2.sol";
 import "./utils/EthPricer.sol";
 
 interface IC9Redeemer {    
     function cancelRedemption(uint256 _tokenId) external;
-    function getRedemptionStep(uint256 _tokenId) external view returns (uint32);
+    function getRedemptionStep(uint256 _tokenId) external view returns (uint8);
+    function removeRedemptionInfo(uint256 _tokenId) external;
     function startRedemption(uint256 _tokenId) external;
 }
 
@@ -34,7 +36,8 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     );
     event RedeemerInit(
         uint256 indexed tokenId,
-        address indexed tokenOwner
+        address indexed tokenOwner,
+        bool indexed registered
     );
     event RedeemerUserFinalize(
         uint256 indexed tokenId,
@@ -47,7 +50,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     );
 
     address public tokenContract;
-
+    
     constructor(){}
 
     modifier isOwner(uint256 _tokenId) {
@@ -78,7 +81,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         external override
         onlyRole(NFTCONTRACT_ROLE)
         tokenLock(_tokenId) {
-            removeRedemptionInfo(_tokenId);
+            _removeRedemptionInfo(_tokenId);
             emit RedeemerCancel(_tokenId, msg.sender, _redemptionStep[_tokenId]);
     }
 
@@ -88,7 +91,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
      */
     function getRedemptionStep(uint256 _tokenId)
         external view override
-        returns (uint32) {
+        returns (uint8) {
             return _redemptionStep[_tokenId];
     }
 
@@ -97,9 +100,16 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
      * or if token own calls this contract (from the token contract) 
      * having caneled redemption.
      */
-    function removeRedemptionInfo(uint256 _tokenId) internal {
-        delete _redemptionCode[_tokenId];
-        delete _redemptionStep[_tokenId];
+    function _removeRedemptionInfo(uint256 _tokenId)
+        internal {
+            delete _redemptionCode[_tokenId];
+            delete _redemptionStep[_tokenId];
+    }
+
+    function removeRedemptionInfo(uint256 _tokenId)
+        external override
+        onlyRole(NFTCONTRACT_ROLE) {
+            _removeRedemptionInfo(_tokenId);
     }
 
     /**
@@ -110,8 +120,23 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         onlyRole(NFTCONTRACT_ROLE)
         tokenLock(_tokenId)
         redemptionStep(_tokenId, 0) {
-            _redemptionStep[_tokenId] = 1;
-            emit RedeemerInit(_tokenId, msg.sender);
+            // Check if already registered
+            address _contractRegistrar = C9Token(tokenContract).contractRegistrar();
+            address _registerOwner = IC9Registrar(_contractRegistrar).getRegisteredOwner(_tokenId);
+            if (_registerOwner != address(0)) {
+                // If registered jump to step 4
+                address _tokenOwner = IC9Token(tokenContract).ownerOf(_tokenId);
+                if (_registerOwner != _tokenOwner) {
+                    revert("C9Redeemer: Registered address mismatch");
+                }
+                _redemptionStep[_tokenId] = 4;
+                emit RedeemerInit(_tokenId, msg.sender, true);
+            }
+            else {
+                // Else move to next step
+                _redemptionStep[_tokenId] = 1;
+                emit RedeemerInit(_tokenId, msg.sender, false);
+            }
     }
 
     /**
@@ -198,6 +223,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         isOwner(_tokenId)
         tokenLock(_tokenId)
         redemptionStep(_tokenId, 4) {
+            /*
             address _contractPriceFeed = C9Token(tokenContract).contractPriceFeed();
             uint256 _minRedeemWei = IC9EthPriceFeed(_contractPriceFeed).getTokenWeiPrice(_minRedeemPrice);
             if (msg.value < _minRedeemWei) {
@@ -207,6 +233,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             if (!success) {
                 revert("C9Redeemer: payment failure");
             }
+            */
             _redemptionStep[_tokenId] = 5;
             emit RedeemerUserFinalize(_tokenId, msg.sender, msg.value);
     }
@@ -224,7 +251,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         redemptionStep(_tokenId, 5) {
             address _tokenOwner = IC9Token(tokenContract).ownerOf(_tokenId);
             IC9Token(tokenContract).redeemFinish(_tokenId);
-            removeRedemptionInfo(_tokenId);
+            _removeRedemptionInfo(_tokenId);
             emit RedeemerAdminApprove(_tokenId, _tokenOwner, 5);
     }
 

@@ -43,7 +43,8 @@ abstract contract C9Shared {
         uint16 royalty; // Royalty amount
         uint32 id; // Physical authentication id
         uint48 mintstamp; // Minting timestamp
-        string name; // Name to display on SVG -> not worth storing as bytes32
+        uint48 validitystamp; // Needed if validity invalid
+        string name; // Name to display on SVG -> not worth storing as bytes24/32
         string qrdata; // QR data to display on SVG
         string bardata; // Bar code data to display on SVG
     }

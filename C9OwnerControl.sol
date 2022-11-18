@@ -27,6 +27,9 @@ abstract contract C9OwnerControl is AccessControl {
     address public owner;
     address public pendingOwner;
 
+    event OwnershipTransferCancel(
+        address indexed previousOwner
+    );
     event OwnershipTransferComplete(
         address indexed previousOwner,
         address indexed newOwner
@@ -50,7 +53,7 @@ abstract contract C9OwnerControl is AccessControl {
      */
     function renounceRole(bytes32 role, address account)
         public override {
-            if (account != msg.sender) revert("C9OwnerControl: unauthorized");//Unauthorized(msg.sender, account);
+            if (account != msg.sender) revert("C9OwnerControl: unauthorized");
             _revokeRole(role, account);
     }
 
@@ -61,7 +64,7 @@ abstract contract C9OwnerControl is AccessControl {
     function revokeRole(bytes32 role, address account)
         public override
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (account == owner) revert("C9OwnerControl: unauthorized");//Unauthorized(msg.sender, owner);
+            if (account == owner) revert("C9OwnerControl: unauthorized");
             _revokeRole(role, account);
     }
 
@@ -75,6 +78,7 @@ abstract contract C9OwnerControl is AccessControl {
             delete pendingOwner;
             address oldOwner = owner;
             owner = _newOwner;
+            revokeRole(DEFAULT_ADMIN_ROLE, oldOwner);
             emit OwnershipTransferComplete(oldOwner, _newOwner);
     }
 
@@ -86,7 +90,7 @@ abstract contract C9OwnerControl is AccessControl {
     function transferOwnership(address _newOwner)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (_newOwner == address(0)) revert("C9OwnerControl: Invalid address");//InvalidAddress(_newOwner);
+            if (_newOwner == address(0)) revert("C9OwnerControl: Invalid address");
             pendingOwner = _newOwner;
             grantRole(DEFAULT_ADMIN_ROLE, _newOwner);
             emit OwnershipTransferInit(owner, _newOwner);
@@ -99,7 +103,18 @@ abstract contract C9OwnerControl is AccessControl {
      */
     function acceptOwnership()
         external {
-            if (pendingOwner != msg.sender) revert("C9OwnerControl: Unauthorized");//(pendingOwner, msg.sender);
+            if (pendingOwner != msg.sender) revert("C9OwnerControl: Unauthorized");
             _transferOwnership(msg.sender);
+    }
+
+    /**
+     * @dev Cancels a transfer initiated.
+     */
+    function cancelTransferOwnership()
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            delete pendingOwner;
+            revokeRole(DEFAULT_ADMIN_ROLE, pendingOwner);
+            emit OwnershipTransferCancel(owner);
     }
 }
