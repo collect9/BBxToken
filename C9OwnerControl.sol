@@ -26,6 +26,7 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 abstract contract C9OwnerControl is AccessControl {
     address public owner;
     address public pendingOwner;
+    bool _frozen = false;
 
     event OwnershipTransferCancel(
         address indexed previousOwner
@@ -116,5 +117,19 @@ abstract contract C9OwnerControl is AccessControl {
             delete pendingOwner;
             revokeRole(DEFAULT_ADMIN_ROLE, pendingOwner);
             emit OwnershipTransferCancel(owner);
+    }
+
+    /**
+     * @dev Flag that sets global toggle to freeze redemption. 
+     * Users may still cancel redemption and unlock their 
+     * token if in the process.
+     */
+    function toggleFreeze(bool _toggle)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            if (_frozen == _toggle) {
+                revert("C9Redeemer: bool already set");
+            }
+            _frozen = _toggle;
     }
 }

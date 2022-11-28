@@ -29,26 +29,6 @@ abstract contract C9Shared {
         hex3ToColor["fff"] = "NEBULA    ";
     }
 
-    struct TokenInfo {
-        uint8 validity; // Validity flag to show whether not token is redeemable
-        uint8 edition; // Physical edition
-        uint8 tag; // Hang tag country id
-        uint8 tush; // Tush tag country id
-        uint8 gentag; // Hang tag generation
-        uint8 gentush; // Tush tag generation
-        uint8 markertush; // Tush tag special marker id
-        uint8 spec; // Special id
-        uint8 rtier; // Rarity tier id
-        uint16 mintid; // Mint id for the physical edition id
-        uint16 royalty; // Royalty amount
-        uint32 id; // Physical authentication id
-        uint48 mintstamp; // Minting timestamp
-        uint48 validitystamp; // Needed if validity invalid
-        string name; // Name to display on SVG -> not worth storing as bytes24/32
-        string qrdata; // QR data to display on SVG
-        string bardata; // Bar code data to display on SVG
-    }
-
     /*
      * @dev Used in SVG and Metadata contracts.
      */
