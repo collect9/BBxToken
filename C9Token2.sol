@@ -78,9 +78,9 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * @dev Structure that holds all of the token info required to 
      * construct the 100% on chain SVG.
      */
+    mapping(uint256 => address) private _rTokenData;
     mapping(uint256 => uint256) private _uTokenData;
     mapping(uint256 => string[3]) private _sTokenData;
-    mapping(uint256 => address) private _rTokenData;
 
     /**
      * @dev Mapping that checks whether or not some combination of 
@@ -195,9 +195,47 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             return super.supportsInterface(interfaceId);
     }
 
+    /**
+     * @dev uTokenData is packed into a single uint256. This function
+     * returns an unpacked array.
+     */
+    function getTokenParams(uint256 _tokenId)
+        public view override
+        returns(uint256[18] memory params) {
+            uint256 _packedToken = _uTokenData[_tokenId];
+            params[0] = uint256(uint8(_packedToken>>POS_UPGRADED));
+            params[1] = uint256(uint8(_packedToken>>POS_DISPLAY));
+            params[2] = uint256(uint8(_packedToken>>POS_LOCKED));
+            params[3] = uint256(uint8(_packedToken>>POS_VALIDITY));
+            params[4] = uint256(uint8(_packedToken>>POS_EDITION));
+            params[5] = uint256(uint8(_packedToken>>POS_CNTRYTAG));
+            params[6] = uint256(uint8(_packedToken>>POS_CNTRYTUSH));
+            params[7] = uint256(uint8(_packedToken>>POS_GENTAG));
+            params[8] = uint256(uint8(_packedToken>>POS_GENTUSH));
+            params[9] = uint256(uint8(_packedToken>>POS_MARKERTUSH));
+            params[10] = uint256(uint8(_packedToken>>POS_SPECIAL));
+            params[11] = uint256(uint8(_packedToken>>POS_RARITYTIER));
+            params[12] = uint256(uint16(_packedToken>>POS_MINTID));
+            params[13] = uint256(uint16(_packedToken>>POS_ROYALTY));
+            params[14] = uint256(uint16(_packedToken>>POS_ROYALTIESDUE));
+            params[15] = uint256(uint32(_packedToken>>POS_TOKENID));
+            params[16] = uint256(uint40(_packedToken>>POS_VALIDITYSTAMP));
+            params[17] = uint256(uint40(_packedToken>>POS_MINTSTAMP));
+    }
+
+    /**
+     * @dev Get a single entry from uTokenData based on an enum index.
+     */
+    function _getTokenParam(uint256 _tokenId, TokenProps _idx)
+        internal view override
+        returns(uint256) {
+            return getTokenParams(_tokenId)[uint256(_idx)];
+    }
+
+    //>>>>>>> CUSTOM ERC2981 START
+
     /*
-     * @dev Optional ovverides.
-     * Since royalty info is already stored in the uTokenData and the 
+     * @dev Since royalty info is already stored in the uTokenData and the 
      * default receiver is owner, we don't need to write it out 
      * every time. Royalty limit is also enforced on the external 
      * function.
@@ -248,39 +286,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             return (receiver, royaltyAmount);
     }
 
-    /**
-     * @dev Custom overrides.
-     * Gets param from packed token specified by the enum.
-     */
-    function getTokenParams(uint256 _tokenId)
-        public view override
-        returns(uint256[18] memory params) {
-            uint256 _packedToken = _uTokenData[_tokenId];
-            params[0] = uint256(uint8(_packedToken>>POS_UPGRADED));
-            params[1] = uint256(uint8(_packedToken>>POS_DISPLAY));
-            params[2] = uint256(uint8(_packedToken>>POS_LOCKED));
-            params[3] = uint256(uint8(_packedToken>>POS_VALIDITY));
-            params[4] = uint256(uint8(_packedToken>>POS_EDITION));
-            params[5] = uint256(uint8(_packedToken>>POS_CNTRYTAG));
-            params[6] = uint256(uint8(_packedToken>>POS_CNTRYTUSH));
-            params[7] = uint256(uint8(_packedToken>>POS_GENTAG));
-            params[8] = uint256(uint8(_packedToken>>POS_GENTUSH));
-            params[9] = uint256(uint8(_packedToken>>POS_MARKERTUSH));
-            params[10] = uint256(uint8(_packedToken>>POS_SPECIAL));
-            params[11] = uint256(uint8(_packedToken>>POS_RARITYTIER));
-            params[12] = uint256(uint16(_packedToken>>POS_MINTID));
-            params[13] = uint256(uint16(_packedToken>>POS_ROYALTY));
-            params[14] = uint256(uint16(_packedToken>>POS_ROYALTIESDUE));
-            params[15] = uint256(uint32(_packedToken>>POS_TOKENID));
-            params[16] = uint256(uint40(_packedToken>>POS_VALIDITYSTAMP));
-            params[17] = uint256(uint40(_packedToken>>POS_MINTSTAMP));
-    }
-
-    function _getTokenParam(uint256 _tokenId, TokenProps _idx)
-        internal view override
-        returns(uint256) {
-            return getTokenParams(_tokenId)[uint256(_idx)];
-    }
+    //>>>>>>> CUSTOM ERC2981 END
 
     /**
      * @dev This function is meant to automatically fix an inactive 
@@ -294,6 +300,11 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             }
     }
 
+    /**
+     * @dev Reduces revert error messages fee slightly. This will 
+     * eventually be replaced by customError when Ganache 
+     * supports them.
+     */
     function _errMsg(bytes memory message) 
         internal pure override {
             revert(string(bytes.concat("C9Token: ", message)));
@@ -302,7 +313,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     /**
      * @dev The token burning required for the redemption process.
      * Require statement is the same as in ERC721Burnable.
-     * Note the `attrComboExists` of the token is not removed, thus 
+     * Note the `tokenComboExists` of the token is not removed, thus 
      * once the `edition` of any burned token cannot be replaced, but 
      * instead will keep incrementing.
      * 
@@ -462,7 +473,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
                 _input.brdata
             ];
 
-            // Store attribute combo
+            // Store token attribute combo
             _tokenComboExists[getPhysicalHash(_input, _edition)] = true;
 
             // Mint token
