@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.7 <0.9.0;
-import "./utils/ERC721Enumerable.sol";
+import "./utils/ERC721Enum32.sol";
 
 //import "./C9MetaData.sol";
 import "./C9OwnerControl.sol";
@@ -12,7 +12,6 @@ import "./utils/Base64.sol";
 import "./utils/Helpers.sol";
 
 interface IC9Token {
-    function ownerOf(uint256 _tokenId) external view returns (address);
     function preRedeemable(uint256 _tokenId) external view returns(bool);
     function redeemFinish(uint256 _tokenId) external;
     function redeemStart(uint256 _tokenId) external;
@@ -32,7 +31,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     /**
      * @dev Default royalty.
      */
-    uint256 public royaltyDefault = 500;
+    uint256 public royaltyDefault;
     address public royaltyReceiver;
 
     /**
@@ -89,7 +88,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * responsible for determining whether or not to increment 
      * the editionID.
      */
-    mapping(bytes32 => bool) private _attrComboExists;
+    mapping(bytes32 => bool) private _tokenComboExists;
 
     /**
      * @dev _mintId stores the minting ID number for up to 96 editions.
@@ -117,6 +116,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             // contractPriceFeed = priceFeedContract_;
             // contractRedeemer = redeemerContract_;
             // contractSVG = svgContract_;
+            royaltyDefault = 500;
             royaltyReceiver = owner;
     }
 
@@ -143,9 +143,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         if (msg.sender != _tokenOwner) {
             _errMsg("unauthorized");
         }
-        if (_getTokenParam(_tokenId, TokenProps.VALIDITY) == INACTIVE) {
-            _setTokenValidity(_tokenId, VALID);
-        }
+        _checkActivity(_tokenId);
         _;
     }
 
@@ -177,14 +175,17 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         return __baseURI[0];
     }
 
-    function _beforeTokenTransfer(address from, address to, uint256 tokenId, uint256 batchSize)
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 tokenId,
+        uint256 batchSize
+        )
         internal
         override(ERC721Enumerable)
         inRedemption(tokenId, false) {
             super._beforeTokenTransfer(from, to, tokenId, batchSize);
-            if (_getTokenParam(tokenId, TokenProps.VALIDITY) == INACTIVE) {
-                _setTokenValidity(tokenId, VALID);
-            }
+            _checkActivity(tokenId);
     }
 
     function supportsInterface(bytes4 interfaceId)
@@ -198,23 +199,12 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * @dev Optional ovverides.
      * Since royalty info is already stored in the uTokenData and the 
      * default receiver is owner, we don't need to write it out 
-     * every time.
+     * every time. Royalty limit is also enforced on the external 
+     * function.
      */
-    function _feeDenominator()
-        internal pure
-        returns (uint256) {
-            return 10000;
-    }
-
     function _setTokenRoyalty(uint256 _tokenId, address _receiver, uint256 _royalty)
         internal {
-            if (_royalty > _feeDenominator()) {
-                _errMsg("royalty fee exceeds salePrice");
-            }
-            if (_receiver == address(0)) {
-                _errMsg("invalid receiver");
-            }
-            if (_receiver != royaltyReceiver) {
+            if (_receiver != royaltyReceiver && _receiver != address(0)) {
                 _rTokenData[_tokenId] = _receiver;
             }
             _uTokenData[_tokenId] = _setTokenParam(
@@ -232,7 +222,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         onlyRole(DEFAULT_ADMIN_ROLE)
         external {
             if (_rTokenData[_tokenId] != address(0)) {
-                delete _rTokenData[_tokenId];
+                delete _rTokenData[_tokenId]; // back to owner
             }
             _uTokenData[_tokenId] = _setTokenParam(
                 _uTokenData[_tokenId],
@@ -254,7 +244,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
                 receiver = royaltyReceiver;
             }
             uint256 _fraction = _getTokenParam(_tokenId, TokenProps.ROYALTY);
-            uint256 royaltyAmount = (_salePrice * _fraction) / _feeDenominator();
+            uint256 royaltyAmount = (_salePrice * _fraction) / 10000;
             return (receiver, royaltyAmount);
     }
 
@@ -293,8 +283,17 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     }
 
     /**
-     * @dev Temp functions.
+     * @dev This function is meant to automatically fix an inactive 
+     * validity status when the owner interacts with the contract.
+     * It is placed _beforeTokenTransfer and in the isOwner modifier.
      */
+    function _checkActivity(uint256 _tokenId)
+        internal {
+            if (_getTokenParam(_tokenId, TokenProps.VALIDITY) == INACTIVE) {
+                _setTokenValidity(_tokenId, VALID);
+            }
+    }
+
     function _errMsg(bytes memory message) 
         internal pure override {
             revert(string(bytes.concat("C9Token: ", message)));
@@ -324,7 +323,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     }
 
     /**
-     * @dev Testing function only, remove for release.
+     * @dev Bulk burn function for convenience.
      */
     function burnAll()
         external
@@ -338,11 +337,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     /**
      * @dev Returns the base64 representation of the SVG string. 
      * This is desired when including the string in json data which 
-     * does not allow special characters found in hmtl/xml code.
-     *
-     * Requirements:
-     *
-     * - `tokenId` must exist.
+     * does not allow special characters found in html/xml code.
     */
     function b64SVGImage(uint256 _tokenId)
         internal view
@@ -387,14 +382,14 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
 
     /**
      * @dev Minting function. This checks and sets the `_edition` based on 
-     * the `TokenInfo` input attributes, sets the `__mintId` based on 
+     * the `TokenData` input attributes, sets the `__mintId` based on 
      * the `_edition`, sets the royalty, and then stores all of the 
      * attributes required to construct the SVG in the tightly packed 
-     * `TokenInfo` structure.
+     * `TokenData` structure.
      *
      * Requirements:
      *
-     * - `_input` royalty is <9.99%.
+     * - `_input` royalty is <= 9.99%.
     */
     function mint1(TokenData calldata _input)
         public
@@ -406,14 +401,11 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
                 bytes32 _data;
                 for (uint256 i; i<_mintId.length; i++) {
                     _data = getPhysicalHash(_input, i+1);
-                    if (!_attrComboExists[_data]) {
+                    if (!_tokenComboExists[_data]) {
                         _edition = i+1;
                         break;
                     }
                 }
-            }
-            if (_edition >= _mintId.length) {
-                _errMsg("edition overflow");
             }
 
             // Get the edition mint id
@@ -432,6 +424,9 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             }
             if (_edition == 0) {
                 _errMsg("edition cannot be 0");
+            }
+            if (_edition >= _mintId.length) {
+                _errMsg("edition overflow");
             }
             if (__mintId == 0) {
                 _errMsg("mint id cannot be 0");
@@ -468,7 +463,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             ];
 
             // Store attribute combo
-            _attrComboExists[getPhysicalHash(_input, _edition)] = true;
+            _tokenComboExists[getPhysicalHash(_input, _edition)] = true;
 
             // Mint token
             _mint(msg.sender, _tokenId);
@@ -484,16 +479,6 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             for (uint256 i; i<N; i++) {
                 mint1(_input[i]);
             }
-    }
-
-    /**
-     * @dev Required override so that this can be added to the
-     * interface IC9Token.
-     */
-    function ownerOf(uint256 tokenId)
-        public view override(IC9Token, ERC721)
-        returns (address) {
-            return super.ownerOf(tokenId);
     }
 
     /**
