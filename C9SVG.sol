@@ -3,14 +3,15 @@ pragma solidity >=0.8.7 <0.9.0;
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 import "./C9Shared.sol";
+import "./C9Struct.sol";
 import "./C9Token2.sol";
 import "./utils/Helpers.sol";
 
 interface IC9SVG {
-    function returnSVG(address _address, C9Shared.TokenInfo calldata _token) external view returns (string memory);
+    function returnSVG(address _address, uint256 _uTokenData, string[3] calldata _sTokenData) external view returns(string memory);
 }
 
-contract C9SVG is IC9SVG, C9Shared, Ownable {
+contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
     /**
      * @dev Optimized SVG flags in storage.
      */
@@ -103,29 +104,36 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
         "<use href='#c9usa' x='243.2'/>"
         "<use href='#c9uso' x='304'/>";
     
-    address private tokenContract;
+    address public immutable tokenContract;
     /**
      * @dev Sets up the mapping for compressed/mapped SVG input data.
      */
-    mapping(bytes1 => bytes2) stonum2;
-    mapping(bytes1 => bytes5) stonum5;
-    constructor () {
-        stonum2[0x61] = 0x2e35; // a->.5
-        stonum2[0x41] = 0x3130; // A->10
-        stonum2[0x42] = 0x3131; // B->11
-        stonum2[0x43] = 0x3132; // C->12
-        stonum2[0x44] = 0x3133; // D->13
-        stonum2[0x45] = 0x3134; // E->14
-        stonum2[0x46] = 0x3135; // F->15
-        stonum2[0x47] = 0x3136; // G->16
-        stonum2[0x48] = 0x3138; // H->18
-        stonum2[0x49] = 0x3338; // I->38
-        stonum5[0x55] = 0x322e363730; // U->2.670
-        stonum5[0x56] = 0x342e353030; // V->4.500
-        stonum5[0x57] = 0x352e353030; // W->5.500
-        stonum5[0x58] = 0x372e353030; // X->7.500
-        stonum5[0x59] = 0x32332e3333; // Y->23.33
-        stonum5[0x5a] = 0x33322e3530; // Z->32.50
+    mapping(bytes1 => string) letterMap;
+    constructor (address _tokenContract) {
+        letterMap[0x41] = "10"; // A
+        letterMap[0x42] = "11"; // B
+        letterMap[0x43] = "12"; // C
+        letterMap[0x44] = "13"; // D
+        letterMap[0x45] = "14"; // E
+        letterMap[0x46] = "15"; // F
+        letterMap[0x47] = "16"; // G
+        letterMap[0x48] = "17"; // H
+        letterMap[0x49] = "18"; // I
+        letterMap[0x52] = "2.5"; // R
+        letterMap[0x53] = "2.67"; // S
+        letterMap[0x54] = "4.5"; // T
+        letterMap[0x55] = "5.5"; // U
+        letterMap[0x56] = "7.5"; // V
+        letterMap[0x57] = "20.33"; // W
+        letterMap[0x58] = "21.5"; // X
+        letterMap[0x59] = "23.33"; // Y
+        letterMap[0x5a] = "32.5"; // Z
+        letterMap[0x54] = "4.5"; // T
+        letterMap[0x61] = ".25"; // a
+        letterMap[0x62] = ".33"; // b
+        letterMap[0x63] = ".5"; // c
+        letterMap[0x64] = ".67"; // d
+        tokenContract = _tokenContract;
     }
 
     /**
@@ -160,20 +168,22 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
     /**
      * @dev Adds validity flag info to SVG output memory `b`.
      */
-    function addValidityInfo(TokenInfo calldata _token, bytes memory b) internal view {
-        uint8 _validityIdx = _token.validity;
+    function addValidityInfo(uint256 _uTokenData, bytes memory b) internal view {
+        uint256 _validityIdx = _getTokenParam(_uTokenData, TokenProps.VALIDITY);
+        uint256 _tokenId = _getTokenParam(_uTokenData, TokenProps.TOKENID);
+
         bytes3 _clr;
         bytes16 _validity = _vValidity[_validityIdx];
         bool _lock = false;
         if (_validityIdx == 0) {
-            bool _preRedeemable = IC9Token(tokenContract).preRedeemable(_token.id);
+            bool _preRedeemable = IC9Token(tokenContract).preRedeemable(_tokenId);
             if (_preRedeemable) {
                 _clr = "a0f"; // purple
                 _validity = "PRE-REDEEMABLE  ";
             }
             else {
                 // If validity 0 and locked == getting reedemed
-                _lock = IC9Token(tokenContract).tokenLocked(_token.id);
+                _lock = IC9Token(tokenContract).tokenLocked(_tokenId);
                 if (_lock) {
                     _clr = "b50"; // orange
                     _validity = "REDEEM PENDING  ";
@@ -189,7 +199,7 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
         assembly {
             let dst := add(b, 2519)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _clr))
-            if gt(_validityIdx, 0) {
+            if gt(_validityIdx, VALID) {
                 dst := add(b, 2524)
                 mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), "IN"))
             }
@@ -205,7 +215,7 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
             mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), ">>"))
             dst := add(b, 2535)
             mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _validity))
-            if eq(_validityIdx, 4) {
+            if eq(_validityIdx, REDEEMED) {
                 dst := add(b, 783)
                 mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "0")) // grayscale
             }
@@ -216,60 +226,74 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
      * @dev Adds the `_token` information of fixed sized fields to hardcoded 
      * bytes `b`.
      */
-    function addTokenInfo(TokenInfo calldata _token, bytes memory b) internal view {
-        bytes7 _tagtxt = genTagsToAscii(_token.gentag, _token.tag);
-        bytes7 _tushtxt = genTagsToAscii(_token.gentush, _token.tush);
-        (bytes3 _rgc2, bytes16 _classer) = getGradientColors(_token);
-        bytes6 _periods = getNFTAge(_token.mintstamp);
-        bytes4 __mintid = Helpers.flip4Space(bytes4(Helpers.uintToBytes(_token.mintid)));
-        bytes4 _royalty = Helpers.bpsToPercent(_token.royalty);
-        bytes2 _edition = Helpers.flip2Space(Helpers.remove2Null(bytes2(Helpers.uintToBytes(_token.edition))));
-        bytes2 _namesize = getNameSize(uint256(bytes(_token.name).length));
-        assembly {
-            // Name Font Size
-            let dst := add(b, 251)
-            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _namesize))
-            // Colors
-            dst := add(b, 484)
-            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _rgc2))
-            dst := add(b, 2724)
-            mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _classer))
-            // Edition
-            let _edcheck := gt(_edition, 9)
-            switch _edcheck case 0 {
-                dst := add(b, 2793)
-            } default {
-                dst := add(b, 2792)
+    function addTokenInfo(
+        uint256 _uTokenData,
+        string calldata _name,
+        bytes memory b
+        )
+        internal view {
+            bytes7 _tagtxt = genTagsToAscii(
+                _getTokenParam(_uTokenData, TokenProps.GENTAG),
+                _getTokenParam(_uTokenData, TokenProps.CNTRYTAG));
+            bytes7 _tushtxt = genTagsToAscii(
+                _getTokenParam(_uTokenData, TokenProps.GENTUSH),
+                _getTokenParam(_uTokenData, TokenProps.CNTRYTUSH));
+            bytes6 _periods = getNFTAge(
+                _getTokenParam(_uTokenData, TokenProps.MINTSTAMP));
+            bytes4 __mintid = Helpers.flip4Space(bytes4(Helpers.uintToBytes(
+                _getTokenParam(_uTokenData, TokenProps.MINTID))));
+            bytes4 _royalty = Helpers.bpsToPercent(
+                _getTokenParam(_uTokenData, TokenProps.ROYALTY));
+            bytes2 _edition = Helpers.flip2Space(Helpers.remove2Null(bytes2(Helpers.uintToBytes(
+                _getTokenParam(_uTokenData, TokenProps.EDITION)))));
+            bytes2 _namesize = getNameSize(uint256(bytes(_name).length));
+            (bytes3 _rgc2, bytes16 _classer) = getGradientColors(_uTokenData);
+
+            assembly {
+                // Name Font Size
+                let dst := add(b, 251)
+                mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _namesize))
+                // Colors
+                dst := add(b, 484)
+                mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _rgc2))
+                dst := add(b, 2724)
+                mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _classer))
+                // Edition
+                let _edcheck := gt(_edition, 9)
+                switch _edcheck case 0 {
+                    dst := add(b, 2793)
+                } default {
+                    dst := add(b, 2792)
+                }
+                mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _edition))
+                // Mintid
+                dst := add(b, 2795)
+                mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), __mintid))
+                // Royalty
+                dst := add(b, 2590)
+                mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _royalty))
+                // Timestamps
+                dst := add(b, 2828)
+                let mask := shl(208, 0xFFFF00000000)
+                let srcpart := and(_periods, mask)
+                let destpart := and(mload(dst), not(mask))
+                mstore(dst, or(destpart, srcpart))
+                dst := add(b, 2831)
+                mask := shl(208, 0x0000FFFF0000)
+                srcpart := and(_periods, mask)
+                destpart := and(mload(dst), not(mask))
+                mstore(dst, or(destpart, srcpart))
+                dst := add(b, 2834)
+                mask := shl(208, 0x00000000FFFF)
+                srcpart := and(_periods, mask)
+                destpart := and(mload(dst), not(mask))
+                mstore(dst, or(destpart, srcpart))
+                // Gen Country Text
+                dst := add(b, 3016)
+                mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tagtxt))
+                dst := add(b, 3026)
+                mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tushtxt))
             }
-            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _edition))
-            // Mintid
-            dst := add(b, 2795)
-            mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), __mintid))
-            // Royalty
-            dst := add(b, 2590)
-            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _royalty))
-            // Timestamps
-            dst := add(b, 2828)
-            let mask := shl(208, 0xFFFF00000000)
-            let srcpart := and(_periods, mask)
-            let destpart := and(mload(dst), not(mask))
-            mstore(dst, or(destpart, srcpart))
-            dst := add(b, 2831)
-            mask := shl(208, 0x0000FFFF0000)
-            srcpart := and(_periods, mask)
-            destpart := and(mload(dst), not(mask))
-            mstore(dst, or(destpart, srcpart))
-            dst := add(b, 2834)
-            mask := shl(208, 0x00000000FFFF)
-            srcpart := and(_periods, mask)
-            destpart := and(mload(dst), not(mask))
-            mstore(dst, or(destpart, srcpart))
-            // Gen Country Text
-            dst := add(b, 3016)
-            mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tagtxt))
-            dst := add(b, 3026)
-            mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tushtxt))
-        }
     }
 
     /** 
@@ -278,7 +302,7 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
      * tags. The provides the user with the information necessary to know 
      * what type of tag is present based on the SVG display alone.
      */
-    function addTushMarker(uint8 _markertush, uint8 _gentag) internal view returns (bytes memory e) {
+    function addTushMarker(uint256 _markertush, uint256 _gentag) internal view returns (bytes memory e) {
         if (_markertush > 0) {
             e = "<g transform='translate(555 726)' style='opacity:0.8; font-family:\"Brush Script MT\", cursive; font-size:24; font-weight:700'>"
                 "<text text-anchor='middle' fill='#222'>    </text>"
@@ -305,45 +329,47 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
      * @dev The SVG output memory `b` is finished off with the variable sized parts of `_token`.
      * This is a bit messy but bytes concat seems to get the job done.
      */
-    function addVariableBytes(TokenInfo calldata _token, bytes6 _id) internal view returns(bytes memory vb) {
-        bytes memory href = "<a href='https://collect9.io/nft/XXXXXX' target='_blank'>";
-        assembly {
-            let dst := add(href, 65)
-            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _id))
-        }
-        bytes memory gbarcode = "</a></g><g transform='translate(XXX 646) scale(0.33)'>";
-        bytes3 x = _id[0] != 0x30 ? bytes3("385") : bytes3("400");
-        assembly {
-            let dst := add(gbarcode, 64)
-            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), x))
-        }
-        vb = bytes.concat(
-            bytes(_token.name),
-            "</text></g><g transform='translate(20 621) scale(0.17)'>",
-            getSVGFlag(_token.tag),
-            "</g><g transform='translate(501 621) scale(0.17)'>",
-            getSVGFlag(_token.tush),
-            "</g><g transform='translate(157.5 146) scale(0.5)'>",
-            href,
-            qrCodeSVGFull(bytes(_token.qrdata)),
-            gbarcode,
-            href,
-            barCodeSVG(bytes(_token.bardata), _id),
-            "</a></g>",
-            addUpgradeText(_token)
-        );
+    function addVariableBytes(uint256 _uTokenData, string[3] calldata _sTokenData, bytes6 _id)
+        internal view
+        returns(bytes memory vb) {
+            bytes memory href = "<a href='https://collect9.io/nft/XXXXXX' target='_blank'>";
+            assembly {
+                let dst := add(href, 65)
+                mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _id))
+            }
+            bytes memory gbarcode = "</a></g><g transform='translate(XXX 646) scale(0.33)'>";
+            bytes3 x = _id[0] != 0x30 ? bytes3("385") : bytes3("400");
+            assembly {
+                let dst := add(gbarcode, 64)
+                mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), x))
+            }
+            vb = bytes.concat(
+                bytes(_sTokenData[0]),
+                "</text></g><g transform='translate(20 621) scale(0.17)'>",
+                getSVGFlag(_getTokenParam(_uTokenData, TokenProps.CNTRYTAG)),
+                "</g><g transform='translate(501 621) scale(0.17)'>",
+                getSVGFlag(_getTokenParam(_uTokenData, TokenProps.CNTRYTUSH)),
+                "</g><g transform='translate(157.5 146) scale(0.5)'>",
+                href,
+                qrCodeSVGFull(bytes(_sTokenData[1])),
+                gbarcode,
+                href,
+                barCodeSVG(bytes(_sTokenData[2]), _id),
+                "</a></g>"
+            );
+            vb =  bytes.concat(vb, addUpgradeText(_getTokenParam(_uTokenData, TokenProps.UPGRADED)));
     }
 
     /**
      * @dev If token has been upgraded, add text that shows it has.
      */
-    function addUpgradeText(TokenInfo calldata _token) internal view returns(bytes memory upgradedText) {
+    function addUpgradeText(uint256 _upgraded) internal pure returns(bytes memory upgradedText) {
         upgradedText = "<text x='190' y='58' style='font-family: \"Brush Script MT\", cursive;' font-size='22'>        </text>";
-        if (IC9Token(tokenContract).tokenUpgraded(_token.id)) {
-            assembly {
+        assembly {
                 let dst := add(upgradedText, 117)
-                mstore(dst, or(and(mload(dst), not(shl(192, 0xFFFFFFFFFFFFFFFF))), "upgraded"))
-            }
+                if eq(_upgraded, 1) {
+                    mstore(dst, or(and(mload(dst), not(shl(192, 0xFFFFFFFFFFFFFFFF))), "upgraded"))
+                }
         }
     }
 
@@ -358,8 +384,6 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
         bytes memory entry = "     ";
         bytes memory tmp;
         bytes1 e0;
-        bytes2 m2;
-        bytes5 m5;
         uint256 j = 0;
         uint256 l = 0;
         bool delims = false;
@@ -396,16 +420,7 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
                 }
             } 
             else {
-                m2 = stonum2[e0];
-                if (m2 != 0x0000) {
-                    output = bytes.concat(output, "<rect x='", m2, "'/>");
-                }
-                else {
-                    m5 = stonum5[e0];
-                    output = m5 != 0x0000000000 ? 
-                        bytes.concat(output, "<rect x='", m5, "'/>") : 
-                        bytes.concat(output, "<rect x='", Helpers.concatTilSpace(entry, 0), "'/>");
-                }
+                output = mapToString(output, entry, 0, "<rect x='", "'/>");
                 if (!delims) {
                     l += 1;
                 }
@@ -434,7 +449,7 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
      * but users should be able to fetch meta-data updates to see 
      * color changes.
      */
-    function checkForSpecialBg(uint8 _rtier, bytes memory b) internal view {
+    function checkForSpecialBg(uint256 _rtier, bytes memory b) internal view {
         bytes32 _filter_mod = "turbulence' baseFrequency='0.002";
         bytes32[3] memory mods = [bytes32("1 1 0 0 0 1 0 0 0 0 0 1 0 0 0 0 "),
             "0 0 0 0 1 1 0 0 0 0 0 1 0 0 0 0 ",
@@ -463,7 +478,7 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
      * @dev Converts integer inputs to the ordinal country ascii text representation 
      * based on input params `_gentag` and `_tag`.
      */
-    function genTagsToAscii(uint8 _gentag, uint8 _tag) internal view returns(bytes7) {
+    function genTagsToAscii(uint256 _gentag, uint256 _tag) internal view returns(bytes7) {
         bytes3 __gentag = Helpers.uintToOrdinal(_gentag);
         bytes3 _cntrytag = _vFlags[_tag];
         bytes memory _tmpout = "       ";
@@ -482,10 +497,28 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
      * @dev Returns styling and textual information based on token attributes input 
      * params `_spec` and `_rtier`.
      */
-    function getGradientColors(TokenInfo calldata _token) internal view returns (bytes3, bytes16) {
-        uint8 _spec = _token.spec;
-        uint8 _rtier = _token.rtier;
-        return (hex3[_spec], rtiers[_rtier]);
+    function getGradientColors(uint256 _uTokenData) internal view returns (bytes3, bytes16) {
+        uint256 _genTag = _getTokenParam(_uTokenData, TokenProps.GENTAG);
+        uint256 _rarityTier = _getTokenParam(_uTokenData, TokenProps.RARITYTIER);
+        uint256 _specialTier = _getTokenParam(_uTokenData, TokenProps.SPECIAL);
+
+        bytes16 _b16Tier = rarityTiers[_rarityTier];
+        bytes memory _bTier = "                ";
+        assembly {
+            let dst := add(_bTier, 32)
+            mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _b16Tier))
+        }
+        
+        bytes3 _bgColor;
+        if (_specialTier > 0) {
+            bytes16 _sTier = specialTiers[_specialTier];
+            _bTier[0] = _sTier[0];
+            _bgColor = hex3[_specialTier+5];
+        }
+        else {
+            _bgColor = hex3[_genTag];
+        }
+        return (_bgColor, bytes16(_bTier));
     }
 
     /**
@@ -556,7 +589,7 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
      * If input is not within a valid range (<7), then return a blank 
      * flag will be returned.
      */
-    function getSVGFlag(uint8 _flag) internal pure returns(bytes memory) {
+    function getSVGFlag(uint256 _flag) internal pure returns(bytes memory) {
         if (_flag == 0) {
             return FLG_CAN;
         }
@@ -583,6 +616,26 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
         }
     }
 
+    function mapToString(bytes memory b, bytes memory entry, uint256 k, bytes memory start, bytes memory end) 
+        internal view
+        returns (bytes memory output) {
+            bytes1 e0;
+            bytes memory tmp;
+            for (uint256 j; j<entry.length; j++) {
+                e0 = entry[j+k];
+                if (e0 == 0x20) { //space
+                    break;
+                }
+                if (bytes1(bytes(letterMap[e0])) != 0x00) {
+                    tmp = bytes.concat(tmp, bytes(letterMap[e0]));
+                }
+                else {
+                    tmp = bytes.concat(tmp, e0);
+                }
+            }
+            output = bytes.concat(b, start, tmp, end);
+    }
+
     /**
      * @dev Reconstructs mapped compressed representation of data into a 
      * micro QRCode SVG from input `_data`.
@@ -591,7 +644,6 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
         bytes memory entry = "      ";
         bytes memory tmp;
         bytes1 e0;
-        bytes2 m2;
         bytes3[3] memory colors = [bytes3("111"), "007", "407"];
         bytes3 color;
 
@@ -615,17 +667,8 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
 
             j = 0;
             e0 = entry[0];
-            m2 = stonum2[e0];
-            bytes5 m5 = stonum5[e0];
             if (xflg) {
-                if (m2 != 0x0000) {
-                    output = bytes.concat(output, "x='", m2, "'");
-                }
-                else {
-                    output = m5 != 0x0000000000 ? 
-                        bytes.concat(output, "x='", m5, "'") : 
-                        bytes.concat(output, "x='", Helpers.concatTilSpace(entry, 0), "'");
-                }
+                output = mapToString(output, entry, 0, "x='", "'");
                 xflg = false;
                 yflg = true;
             }
@@ -636,14 +679,7 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
                     let dst := add(tmp, 41)
                     mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), color))
                 }
-                if (m2 != 0x0000) {
-                    output = bytes.concat(output, " y='", m2, tmp);
-                }
-                else {
-                    output = m5 != 0x0000000000 ? 
-                        bytes.concat(output, " y='", m5, tmp) : 
-                        bytes.concat(output, " y='", Helpers.concatTilSpace(entry, 0), tmp);
-                } 
+                output = mapToString(output, entry, 0, "y='", tmp);
                 yflg = false;
             }
             else {
@@ -655,7 +691,7 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
                 else if (e0 == 0x67) {
                     delims = true;
                     l = 2;
-                    tmp = "<g transform='scale(X 1)'>";
+                    tmp = "</g><g transform='scale(X 1)'>";
                     e0 = _data[i+1];
                     assembly {
                         let dst := add(tmp, 52)
@@ -698,17 +734,7 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
                     k = 0;
                 }
 
-                e0 = entry[k];
-                m2 = stonum2[e0];
-                if (m2 != 0x0000) {
-                    output = bytes.concat(output, "x='", m2, "'");
-                }
-                else {
-                    m5 = stonum5[e0];
-                    output = m5 != 0x0000000000 ? 
-                        bytes.concat(output, "x='", m5, "'") : 
-                        bytes.concat(output, "x='", Helpers.concatTilSpace(entry, k), "'");
-                }          
+                output = mapToString(output, entry, k, "x='", "'");
                 k = 1;
                 yflg = true;
             }
@@ -731,12 +757,13 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
             "<rect x='3' height='1' width='1'/>"
             "</symbol>"
             "<rect transform='scale(3)' x='0.67' y='0.67' fill='#111'/>"
-            "<rect x='0.5' y='0.5' style='width:6px;height:6px;fill:none;stroke:#111;'/>";
+            "<rect x='0.5' y='0.5' style='width:6px;height:6px;fill:none;stroke:#111;'/>"
+            "<g>";
         return bytes.concat(
             b,
-            qrCodeSVG("d80dC0G0G1dB3F4dD5F6B7d08d58C8F90AFA0CGC0EBF0Gg2:W:4:V:6:X:7:V:8:X:8:6.5:B:W:C:W:G:e:"),
+            qrCodeSVG("d80dC0G0G1dB3F4dD5F6B7d08d58C8F90AFA0CGC0EBF0Gg2:U:4:T:6:V:7:T:8:V:8:6.5:B:U:C:U:G"),
             qrCodeSVG(_qrdata),
-            "</svg>"
+            "</g></svg>"
         );
     }
 
@@ -744,7 +771,9 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
      * @dev External function to call and return the SVG string built from `_token`  
      * and owner `_address`.
      */
-    function returnSVG(address _address, TokenInfo calldata _token) external view override returns (string memory) {
+    function returnSVG(address _address, uint256 _uTokenData, string[3] calldata _sTokenData)
+        external view override
+        returns (string memory) {
         bytes memory b = "<svg version='1.1' class='c9svg' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 630 880'>"
             "<style type='text/css'>"
             ".c9svg{font-family:'Courier New';} "
@@ -822,28 +851,21 @@ contract C9SVG is IC9SVG, C9Shared, Ownable {
             "<g text-anchor='middle'>"
             "<text x='50%' y='645' class='nXXXXXX'>        |        </text>"
             "<text x='50%' y='698' class='tXXXXXX'>";
-        bytes6 _id = Helpers.tokenIdToBytes(_token.id);
+        uint256 _tokenId = _getTokenParam(_uTokenData, TokenProps.TOKENID);
+        bytes6 _id = Helpers.tokenIdToBytes(_tokenId);
         addIds(_id, b);
-        addTokenInfo(_token, b);
-        addValidityInfo(_token, b);
+        addTokenInfo(_uTokenData, _sTokenData[0], b);
+        addValidityInfo(_uTokenData, b);
         addAddress(_address, b);
-        checkForSpecialBg(_token.rtier, b);
+        checkForSpecialBg(_getTokenParam(_uTokenData, TokenProps.SPECIAL), b);
         return string(
             bytes.concat(b,
-                addVariableBytes(_token, _id),
-                addTushMarker(_token.markertush, _token.gentag),
+                addVariableBytes(_uTokenData, _sTokenData, _id),
+                addTushMarker(
+                    _getTokenParam(_uTokenData, TokenProps.MARKERTUSH),
+                    _getTokenParam(_uTokenData, TokenProps.GENTAG)),
                 "</g></svg>"
             )
         );
-    }
-
-    /**
-     * @dev Updates the token contract address.
-     */
-    function setTokenContract(address _address)
-        external
-        onlyOwner {
-            if (tokenContract == _address) revert("C9Token: val already set");//C9Errors.ValAlreadySet();
-            tokenContract = _address;
     }
 }
