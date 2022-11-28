@@ -74,8 +74,8 @@ abstract contract C9Shared {
      * @dev Token validity flags.
      */   
     bytes16[5] _vValidity = [
-        bytes16("REDEEMABLE      "),
-        "ROYALTIES DUE   ",
+        bytes16("VALID           "),
+        "ROYALTIES       ",
         "INACTIVE        ",
         "OTHER           ",
         "REDEEMED        "

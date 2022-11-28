@@ -13,7 +13,6 @@ interface IC9Registrar {
 }
 
 contract C9Registrar is IC9Registrar, C9OwnerControl {
-    bool _frozen;
     bytes32 public constant NFTCONTRACT_ROLE = keccak256("NFTCONTRACT_ROLE");
     
     mapping(uint256 => uint32) private _verificationCode;
@@ -66,11 +65,6 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
 
     modifier isRegistered(uint256 _tokenId) {
         if (_registeredOwner[_tokenId] == address(0)) revert("C9Registrar: token not registered");
-        _;
-    }
-
-    modifier notFrozen() {
-        if (_frozen) revert("C9Registrar: contract frozen");
         _;
     }
 
@@ -214,20 +208,6 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
             }
             tokenContract = _address;
             _grantRole(NFTCONTRACT_ROLE, tokenContract);
-    }
-
-    /**
-     * @dev Flag that sets global toggle to freeze redemption. 
-     * Users may still cancel redemption and unlock their 
-     * token if in the process.
-     */
-    function toggleFreeze(bool _toggle)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (_frozen == _toggle) {
-                revert("C9Registrar: bool already set");
-            }
-            _frozen = _toggle;
     }
 
     /**

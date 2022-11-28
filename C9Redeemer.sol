@@ -18,7 +18,6 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     mapping(uint256 => uint32) _redemptionCode;
     mapping(uint256 => uint8) _redemptionStep;
     uint16 _minRedeemPrice = 20; // min uninsured handling & shipping costs
-    bool _frozen;
 
     event RedeemerAdminApprove(
         uint256 indexed tokenId,
@@ -49,12 +48,13 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         address indexed tokenOwner
     );
 
-    address public tokenContract;
+    address public contractRegistrar;
+    address public contractToken;
     
     constructor(){}
 
     modifier isOwner(uint256 _tokenId) {
-        address _tokenOwner = IC9Token(tokenContract).ownerOf(_tokenId);
+        address _tokenOwner = IC9Token(contractToken).ownerOf(_tokenId);
         if (msg.sender != _tokenOwner) revert("C9Redeemer: unauthorized");
         _;
     }
@@ -67,7 +67,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     }
 
     modifier tokenLock(uint256 _tokenId) {
-        bool _lock = IC9Token(tokenContract).tokenLocked(_tokenId);
+        bool _lock = IC9Token(contractToken).tokenLocked(_tokenId);
         if (_lock != true) revert("C9Redeemer: token not locked for redemption");
         _;
     }
@@ -121,11 +121,10 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         tokenLock(_tokenId)
         redemptionStep(_tokenId, 0) {
             // Check if already registered
-            address _contractRegistrar = C9Token(tokenContract).contractRegistrar();
-            address _registerOwner = IC9Registrar(_contractRegistrar).getRegisteredOwner(_tokenId);
+            address _registerOwner = IC9Registrar(contractRegistrar).getRegisteredOwner(_tokenId);
             if (_registerOwner != address(0)) {
                 // If registered jump to step 4
-                address _tokenOwner = IC9Token(tokenContract).ownerOf(_tokenId);
+                address _tokenOwner = IC9Token(contractToken).ownerOf(_tokenId);
                 if (_registerOwner != _tokenOwner) {
                     revert("C9Redeemer: Registered address mismatch");
                 }
@@ -189,7 +188,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
                 revert("C9Redeemer: code incorrect");
             }
             _redemptionStep[_tokenId] = 3;
-            address _tokenOwner = IC9Token(tokenContract).ownerOf(_tokenId);
+            address _tokenOwner = IC9Token(contractToken).ownerOf(_tokenId);
             emit RedeemerAdminApprove(_tokenId, _tokenOwner, 2);
     }
 
@@ -249,8 +248,8 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         onlyRole(DEFAULT_ADMIN_ROLE)
         tokenLock(_tokenId)
         redemptionStep(_tokenId, 5) {
-            address _tokenOwner = IC9Token(tokenContract).ownerOf(_tokenId);
-            IC9Token(tokenContract).redeemFinish(_tokenId);
+            address _tokenOwner = IC9Token(contractToken).ownerOf(_tokenId);
+            IC9Token(contractToken).redeemFinish(_tokenId);
             _removeRedemptionInfo(_tokenId);
             emit RedeemerAdminApprove(_tokenId, _tokenOwner, 5);
     }
@@ -258,27 +257,25 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     /**
      * @dev Updates the token contract address.
      */
-    function setTokenContract(address _address)
+    function setContractRegistrar(address _address)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (tokenContract == _address) {
+            if (contractRegistrar == _address) {
                 revert("C9Redeemer: address already set");
             }
-            tokenContract = _address;
-            _grantRole(NFTCONTRACT_ROLE, tokenContract);
+            contractRegistrar = _address;
     }
 
     /**
-     * @dev Flag that sets global toggle to freeze redemption. 
-     * Users may still cancel redemption and unlock their 
-     * token if in the process.
+     * @dev Updates the token contract address.
      */
-    function toggleFreeze(bool _toggle)
+    function setContractToken(address _address)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (_frozen == _toggle) {
-                revert("C9Redeemer: bool already set");
+            if (contractToken == _address) {
+                revert("C9Redeemer: address already set");
             }
-            _frozen = _toggle;
+            contractToken = _address;
+            _grantRole(NFTCONTRACT_ROLE, contractToken);
     }
 }

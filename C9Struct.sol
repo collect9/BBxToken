@@ -75,7 +75,7 @@ abstract contract C9Struct {
     uint256 constant POS_MINTSTAMP = 216;
 
     function getTokenParams(uint256 _packedToken)
-        public view
+        public view virtual
         returns(uint256[18] memory params) {
             params[0] = uint256(uint8(_packedToken>>POS_UPGRADED));
             params[1] = uint256(uint8(_packedToken>>POS_DISPLAY));
@@ -103,16 +103,16 @@ abstract contract C9Struct {
             return getTokenParams(_packedToken)[uint256(_idx)];
     }
 
-    function _updateTokenParam(
+    function _setTokenParam(
         uint256 _packedToken,
         uint256 _pos,
         uint256 _val,
         uint256 _mask
     )
-        internal pure
+        internal pure virtual
         returns(uint256) {
-            _packedToken &= ~(_mask>>_pos);
-            _packedToken |= _val>>_pos;
+            _packedToken &= ~(_mask<<_pos); //zero out only its portion
+            _packedToken |= _val<<_pos; //write value back in
             return _packedToken;
     }
 }

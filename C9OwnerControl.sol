@@ -45,6 +45,21 @@ abstract contract C9OwnerControl is AccessControl {
         _grantRole(DEFAULT_ADMIN_ROLE, owner);
     }
 
+    modifier notFrozen() { 
+        if (_frozen) {
+            _errMsg("contract frozen");
+        }
+        _;
+    }
+
+    /**
+     * @dev Temp functions.
+     */
+    function _errMsg(bytes memory message) 
+        internal pure virtual {
+            revert(string(bytes.concat("C9OwnerControl: ", message)));
+    }
+
     /**
      * @dev It will not be possible to call `onlyRole(DEFAULT_ADMIN_ROLE)` 
      * functions anymore, unless there are other accounts with that role.
@@ -54,7 +69,7 @@ abstract contract C9OwnerControl is AccessControl {
      */
     function renounceRole(bytes32 role, address account)
         public override {
-            if (account != msg.sender) revert("C9OwnerControl: unauthorized");
+            if (account != msg.sender) _errMsg("unauthorized");
             _revokeRole(role, account);
     }
 
@@ -65,7 +80,7 @@ abstract contract C9OwnerControl is AccessControl {
     function revokeRole(bytes32 role, address account)
         public override
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (account == owner) revert("C9OwnerControl: unauthorized");
+            if (account == owner) _errMsg("unauthorized");
             _revokeRole(role, account);
     }
 
@@ -91,7 +106,7 @@ abstract contract C9OwnerControl is AccessControl {
     function transferOwnership(address _newOwner)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (_newOwner == address(0)) revert("C9OwnerControl: Invalid address");
+            if (_newOwner == address(0)) _errMsg("invalid address");
             pendingOwner = _newOwner;
             grantRole(DEFAULT_ADMIN_ROLE, _newOwner);
             emit OwnershipTransferInit(owner, _newOwner);
@@ -104,7 +119,7 @@ abstract contract C9OwnerControl is AccessControl {
      */
     function acceptOwnership()
         external {
-            if (pendingOwner != msg.sender) revert("C9OwnerControl: Unauthorized");
+            if (pendingOwner != msg.sender) _errMsg("unauthorized");
             _transferOwnership(msg.sender);
     }
 
@@ -128,7 +143,7 @@ abstract contract C9OwnerControl is AccessControl {
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
             if (_frozen == _toggle) {
-                revert("C9Redeemer: bool already set");
+                _errMsg("bool already set");
             }
             _frozen = _toggle;
     }
