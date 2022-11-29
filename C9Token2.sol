@@ -588,7 +588,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         onlyRole(REDEEMER_ROLE)
         tokenExists(_tokenId)
         inRedemption(_tokenId, true) {
-            _setTokenValidity(_tokenId, 4);
+            _setTokenValidity(_tokenId, REDEEMED);
             emit RedemptionFinish(ownerOf(_tokenId), _tokenId);
     }
 
@@ -645,14 +645,16 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         tokenExists(_tokenId)
         returns(bool) {
             uint256 _val = _getTokenParam(_tokenId, TokenProps.LOCKED);
+            //uint256 _val = uint256(uint8(_uTokenData[_tokenId]>>POS_LOCKED));
             return Helpers.uintToBool(_val);
     }
 
     function tokenUpgraded(uint256 _tokenId)
-        public view override
+        external view override
         tokenExists(_tokenId)
         returns (bool) {
             uint256 _val = _getTokenParam(_tokenId, TokenProps.UPGRADED);
+            //uint256 _val = uint256(uint8(_uTokenData[_tokenId]>>POS_UPGRADED));
             return Helpers.uintToBool(_val);
     }
 
@@ -674,8 +676,8 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         public view override
         tokenExists(_tokenId)
         returns (string memory) {
-            uint256 _val = _getTokenParam(_tokenId, TokenProps.DISPLAY);
-            bool _ipfsView = Helpers.uintToBool(_val);
+            uint256 _tokenData = _uTokenData[_tokenId];
+            bool _ipfsView = Helpers.uintToBool(uint256(uint8(_tokenData>>POS_DISPLAY)));
             bytes memory image;
             if (svgOnly || !_ipfsView) {// Onchain SVG
                 image = abi.encodePacked(
@@ -683,8 +685,8 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
                     b64SVGImage(_tokenId)
                 );
             }
-            else {// Token upgraded, get view URI based on if redeemed or active
-                uint256 _view = _getTokenParam(_tokenId, TokenProps.VALIDITY) == REDEEMED ? 1 : 0;
+            else {// Token upgraded, get view URI based on if redeemed or not
+                uint256 _view = uint256(uint8(_tokenData>>POS_VALIDITY)) == REDEEMED ? 1 : 0;
                 image = abi.encodePacked(
                     ',"image":"',
                     __baseURI[_view],
@@ -692,7 +694,6 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
                     '.png'
                 );
             }
-            uint256 _tokenData = _uTokenData[_tokenId];
             return string(
                 abi.encodePacked(
                     'data:application/json;base64,',
@@ -712,6 +713,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * By default this contract will load SVGs from another contract, 
      * but if a future upgrade allows for artwork on IPFS, the 
      * contract will need to set the IPFS location.
+     * Cost: ~48,000 gas first time, ~35,000 gas update, for ~32 length word.
      */
     function setBaseUri(string calldata _newBaseURI, uint256 _idx)
         external
@@ -719,11 +721,17 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             if (Helpers.stringEqual(__baseURI[_idx], _newBaseURI)) {
                 _errMsg("uri already set");
             }
+            bytes calldata _bBaseURI = bytes(_newBaseURI);
+            uint256 len = _bBaseURI.length;
+            if (bytes1(_bBaseURI[len-1]) != 0x2f) {
+                _errMsg("uri missing end slash");
+            }
             __baseURI[_idx] = _newBaseURI;
     }
 
      /**
      * @dev Updates the contractURI.
+     * Cost: ~35,000 gas for ~32 length word
      */
     function setContractUri(string calldata _newContractURI)
         external
@@ -734,12 +742,11 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             _contractURI = _newContractURI;
     }
 
-
-
     /**
      * @dev Updates the meta data contract address.
      * This will be most useful when trying to make a generic 
      * SVG template that will include other collectible classes.
+     * Cost: ~29,000-46,000 gas depending on state
      */
     function setContractMeta(address _address)
         external
@@ -750,6 +757,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
 
     /**
      * @dev Updates the redemption data contract address.
+     * Cost: ~72,000 gas
      */
     function setContractRedeemer(address _address)
         external
@@ -765,6 +773,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * upgrades.
      * This will be most useful when trying to make a generic 
      * SVG template that will include other collectible classes.
+     * Cost: ~29,000-46,000 gas depending on state
      */
     function setContractSVG(address _address)
         external
@@ -776,6 +785,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     /**
      * @dev Gets or sets the global token redeemable period.
      * This may be reduced in the future.
+     * Cost: ~29,000 gas
      */
     function setPreRedeemPeriod(uint256 _period)
         external
@@ -803,14 +813,15 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             if (_amount == 0) {
                 _errMsg("amount must be > 0");
             }
-            if (_getTokenParam(_tokenId, TokenProps.ROYALTIESDUE) == _amount) {
-                _errMsg("due amt already set");
-            }
-            if (_getTokenParam(_tokenId, TokenProps.VALIDITY) != ROYALTIES) {
+            uint256 _tokenData = _uTokenData[_tokenId];
+            if (uint256(uint8(_tokenData>>POS_VALIDITY)) != ROYALTIES) {
                 _errMsg("token status not royalties due");
             }
+            if (uint256(uint16(_tokenData>>POS_ROYALTIESDUE)) == _amount) {
+                _errMsg("due amt already set");
+            }
             _uTokenData[_tokenId] = _setTokenParam(
-                _uTokenData[_tokenId],
+                _tokenData,
                 POS_ROYALTIESDUE,
                 _amount,
                 65535
@@ -821,6 +832,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * @dev Set SVG flag to either display on-chain SVG (true) or IPFS 
      * version (false). If set to true, it is still possible 
      * to retrieve the SVG image by calling svgImage(_tokenId).
+     * Cost: ~46,000 gas for true, ~29,000 gas for false
      */
     function setSvgOnly(bool _flag)
         external
@@ -836,10 +848,10 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * on a per token basis, within limits.
      * Note: set customRoyalty address to the null address 
      * to ignore it and use the already default set royalty address.
-     * Cost of this update:
+     * Cost:
      * Only royalty: ~37,000 gas
      * Only receiver: ~56,000 if rToken == address(0) else 39,000 subsequent 
-     * Both: ~59,000 gas gas first time, 42,000 subsequent
+     * Both at once: ~59,000 gas gas first time, 42,000 subsequent
      *
      * Note: Updating the receiver the first time is nearly as
      * expensive as updating both together the first time.
@@ -849,12 +861,12 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         uint256 _newRoyalty,
         address _receiver
     )
-    external
-    onlyRole(DEFAULT_ADMIN_ROLE)
-    limitRoyalty(_newRoyalty)
-    tokenExists(_tokenId)
-    notRedeemed(_tokenId) {
-        _setTokenRoyalty(_tokenId, _receiver, _newRoyalty);
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        limitRoyalty(_newRoyalty)
+        tokenExists(_tokenId)
+        notRedeemed(_tokenId) {
+            _setTokenRoyalty(_tokenId, _receiver, _newRoyalty);
     }
 
     /**
@@ -891,7 +903,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
 
     /*
      * @dev Sets the token validity.
-     * Cost for this update is around ~33,500 gas.
+     * Cost: ~33,500 gas.
      */
     function setTokenValidity(uint256 _tokenId, uint256 _vId)
         external
@@ -907,7 +919,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * @dev Allows holder to set back to SVG view after 
      * token has already been upgraded. Flag must be set 
      * back to true for upgraded view to show again.
-     * Cost for this update is around ~31,000 gas.
+     * Cost: ~31,000 gas.
      */
     function setTokenDisplay(uint256 _tokenId, bool _flag)
         external
@@ -931,13 +943,12 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
 
     /**
      * @dev Potential token upgrade path params.
-     * Cost for this update is around ~31,000 gas.
+     * Cost: ~31,000 gas.
      */
     function setTokenUpgraded(uint256 _tokenId)
         external override
         onlyRole(DEFAULT_ADMIN_ROLE)
-        tokenExists(_tokenId)
-        {
+        tokenExists(_tokenId) {
             uint256 _tokenData = _uTokenData[_tokenId];
             uint256 _val = uint256(uint8(_tokenData>>POS_UPGRADED));
             if (_val == 1) {
