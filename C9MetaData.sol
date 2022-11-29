@@ -2,23 +2,24 @@
 pragma solidity >=0.8.7 <0.9.0;
 import "./utils/Helpers.sol";
 import "./C9Shared.sol";
+import "./C9Struct.sol";
 
 
 interface IC9MetaData {
-    function metaNameDesc(C9Shared.TokenInfo calldata token) external view returns(bytes memory);
-    function metaAttributes(C9Shared.TokenInfo calldata token, bool upgraded) external view returns (bytes memory b);
+    function metaNameDesc(uint256 _uTokenData, string calldata _name) external view returns(bytes memory);
+    function metaAttributes(uint256 _uTokenData) external view returns (bytes memory b);
 }
 
-contract C9MetaData is C9Shared {
+contract C9MetaData is IC9MetaData, C9Shared, C9Struct {
     /**
      * @dev Moved because metaAttributes was getting a stack 
      * too deep error with this portion of the code included.
      */
-    function checkTushMarker(TokenInfo calldata token, bytes memory b, uint256 _offset)
+    function checkTushMarker(uint256 _markerTush, bytes memory b, uint256 _offset)
         internal view {
-            if (token.markertush > 0) {
-                bytes4 _markertush = _vMarkers[token.markertush-1];
-                assembly {
+            bytes4 _markertush = _vMarkers[_markerTush-1];
+            assembly {
+                if gt(_markerTush, 0) {
                     let dst := add(b, 316)
                     mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), _markertush))
                     dst := add(b, 367)
@@ -33,16 +34,21 @@ contract C9MetaData is C9Shared {
      * @dev Constructs the json string portion containing the external_url, description, 
      * and name parts.
      */
-    function metaNameDesc(TokenInfo calldata token)
-        external view
+    function metaNameDesc(uint256 _uTokenData, string calldata _name)
+        external view override
         returns(bytes memory) {
-            bytes6 _id = Helpers.tokenIdToBytes(token.id);
-            bytes3 _gentag = Helpers.uintToOrdinal(token.gentag);
-            bytes3 _gentush = Helpers.uintToOrdinal(token.gentush);
-            bytes3 _cntrytag = _vFlags[token.tag];
-            bytes3 _cntrytush = _vFlags[token.tush];
-            uint8 x = _cntrytag[2] == 0x20 ? 0 : 1;
-            bytes memory _name = bytes(token.name);
+            bytes6 _id = Helpers.tokenIdToBytes(
+                _getTokenParam(_uTokenData, TokenProps.TOKENID)
+            );
+            bytes3 _gentag = Helpers.uintToOrdinal(
+                _getTokenParam(_uTokenData, TokenProps.GENTAG)
+            );
+            bytes3 _gentush = Helpers.uintToOrdinal(
+                _getTokenParam(_uTokenData, TokenProps.GENTUSH)
+            );
+            bytes3 _cntrytag = _vFlags[_getTokenParam(_uTokenData, TokenProps.CNTRYTAG)];
+            bytes3 _cntrytush = _vFlags[_getTokenParam(_uTokenData, TokenProps.CNTRYTUSH)];
+            uint256 x = _cntrytag[2] == 0x20 ? 0 : 1;
             bytes memory _datap1 = '{'
                 '"external_url":"https://collect9.io/nft/      ",'
                 '"name":"Collect9 NFT #       -         ';
@@ -87,9 +93,9 @@ contract C9MetaData is C9Shared {
             }
             return bytes.concat(
                 _datap1,
-                _name,
+                bytes(_name),
                 _datap2,
-                _name,
+                bytes(_name),
                 _datap3
             );
     }
@@ -97,19 +103,33 @@ contract C9MetaData is C9Shared {
     /**
      * @dev Constructs the json string containing the attributes of the token.
      */
-    function metaAttributes(TokenInfo calldata token, bool upgraded)
-        external view
+    function metaAttributes(uint256 _uTokenData)
+        external view override
         returns (bytes memory b) {
-            bytes16 _rclass = rtiers[token.rtier];
-            bytes3 _gentag = Helpers.uintToOrdinal(token.gentag);
-            bytes3 _gentush = Helpers.uintToOrdinal(token.gentush);
-            bytes3 _cntrytag = _vFlags[token.tag];
-            bytes3 _cntrytush = _vFlags[token.tush];
-            bytes2 _edition = Helpers.remove2Null(bytes2(Helpers.uintToBytes(token.edition)));
-            bytes4 __mintId = Helpers.flip4Space(bytes4(Helpers.uintToBytes(token.mintid)));
-            bytes10 _bgcolor = hex3ToColor[hex3[token.spec]];
-            bytes3 _upgraded = upgraded ? bytes3("YES") : bytes3("NO ");
-            bytes3 _redeemed = token.validity == 4 ? bytes3("YES") : bytes3("NO ");
+            (uint256 _bgidx, bytes16 _rclass) = _getRarityTier(
+                _getTokenParam(_uTokenData, TokenProps.GENTAG),
+                _getTokenParam(_uTokenData, TokenProps.RARITYTIER),
+                _getTokenParam(_uTokenData, TokenProps.SPECIAL)
+            );
+            bytes10 _bgcolor = hex3ToColor[hex3[_bgidx]];
+
+            bytes3 _gentag = Helpers.uintToOrdinal(
+                _getTokenParam(_uTokenData, TokenProps.GENTAG)
+            );
+            bytes3 _gentush = Helpers.uintToOrdinal(
+                _getTokenParam(_uTokenData, TokenProps.GENTUSH)
+            );
+            bytes3 _cntrytag = _vFlags[_getTokenParam(_uTokenData, TokenProps.CNTRYTAG)];
+            bytes3 _cntrytush = _vFlags[_getTokenParam(_uTokenData, TokenProps.CNTRYTUSH)];
+            bytes2 _edition = Helpers.remove2Null(bytes2(Helpers.uintToBytes(
+                _getTokenParam(_uTokenData, TokenProps.EDITION)
+            )));
+            bytes4 __mintId = Helpers.flip4Space(bytes4(Helpers.uintToBytes(
+                _getTokenParam(_uTokenData, TokenProps.MINTID)
+            )));
+
+            bytes3 _upgraded = _getTokenParam(_uTokenData, TokenProps.UPGRADED) == 1 ? bytes3("YES") : bytes3("NO ");
+            bytes3 _redeemed = _getTokenParam(_uTokenData, TokenProps.VALIDITY) == REDEEMED ? bytes3("YES") : bytes3("NO ");
 
             uint256 _offset = _cntrytag[2] == 0x20 ? 0 : 1;
             b = '","attributes":['
@@ -171,6 +191,6 @@ contract C9MetaData is C9Shared {
                 dst := add(b, 739)
                 mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _redeemed))
             }
-            checkTushMarker(token, b, _offset);
+            checkTushMarker(_getTokenParam(_uTokenData, TokenProps.MARKERTUSH), b, _offset);
         }
 }

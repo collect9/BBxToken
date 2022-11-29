@@ -34,6 +34,12 @@ abstract contract C9Struct {
         string brdata;
     }
 
+    struct sTokenData {
+        string name;
+        string qrdata;
+        string brdata;
+    }
+
     enum TokenProps {
         UPGRADED,
         DISPLAY,
@@ -115,4 +121,6 @@ abstract contract C9Struct {
             _packedToken |= _val<<_pos; //write value back in
             return _packedToken;
     }
+
+    
 }

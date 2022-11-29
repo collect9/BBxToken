@@ -2,7 +2,7 @@
 pragma solidity >=0.8.7 <0.9.0;
 import "./utils/ERC721Enum32.sol";
 
-//import "./C9MetaData.sol";
+import "./C9MetaData.sol";
 import "./C9OwnerControl.sol";
 import "./C9Redeemer.sol";
 import "./C9Struct.sol";
@@ -107,15 +107,9 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      */
     constructor(
         // address metaContract_,
-        // address priceFeedContract_,
-        // address redeemerContract_,
-        // address svgContract_
         )
         ERC721("Collect9 NFTs", "C9T") {
             // contractMeta = metaContract_;
-            // contractPriceFeed = priceFeedContract_;
-            // contractRedeemer = redeemerContract_;
-            // contractSVG = svgContract_;
             royaltyDefault = 500;
             royaltyReceiver = owner;
     }
@@ -636,14 +630,15 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
                     '.png'
                 );
             }
+            uint256 _tokenData = _uTokenData[_tokenId];
             return string(
                 abi.encodePacked(
                     'data:application/json;base64,',
                     Base64.encode(
                         abi.encodePacked(
-                            //IC9MetaData(contractMeta).metaNameDesc(_tokens[_tokenId]),
-                            image
-                            //IC9MetaData(contractMeta).metaAttributes(_tokens[_tokenId], _upgraded)
+                            IC9MetaData(contractMeta).metaNameDesc(_tokenData, _sTokenData[_tokenId][0]),
+                            image,
+                            IC9MetaData(contractMeta).metaAttributes(_tokenData)
                         )
                     )
                 )

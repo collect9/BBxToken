@@ -13,37 +13,43 @@ abstract contract C9Shared {
         hex3ToColor["bbb"] = "SILVER    ";
         hex3[3] = "a74";
         hex3ToColor["a74"] = "BRONZE    ";
-        hex3[4] = "c0f";
-        hex3ToColor["c0f"] = "AMETHYST  ";
-        hex3[5] = "c00";
-        hex3ToColor["c00"] = "RUBY      ";
-        hex3[6] = "0a0";
-        hex3ToColor["0a0"] = "EMERALD   ";
-        hex3[7] = "0cf";
-        hex3ToColor["0cf"] = "SAPPHIRE  ";
-        hex3[8] = "eee";
-        hex3ToColor["eee"] = "DIAMOND   ";
-        hex3[9] = "cb8";
+        hex3[4] = "cb8";
         hex3ToColor["cb8"] = "CARDBOARD ";
+        hex3[5] = "eee";
+        hex3ToColor["eee"] = "PAPER     ";
+        hex3[6] = "c0f";
+        hex3ToColor["c0f"] = "AMETHYST  "; // STOPPED EARLY
+        hex3[7] = "c00";
+        hex3ToColor["c00"] = "RUBY      "; // EMBROIDERED
+        hex3[8] = "0a0";
+        hex3ToColor["0a0"] = "EMERALD   "; // ODDITY
+        hex3[9] = "0cf";
+        hex3ToColor["0cf"] = "SAPPHIRE  "; // FINITE QTY
         hex3[10] = "fff";
-        hex3ToColor["fff"] = "NEBULA    ";
+        hex3ToColor["fff"] = "NEBULA    "; // PROTO
     }
 
     /*
      * @dev Used in SVG and Metadata contracts.
      */
-    bytes16[12] rtiers = [bytes16("T0 GHOST        "),
-        "T1 LEGENDARY    ",
-        "T2 HYPER RARE   ",
-        "T3 ULTRA RARE   ",
-        "T4 RARE         ",
-        "T5 UNCOMMON     ",
-        "T6 COMMON       ",
-        "T7 ABUNDANT     ",
-        "S0 PROTO UNIQUE ",
-        "S1 ODDITY RARE  ",
-        "S2 PROD HALT    ",
-        "S3 FINITE QTY   "
+    bytes16[10] rarityTiers = [bytes16("R0 UNIQUE       "),
+        "R1 GHOST        ",
+        "R2 LEGENDARY    ",
+        "R3 HYPER RARE   ",
+        "R4 ULTRA RARE   ",
+        "R5 RARE         ",
+        "R6 UNCOMMON     ",
+        "R7 COMMON       ",
+        "R8 FREQUENT     ",
+        "R9 ABUNDANT     "
+    ];
+
+    bytes16[6] specialTiers = [bytes16("                "),
+        "STOPPED EARLY   ",
+        "EMBROIDERED     ",
+        "ODDITY          ",
+        "FINITE QTY      ",
+        "PROTO           "
     ];
 
     /*
@@ -74,10 +80,31 @@ abstract contract C9Shared {
      * @dev Token validity flags.
      */   
     bytes16[5] _vValidity = [
-        bytes16("VALID           "),
+        bytes16("REDEEMABLE      "),
         "ROYALTIES       ",
         "INACTIVE        ",
         "OTHER           ",
         "REDEEMED        "
     ];
+
+    function _getRarityTier(uint256 _genTag, uint256 _rarityTier, uint256 _specialTier)
+        internal view
+        returns(uint256, bytes16) {
+            bytes16 _b16Tier = rarityTiers[_rarityTier];
+            bytes memory _bTier = "                ";
+            assembly {
+                let dst := add(_bTier, 32)
+                mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _b16Tier))
+            }
+            uint256 _bgIdx;
+            if (_specialTier > 0) {
+                bytes16 _sTier = specialTiers[_specialTier];
+                _bTier[0] = _sTier[0];
+                _bgIdx = _specialTier+5;
+            }
+            else {
+                _bgIdx = _genTag;
+            }
+            return (_bgIdx, bytes16(_bTier));
+    }
 }

@@ -246,9 +246,14 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
                 _getTokenParam(_uTokenData, TokenProps.ROYALTY));
             bytes2 _edition = Helpers.flip2Space(Helpers.remove2Null(bytes2(Helpers.uintToBytes(
                 _getTokenParam(_uTokenData, TokenProps.EDITION)))));
+            (uint256 _bgidx, bytes16 _classer) = _getRarityTier(
+                _getTokenParam(_uTokenData, TokenProps.GENTAG),
+                _getTokenParam(_uTokenData, TokenProps.RARITYTIER),
+                _getTokenParam(_uTokenData, TokenProps.SPECIAL)
+            );
+            bytes3 _rgc2 = hex3[_bgidx];
             bytes2 _namesize = getNameSize(uint256(bytes(_name).length));
-            (bytes3 _rgc2, bytes16 _classer) = getGradientColors(_uTokenData);
-
+        
             assembly {
                 // Name Font Size
                 let dst := add(b, 251)
@@ -366,10 +371,10 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
     function addUpgradeText(uint256 _upgraded) internal pure returns(bytes memory upgradedText) {
         upgradedText = "<text x='190' y='58' style='font-family: \"Brush Script MT\", cursive;' font-size='22'>        </text>";
         assembly {
-                let dst := add(upgradedText, 117)
-                if eq(_upgraded, 1) {
-                    mstore(dst, or(and(mload(dst), not(shl(192, 0xFFFFFFFFFFFFFFFF))), "upgraded"))
-                }
+            let dst := add(upgradedText, 117)
+            if eq(_upgraded, 1) {
+                mstore(dst, or(and(mload(dst), not(shl(192, 0xFFFFFFFFFFFFFFFF))), "upgraded"))
+            }
         }
     }
 
