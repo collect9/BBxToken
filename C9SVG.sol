@@ -117,8 +117,8 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
         letterMap[0x45] = "14"; // E
         letterMap[0x46] = "15"; // F
         letterMap[0x47] = "16"; // G
-        letterMap[0x48] = "17"; // H
-        letterMap[0x49] = "18"; // I
+        letterMap[0x48] = "18"; // H
+        letterMap[0x49] = "38"; // I
         letterMap[0x52] = "2.5"; // R
         letterMap[0x53] = "2.67"; // S
         letterMap[0x54] = "4.5"; // T
@@ -679,22 +679,17 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
                     let dst := add(tmp, 41)
                     mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), color))
                 }
-                output = mapToString(output, entry, 0, "y='", tmp);
+                output = mapToString(output, entry, 0, " y='", tmp);
                 yflg = false;
             }
             else {
-                if (e0 == 0x65) {
-                    output = bytes.concat(output, "</g>");
-                    entry = "      ";
-                    continue;
-                }
-                else if (e0 == 0x67) {
+                if (e0 == 0x67) {
                     delims = true;
                     l = 2;
                     tmp = "</g><g transform='scale(X 1)'>";
                     e0 = _data[i+1];
                     assembly {
-                        let dst := add(tmp, 52)
+                        let dst := add(tmp, 56)
                         mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), e0))
                     }
                     output = bytes.concat(output, tmp);
@@ -757,11 +752,11 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
             "<rect x='3' height='1' width='1'/>"
             "</symbol>"
             "<rect transform='scale(3)' x='0.67' y='0.67' fill='#111'/>"
-            "<rect x='0.5' y='0.5' style='width:6px;height:6px;fill:none;stroke:#111;'/>"
-            "<g>";
+            "<rect x='0.5' y='0.5' style='width:6px;height:6px;fill:none;stroke:#111;'/><g>";
         return bytes.concat(
             b,
             qrCodeSVG("d80dC0G0G1dB3F4dD5F6B7d08d58C8F90AFA0CGC0EBF0Gg2:U:4:T:6:V:7:T:8:V:8:6.5:B:U:C:U:G"),
+            "</g><g>",
             qrCodeSVG(_qrdata),
             "</g></svg>"
         );

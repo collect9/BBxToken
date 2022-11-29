@@ -6,7 +6,7 @@ import "./utils/ERC721Enum32.sol";
 import "./C9OwnerControl.sol";
 import "./C9Redeemer.sol";
 import "./C9Struct.sol";
-//import "./C9SVG.sol";
+import "./C9SVG.sol";
 
 import "./utils/Base64.sol";
 import "./utils/Helpers.sol";
@@ -31,8 +31,8 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     /**
      * @dev Default royalty.
      */
-    uint256 public royaltyDefault;
     address public royaltyReceiver;
+    uint96 public royaltyDefault;
 
     /**
      * @dev The meta and SVG contracts.
@@ -408,8 +408,8 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         limitRoyalty(_input.royalty) {
             // Get physical edition id
             uint256 _edition = _input.edition;
+            bytes32 _data;
             if (_edition == 0) {
-                bytes32 _data;
                 for (uint256 i; i<_mintId.length; i++) {
                     _data = getPhysicalHash(_input, i+1);
                     if (!_tokenComboExists[_data]) {
@@ -474,7 +474,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             ];
 
             // Store token attribute combo
-            _tokenComboExists[getPhysicalHash(_input, _edition)] = true;
+            _tokenComboExists[_data] = true;
 
             // Mint token
             _mint(msg.sender, _tokenId);
@@ -574,7 +574,11 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         public view
         tokenExists(_tokenId)
         returns (string memory) {
-            return "";//IC9SVG(contractSVG).returnSVG(ownerOf(_tokenId), _tokens[_tokenId]);
+            return IC9SVG(contractSVG).returnSVG(
+                ownerOf(_tokenId),
+                _uTokenData[_tokenId],
+                _sTokenData[_tokenId]
+            );
     }
 
     /**
@@ -686,7 +690,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
                 _errMsg("default royalty vals already set");
             }
             if (_royaltyDefault != royaltyDefault) {
-                royaltyDefault = _royaltyDefault;
+                royaltyDefault = uint96(_royaltyDefault);
             }
             if (_royaltyReceiver != address(0)) {
                 royaltyReceiver = _royaltyReceiver;
