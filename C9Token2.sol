@@ -31,7 +31,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     /**
      * @dev Default royalty. These should be packed into one slot.
      */
-    address public royaltyReceiver;
+    address public royaltyDefaultReceiver;
     uint96 public royaltyDefault;
 
     /**
@@ -106,7 +106,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     constructor(uint256 _royaltyDefault)
         ERC721("Collect9 NFTs", "C9T") {
             royaltyDefault = uint96(_royaltyDefault);
-            royaltyReceiver = owner;
+            royaltyDefaultReceiver = owner;
     }
 
     /*
@@ -263,7 +263,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             }
 
             if (_newReceiver && _receiver != address(0)) {
-                if (_receiver == royaltyReceiver) {
+                if (_receiver == royaltyDefaultReceiver) {
                     if (_rTokenData[_tokenId] != address(0)) {
                         delete _rTokenData[_tokenId];
                     }
@@ -291,11 +291,11 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     function resetTokenRoyalty(uint256 _tokenId)
         onlyRole(DEFAULT_ADMIN_ROLE)
         external {
-            _setTokenRoyalty(_tokenId, royaltyReceiver, royaltyDefault);
+            _setTokenRoyalty(_tokenId, royaltyDefaultReceiver, royaltyDefault);
     }
 
     /**
-     * @dev Receiver is royaltyReceiver(default is owner) unless 
+     * @dev Receiver is royaltyDefaultReceiver(default is owner) unless 
      * otherwise specified for that tokenId.
      */
     function royaltyInfo(uint256 _tokenId, uint256 _salePrice)
@@ -303,7 +303,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         returns (address, uint256) {
             address receiver = _rTokenData[_tokenId];
             if (receiver == address(0)) {
-                receiver = royaltyReceiver;
+                receiver = royaltyDefaultReceiver;
             }
             uint256 _tokenData = _uTokenData[_tokenId];
             uint256 _fraction = uint256(uint16(_tokenData>>POS_ROYALTY));
@@ -315,26 +315,31 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     /**
      * @dev Allows the contract owner to update the global royalties 
      * recever address and amount.
-     * Costs:
-     * Royalty only: ~35,000 gas
-     * Receiver only: ~35,000 gas
-     * Both at the same time: ~35,000 gas
+     * Cost: ~29,000 gas
      */
-    function setDefaultRoyalties(address _royaltyReceiver, uint256 _royaltyDefault)
+    function setRoyaltyDefault(uint256 _royaltyDefault)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
         limitRoyalty(_royaltyDefault) {
-            (address _royaltyAddress,) = royaltyInfo(0, 10000);
-            bool royaltyChange = _royaltyDefault != royaltyDefault;
-            if (_royaltyReceiver == _royaltyAddress && !royaltyChange) {
-                _errMsg("default royalty vals already set");
+            if (_royaltyDefault == royaltyDefault) {
+                _errMsg("royalty val already set");
             }
-            if (royaltyChange) {
-                royaltyDefault = uint96(_royaltyDefault);
+            royaltyDefault = uint96(_royaltyDefault);
+    }
+
+    /**
+     * @dev Allows contract to have a separate royalties receiver 
+     * address. The default receiver is owner.
+     * Cost: ~31,000 gas
+     */
+    function setRoyaltyDefaultReceiver(address _address)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        addressNotSame(royaltyDefaultReceiver, _address) {
+            if (_address == address(0)) {
+                _errMsg("invalid address");
             }
-            if (_royaltyReceiver != address(0)) {
-                royaltyReceiver = _royaltyReceiver;
-            }
+            royaltyDefaultReceiver = _address;
     }
 
     //>>>>>>> CUSTOM ERC2981 END
@@ -810,17 +815,6 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
                 _amount,
                 65535
             );
-    }
-
-    /**
-     * @dev Allows contract to have a separate royalties receiver 
-     * address. The default receiver is owner.
-     */
-    function setRoyaltyReceiver(address _address)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-        addressNotSame(royaltyReceiver, _address) {
-            royaltyReceiver = _address;
     }
 
     /**
