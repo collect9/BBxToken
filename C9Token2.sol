@@ -29,24 +29,22 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     bytes32 public constant VALIDITY_ROLE = keccak256("VALIDITY_ROLE");
 
     /**
-     * @dev Default royalty.
+     * @dev Default royalty. These should be packed into one slot.
      */
     address public royaltyReceiver;
     uint96 public royaltyDefault;
 
     /**
-     * @dev The meta and SVG contracts.
+     * @dev The meta and SVG contracts that this token contract
+     * interact with.
      */
     address public contractMeta;
     address public contractRedeemer;
     address public contractSVG;
 
     /**
-     * @dev Flag that may enable IPFS artwork versions to be 
-     * displayed in the future. Is it set to false by default
-     * until upgrade capability is confirmed and ready. The 
-     * SVG only flag acts as a fail safe to return to SVG 
-     * only mode later on.
+     * @dev Flag that may enable external artwork versions to be 
+     * displayed in the future.
      */
     bool public svgOnly = true;
     string[2] private __baseURI;
@@ -55,12 +53,14 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * @dev Contract-level meta data for OpenSea.
      * OpenSea: https://docs.opensea.io/docs/contract-level-metadata
      */
-    string private _contractURI = "collect9.io/metadata/C9T";
+    string private _contractURI = "collect9.io/metadata/C9BBxToken";
 
     /**
-     * @dev Redemption definitions.
+     * @dev Redemption definitions and events. preRedeem period 
+     * defines how long a token must exist before it can be 
+     * redeemed.
      */
-    uint256 public preReleasePeriod = 31556926; //seconds
+    uint256 public preRedeemPeriod = 31556926; //seconds
     event RedemptionCancel(
         address indexed tokenOwner,
         uint256 indexed tokenId
@@ -76,7 +76,8 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
 
     /**
      * @dev Structure that holds all of the token info required to 
-     * construct the 100% on chain SVG.
+     * construct the 100% on chain SVG. The properties that define 
+     * the physical collectible cannot be modified once set.
      */
     mapping(uint256 => address) private _rTokenData;
     mapping(uint256 => uint256) private _uTokenData;
@@ -84,36 +85,34 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
 
     /**
      * @dev Mapping that checks whether or not some combination of 
-     * TokenInfo has already been minted. The bool return is 
-     * responsible for determining whether or not to increment 
-     * the editionID.
+     * TokenData has already been minted. The boolean determines
+     * whether or not to increment the editionID.
      */
     mapping(bytes32 => bool) private _tokenComboExists;
 
     /**
-     * @dev _mintId stores the minting ID number for up to 96 editions.
+     * @dev _mintId stores the minting ID number for up to 99 editions.
      * This means that 96 of some physical collectible, differentiated 
-     * only by authentication certificate id can be minted. 96 is chosen 
-     * for packed storage purposes as it takes up the same space as 7x 
-     * uint256.
+     * only by authentication certificate id can be minted. The limit 
+     * is 99 due to the SVG only being able to display 2 digits.
      */
-    uint16[96] private _mintId;
+    uint16[99] private _mintId;
 
     /**
-     * @dev The constructor sets the default royalty of the token 
-     * to 5.0%. Owner needs to be set because default owner from 
-     * ownable is not payable. All addresses can be updated after 
-     * deployment.
+     * @dev The constructor sets the default royalty of the tokens.
+     * Default receiver is set to owner. Both can be 
+     * updated after deployment.
      */
-    constructor(
-        // address metaContract_,
-        )
+    constructor(uint256 _royaltyDefault)
         ERC721("Collect9 NFTs", "C9T") {
-            // contractMeta = metaContract_;
-            royaltyDefault = 500;
+            royaltyDefault = uint96(_royaltyDefault);
             royaltyReceiver = owner;
     }
 
+    /*
+     * @dev Checks if address is the same before update. There are 
+     * a few functions that update addresses where this is used.
+     */ 
     modifier addressNotSame(address _old, address _new) {
         if (_old == _new) {
             _errMsg("address same");
@@ -121,6 +120,10 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         _;
     }
 
+    /*
+     * @dev Checks to see whether or not the token is in the 
+     * redemption process.
+     */ 
     modifier inRedemption(uint256 _tokenId, bool status) {
         if (_getTokenParam(_tokenId, TokenProps.VALIDITY) == REDEEMED) {
             _errMsg("token is redeemed");
@@ -132,6 +135,9 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         _;
     }
 
+    /*
+     * @dev Checks to see if caller is the token owner.
+     */ 
     modifier isOwner(uint256 _tokenId) {
         address _tokenOwner = ownerOf(_tokenId);
         if (msg.sender != _tokenOwner) {
@@ -141,6 +147,9 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         _;
     }
 
+    /*
+     * @dev Limits royalty inputs to 10%.
+     */ 
     modifier limitRoyalty(uint256 _royalty) {
         if (_royalty > 999) {
             _errMsg("royalty too high");
@@ -148,6 +157,12 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         _;
     }
 
+    /*
+     * @dev Checks to see the token is not yet redeemed. This is a 
+     * bit redundant to inRedemption, however some things like 
+     * updating royalties should not depend on the token being 
+     * outside of the redemption process.
+     */ 
     modifier notRedeemed(uint256 _tokenId) {
         if (_getTokenParam(_tokenId, TokenProps.VALIDITY) == REDEEMED) {
             _errMsg("token is redeemed");
@@ -155,6 +170,9 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         _;
     }
 
+    /*
+     * @dev Checks to see the token exists.
+     */
     modifier tokenExists(uint256 _tokenId) {
         if (!_exists(_tokenId)) {
             _errMsg("non-existent token id");
@@ -163,7 +181,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     }
 
     /**
-     * @dev Required overrides.
+     * @dev Required overrides from imported contracts.
      */
     function _baseURI() internal view override returns(string memory) {
         return __baseURI[0];
@@ -191,7 +209,8 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
 
     /**
      * @dev uTokenData is packed into a single uint256. This function
-     * returns an unpacked array.
+     * returns an unpacked array. It overrides the C9Struct defintion 
+     * so only the _tokenId needs to be passed in.
      */
     function getTokenParams(uint256 _tokenId)
         public view override
@@ -229,44 +248,55 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     //>>>>>>> CUSTOM ERC2981 START
 
     /*
-     * @dev Since royalty info is already stored in the uTokenData and the 
-     * default receiver is owner, we don't need to write it out 
-     * every time. Royalty limit is also enforced on the external 
-     * function.
+     * @dev Since royalty info is already stored in the uTokenData,
+     * we don't need a new slots for per token royalties as is defined 
+     * in the ERC2981 standard. This custom implementation that reads 
+     * and updates uTokenData saves a good chunk of gas.
      */
     function _setTokenRoyalty(uint256 _tokenId, address _receiver, uint256 _royalty)
         internal {
-            if (_receiver != royaltyReceiver && _receiver != address(0)) {
-                _rTokenData[_tokenId] = _receiver;
+            (address _royaltyAddress, uint256 _royaltyAmt) = royaltyInfo(_tokenId, 10000);
+            bool _newReceiver = _receiver != _royaltyAddress;
+            bool _newRoyalty = _royalty != _royaltyAmt;
+            if (!_newReceiver && !_newRoyalty) {
+                _errMsg("royalty vals already set");
             }
-            _uTokenData[_tokenId] = _setTokenParam(
-                _uTokenData[_tokenId],
-                POS_ROYALTY,
-                _royalty,
-                65535
-            );
+
+            if (_newReceiver && _receiver != address(0)) {
+                if (_receiver == royaltyReceiver) {
+                    if (_rTokenData[_tokenId] != address(0)) {
+                        delete _rTokenData[_tokenId];
+                    }
+                }
+                else {
+                    _rTokenData[_tokenId] = _receiver;
+                }
+            }
+            
+            if (_newRoyalty) {
+                _uTokenData[_tokenId] = _setTokenParam(
+                    _uTokenData[_tokenId],
+                    POS_ROYALTY,
+                    _royalty,
+                    65535
+                );
+            }
     }
 
     /**
-     * @dev Resets royalty information for the token id back to the global default.
+     * @dev Resets royalty information for the token id back to the 
+     * global default.
+     * Cost: ~37,000 gas
      */
     function resetTokenRoyalty(uint256 _tokenId)
         onlyRole(DEFAULT_ADMIN_ROLE)
         external {
-            if (_rTokenData[_tokenId] != address(0)) {
-                delete _rTokenData[_tokenId]; // back to owner
-            }
-            _uTokenData[_tokenId] = _setTokenParam(
-                _uTokenData[_tokenId],
-                POS_ROYALTY,
-                royaltyDefault,
-                65535
-            );
+            _setTokenRoyalty(_tokenId, royaltyReceiver, royaltyDefault);
     }
 
     /**
-     * @dev Receiver is royaltyReceiver(default is owner) unless otherwise specified
-     * for that tokenId.
+     * @dev Receiver is royaltyReceiver(default is owner) unless 
+     * otherwise specified for that tokenId.
      */
     function royaltyInfo(uint256 _tokenId, uint256 _salePrice)
         public view
@@ -275,9 +305,36 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             if (receiver == address(0)) {
                 receiver = royaltyReceiver;
             }
-            uint256 _fraction = _getTokenParam(_tokenId, TokenProps.ROYALTY);
+            uint256 _tokenData = _uTokenData[_tokenId];
+            uint256 _fraction = uint256(uint16(_tokenData>>POS_ROYALTY));
+            //uint256 _fraction = _getTokenParam(_tokenId, TokenProps.ROYALTY);
             uint256 royaltyAmount = (_salePrice * _fraction) / 10000;
             return (receiver, royaltyAmount);
+    }
+
+    /**
+     * @dev Allows the contract owner to update the global royalties 
+     * recever address and amount.
+     * Costs:
+     * Royalty only: ~35,000 gas
+     * Receiver only: ~35,000 gas
+     * Both at the same time: ~35,000 gas
+     */
+    function setDefaultRoyalties(address _royaltyReceiver, uint256 _royaltyDefault)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        limitRoyalty(_royaltyDefault) {
+            (address _royaltyAddress,) = royaltyInfo(0, 10000);
+            bool royaltyChange = _royaltyDefault != royaltyDefault;
+            if (_royaltyReceiver == _royaltyAddress && !royaltyChange) {
+                _errMsg("default royalty vals already set");
+            }
+            if (royaltyChange) {
+                royaltyDefault = uint96(_royaltyDefault);
+            }
+            if (_royaltyReceiver != address(0)) {
+                royaltyReceiver = _royaltyReceiver;
+            }
     }
 
     //>>>>>>> CUSTOM ERC2981 END
@@ -494,7 +551,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         public view override
         tokenExists(_tokenId)
         returns (bool) {
-            return block.timestamp-_getTokenParam(_tokenId, TokenProps.MINTSTAMP) < preReleasePeriod;
+            return block.timestamp-_getTokenParam(_tokenId, TokenProps.MINTSTAMP) < preRedeemPeriod;
     }
 
     /**
@@ -672,25 +729,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             _contractURI = _newContractURI;
     }
 
-    /**
-     * @dev Allows the contract owner to update the global royalties 
-     * receving address and amount.
-     */
-    function setDefaultRoyalties(address _royaltyReceiver, uint256 _royaltyDefault)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-        limitRoyalty(_royaltyDefault) {
-            (address _royaltyAddress, uint256 _salePrice) = royaltyInfo(0, 10000);
-            if (_royaltyReceiver == _royaltyAddress && _salePrice == _royaltyDefault) {
-                _errMsg("default royalty vals already set");
-            }
-            if (_royaltyDefault != royaltyDefault) {
-                royaltyDefault = uint96(_royaltyDefault);
-            }
-            if (_royaltyReceiver != address(0)) {
-                royaltyReceiver = _royaltyReceiver;
-            }
-    }
+
 
     /**
      * @dev Updates the meta data contract address.
@@ -733,16 +772,16 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * @dev Gets or sets the global token redeemable period.
      * This may be reduced in the future.
      */
-    function setPreReleasePeriod(uint256 _period)
+    function setPreRedeemPeriod(uint256 _period)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (preReleasePeriod == _period) {
+            if (preRedeemPeriod == _period) {
                 _errMsg("period already set");
             }
             if (_period > 63113852) { // 2 years max
                 _errMsg("period too long");
             }
-            preReleasePeriod = _period;
+            preRedeemPeriod = _period;
     }
 
     /**
@@ -803,30 +842,25 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * on a per token basis, within limits.
      * Note: set customRoyalty address to the null address 
      * to ignore it and use the already default set royalty address.
+     * Cost of this update:
+     * Only royalty: ~37,000 gas
+     * Only receiver: ~56,000 if rToken == address(0) else 39,000 subsequent 
+     * Both: ~59,000 gas gas first time, 42,000 subsequent
+     *
+     * Note: Updating the receiver the first time is nearly as
+     * expensive as updating both together the first time.
      */
     function setTokenRoyalty(
         uint256 _tokenId,
         uint256 _newRoyalty,
-        address _customRoyaltyAddress
+        address _receiver
     )
     external
     onlyRole(DEFAULT_ADMIN_ROLE)
     limitRoyalty(_newRoyalty)
     tokenExists(_tokenId)
     notRedeemed(_tokenId) {
-        _uTokenData[_tokenId] = _setTokenParam(
-            _uTokenData[_tokenId],
-            POS_ROYALTY,
-            _newRoyalty,
-            65535
-        );
-        (address _royaltyAddress,) = royaltyInfo(0, 10000);
-        if (_customRoyaltyAddress != address(0)) {
-            _setTokenRoyalty(_tokenId, _customRoyaltyAddress, _newRoyalty);
-        }
-        else {
-            _setTokenRoyalty(_tokenId, _royaltyAddress, _newRoyalty);
-        }
+        _setTokenRoyalty(_tokenId, _receiver, _newRoyalty);
     }
 
     /**
@@ -841,10 +875,11 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             if (_vId > 4) {
                 _errMsg("invalid internal vId");
             }
-            if (_getTokenParam(_tokenId, TokenProps.VALIDITY) == _vId) {
+            uint256 _tokenData = _uTokenData[_tokenId];
+            uint256 _tokenValidity = uint256(uint8(_tokenData>>POS_VALIDITY));
+            if (_tokenValidity == _vId) {
                 _errMsg("vId already set");
             }
-            uint256 _tokenData = _uTokenData[_tokenId];
             _tokenData = _setTokenParam(
                 _tokenData,
                 POS_VALIDITY,
@@ -860,6 +895,10 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             _uTokenData[_tokenId] = _tokenData;
     }
 
+    /*
+     * @dev Sets the token validity.
+     * Cost for this update is around ~33,500 gas.
+     */
     function setTokenValidity(uint256 _tokenId, uint256 _vId)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
@@ -874,19 +913,22 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * @dev Allows holder to set back to SVG view after 
      * token has already been upgraded. Flag must be set 
      * back to true for upgraded view to show again.
+     * Cost for this update is around ~31,000 gas.
      */
     function setTokenDisplay(uint256 _tokenId, bool _flag)
         external
         isOwner(_tokenId) {
-            if (!tokenUpgraded(_tokenId)) {
+            uint256 _tokenData = _uTokenData[_tokenId];
+            uint256 _val = uint256(uint8(_tokenData>>POS_UPGRADED));
+            if (_val != 1) {
                 _errMsg("token is not upgraded");
             }
-            uint256 _val = _getTokenParam(_tokenId, TokenProps.DISPLAY);
+            _val = uint256(uint8(_tokenData>>POS_DISPLAY));
             if (Helpers.uintToBool(_val) == _flag) {
                 _errMsg("view already set");
             }
             _uTokenData[_tokenId] = _setTokenParam(
-                _uTokenData[_tokenId],
+                _tokenData,
                 POS_DISPLAY,
                 _flag ? 1 : 0,
                 255
@@ -895,20 +937,20 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
 
     /**
      * @dev Potential token upgrade path params.
-     * Upgraded involves setting token to point to baseURI and 
-     * display a .png version. Upgraded tokens may have 
-     * the tokenUpgradedView flag toggled to go back and 
-     * forth between SVG and PNG views.
+     * Cost for this update is around ~31,000 gas.
      */
     function setTokenUpgraded(uint256 _tokenId)
         external override
         onlyRole(DEFAULT_ADMIN_ROLE)
-        tokenExists(_tokenId) {
-            if (tokenUpgraded(_tokenId)) {
+        tokenExists(_tokenId)
+        {
+            uint256 _tokenData = _uTokenData[_tokenId];
+            uint256 _val = uint256(uint8(_tokenData>>POS_UPGRADED));
+            if (_val == 1) {
                 _errMsg("token is already upgraded");
             }
             _uTokenData[_tokenId] = _setTokenParam(
-                _uTokenData[_tokenId],
+                _tokenData,
                 POS_UPGRADED,
                 1,
                 255
