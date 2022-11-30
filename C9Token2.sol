@@ -15,6 +15,7 @@ interface IC9Token {
     function preRedeemable(uint256 _tokenId) external view returns(bool);
     function redeemFinish(uint256 _tokenId) external;
     function redeemStart(uint256 _tokenId) external;
+    function redeemStartBatch(uint256[] calldata _tokenId, uint256 _batchSize) external;
     function setTokenUpgraded(uint256 _tokenId) external;
     function tokenLocked(uint256 _tokenId) external view returns(bool);
     function tokenUpgraded(uint256 _tokenId) external view returns(bool);
@@ -600,7 +601,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * Cost: ~90,000 gas
      */
     function redeemStart(uint256 _tokenId)
-        external override
+        public override
         isOwner(_tokenId)
         inRedemption(_tokenId, false) {
             if (_getTokenParam(_tokenId, TokenProps.VALIDITY) != VALID) {
@@ -617,6 +618,21 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             );
             IC9Redeemer(contractRedeemer).startRedemption(_tokenId);
             emit RedemptionStart(msg.sender, _tokenId);
+    }
+
+    /**
+     * @dev Starts the redemption process. Only the token holder can start.
+     * Once started, the token is locked from further exchange. The user 
+     * can still cancel the process before finishing.
+     * Cost: ~528,000 gas for batch of 10
+     * Can be improved should only have to gen one code for all batch
+     * May need separate contract to handle batch data better
+     */
+    function redeemStartBatch(uint256[] calldata _tokenId, uint256 _batchSize)
+        external override {
+            for (uint256 i; i<_batchSize; i++) {
+                redeemStart(_tokenId[i]);
+            }
     }
 
     /**
