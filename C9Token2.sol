@@ -644,18 +644,14 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         external view override
         tokenExists(_tokenId)
         returns(bool) {
-            uint256 _val = _getTokenParam(_tokenId, TokenProps.LOCKED);
-            //uint256 _val = uint256(uint8(_uTokenData[_tokenId]>>POS_LOCKED));
-            return Helpers.uintToBool(_val);
+            return _getTokenParam(_tokenId, TokenProps.LOCKED) == 1;
     }
 
     function tokenUpgraded(uint256 _tokenId)
         external view override
         tokenExists(_tokenId)
         returns (bool) {
-            uint256 _val = _getTokenParam(_tokenId, TokenProps.UPGRADED);
-            //uint256 _val = uint256(uint8(_uTokenData[_tokenId]>>POS_UPGRADED));
-            return Helpers.uintToBool(_val);
+            return _getTokenParam(_tokenId, TokenProps.UPGRADED) == 1;
     }
 
     /**
@@ -677,19 +673,19 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         tokenExists(_tokenId)
         returns (string memory) {
             uint256 _tokenData = _uTokenData[_tokenId];
-            bool _ipfsView = Helpers.uintToBool(uint256(uint8(_tokenData>>POS_DISPLAY)));
+            bool _externalView = uint256(uint8(_tokenData>>POS_DISPLAY)) == 1;
             bytes memory image;
-            if (svgOnly || !_ipfsView) {// Onchain SVG
+            if (svgOnly || !_externalView) {// Onchain SVG
                 image = abi.encodePacked(
                     ',"image":"data:image/svg+xml;base64,',
                     b64SVGImage(_tokenId)
                 );
             }
             else {// Token upgraded, get view URI based on if redeemed or not
-                uint256 _view = uint256(uint8(_tokenData>>POS_VALIDITY)) == REDEEMED ? 1 : 0;
+                uint256 _viewIdx = uint256(uint8(_tokenData>>POS_VALIDITY)) == REDEEMED ? 1 : 0;
                 image = abi.encodePacked(
                     ',"image":"',
-                    __baseURI[_view],
+                    __baseURI[_viewIdx],
                     _tokenId,
                     '.png'
                 );

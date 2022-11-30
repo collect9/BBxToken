@@ -30,18 +30,21 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
 
     modifier isOwner(address _address) {
         // Will revert if not an owner
-        uint256 _tokenId = C9Token(contractToken).tokenOfOwnerByIndex(_address, 0);
+        C9Token(contractToken).tokenOfOwnerByIndex(_address, 0);
         _;
     }
 
     modifier isRegistered(address _address) {
-        if (_registrationData[_address][2] != 1) _errMsg("token not registered");
+        if (_registrationData[_address][2] != 1) {
+            _errMsg("token not registered");
+        }
         _;
     }
 
     modifier registrationStep(address _address, uint256 _step) {
-        uint256 _expected = _registrationData[_address][0];
-        if (_step != _expected) _errMsg("wrong process step");
+        if (_step != _registrationData[_address][0]) {
+            _errMsg("wrong process step");
+        }
         _;
     }
 
@@ -70,6 +73,9 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
     function cancel()
         external override {
             uint32 lastStep = _registrationData[msg.sender][0];
+            if (lastStep == 0) {
+                _errMsg("address not in process");
+            }
             _removeRegistrationData(msg.sender);
             emit RegistrarCancel(msg.sender, lastStep);
     }
