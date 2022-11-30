@@ -74,6 +74,10 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         address indexed tokenOwner,
         uint256 indexed tokenId
     );
+    event RedemptionStartBatch(
+        address indexed tokenOwner,
+        uint256 indexed batchSize
+    );
 
     /**
      * @dev Structure that holds all of the token info required to 
@@ -569,7 +573,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         external
         isOwner(_tokenId)
         inRedemption(_tokenId, true) {
-            IC9Redeemer(contractRedeemer).cancelRedemption(_tokenId);
+            IC9Redeemer(contractRedeemer).cancel(_tokenId);
             _uTokenData[_tokenId] = _setTokenParam(
                 _uTokenData[_tokenId],
                 POS_LOCKED,
@@ -594,14 +598,9 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             emit RedemptionFinish(ownerOf(_tokenId), _tokenId);
     }
 
-    /**
-     * @dev Starts the redemption process. Only the token holder can start.
-     * Once started, the token is locked from further exchange. The user 
-     * can still cancel the process before finishing.
-     * Cost: ~90,000 gas
-     */
-    function redeemStart(uint256 _tokenId)
-        public override
+    
+    function _redeemPrepare(uint256 _tokenId)
+        internal
         isOwner(_tokenId)
         inRedemption(_tokenId, false) {
             if (_getTokenParam(_tokenId, TokenProps.VALIDITY) != VALID) {
@@ -616,7 +615,18 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
                 1,
                 255
             );
-            IC9Redeemer(contractRedeemer).startRedemption(_tokenId);
+    }
+
+    /**
+     * @dev Starts the redemption process. Only the token holder can start.
+     * Once started, the token is locked from further exchange. The user 
+     * can still cancel the process before finishing.
+     * Cost: ~90,000 gas
+     */
+    function redeemStart(uint256 _tokenId)
+        public override {
+            _redeemPrepare(_tokenId);
+            IC9Redeemer(contractRedeemer).start(_tokenId);
             emit RedemptionStart(msg.sender, _tokenId);
     }
 
@@ -631,8 +641,10 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     function redeemStartBatch(uint256[] calldata _tokenId, uint256 _batchSize)
         external override {
             for (uint256 i; i<_batchSize; i++) {
-                redeemStart(_tokenId[i]);
+                _redeemPrepare(_tokenId[i]);
             }
+            IC9Redeemer(contractRedeemer).startBatch(msg.sender, _tokenId, _batchSize);
+            emit RedemptionStartBatch(msg.sender, _batchSize);
     }
 
     /**
