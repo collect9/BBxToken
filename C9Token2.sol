@@ -16,6 +16,7 @@ interface IC9Token {
     function redeemCancel(uint256 _tokenId) external;
     function redeemBatchCancel() external;
     function redeemFinish(uint256 _tokenId) external;
+    function redeemBatchFinish(uint32[] calldata _tokenId) external;
     function redeemStart(uint256 _tokenId) external;
     function redeemBatchStart(uint256[] calldata _tokenId) external;
     function setTokenUpgraded(uint256 _tokenId) external;
@@ -70,11 +71,15 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     );
     event RedemptionBatchCancel(
         address indexed tokenOwner,
-        uint32[] indexed tokenId
+        uint256 indexed batchSize
     );
     event RedemptionFinish(
         address indexed tokenOwner,
         uint256 indexed tokenId
+    );
+    event RedemptionBatchFinish(
+        address indexed tokenOwner,
+        uint256 indexed batchSize
     );
     event RedemptionStart(
         address indexed tokenOwner,
@@ -590,18 +595,33 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             emit RedemptionCancel(msg.sender, _tokenId);
     }
 
+    /**
+     * @dev Allows user to cancel redemption process and resume 
+     * token movement exchange capabilities.
+     * Cost:
+     * ~105,000 gas for batch of 10 (using redeemBatchCancel)
+     * ~72,000 gas for batch of 5   (using redeemBatchCancel)
+     * ~54,000 gas for batch of 2   (using redeemBatchCancel)
+     */
     function redeemBatchCancel()
         external override {
-            uint32[] memory _tokenId = IC9Redeemer(contractRedeemer).cancelBatch(msg.sender);
-            for (uint i; i<_tokenId.length; i++) {
-                _uTokenData[_tokenId[i]] = _setTokenParam(
-                    _uTokenData[_tokenId[i]],
-                    POS_LOCKED,
-                    0,
-                    255
-                );
+            uint32[22] memory _tokenId = IC9Redeemer(contractRedeemer).cancelBatch(msg.sender);
+            uint256 _batchSize;
+            for (uint i; i<22; i++) {
+                if (_tokenId[i] != 0) {
+                    _uTokenData[_tokenId[i]] = _setTokenParam(
+                        _uTokenData[_tokenId[i]],
+                        POS_LOCKED,
+                        0,
+                        255
+                    );
+                }
+                else {
+                    break;
+                }
+                _batchSize += 1;
             }
-            emit RedemptionBatchCancel(msg.sender, _tokenId);
+            emit RedemptionBatchCancel(msg.sender, _batchSize);
     }
 
     /**
@@ -610,16 +630,30 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * to the redeemer role. Once the token validity is set to 4, it is 
      * not possible to change it back.
      */
-    function redeemFinish(uint256 _tokenId)
-        external override
-        onlyRole(REDEEMER_ROLE)
+    function _redeemFinish(uint256 _tokenId)
+        internal
         tokenExists(_tokenId)
         inRedemption(_tokenId, true) {
             _setTokenValidity(_tokenId, REDEEMED);
+        }
+
+    function redeemFinish(uint256 _tokenId)
+        external override
+        onlyRole(REDEEMER_ROLE) {
+            _redeemFinish(_tokenId);
             emit RedemptionFinish(ownerOf(_tokenId), _tokenId);
     }
 
-    
+    function redeemBatchFinish(uint32[] calldata _tokenId)
+        external override
+        onlyRole(REDEEMER_ROLE) {
+            uint256 _batchSize = _tokenId.length;
+            for (uint i=2; i<_batchSize; i++) {
+                _setTokenValidity(_tokenId[i], REDEEMED);
+            }
+            emit RedemptionBatchFinish(ownerOf(_tokenId[2]), _batchSize);
+    }
+
     function _redeemPrepare(uint256 _tokenId)
         internal
         isOwner(_tokenId)
@@ -657,7 +691,9 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * can still cancel the process before finishing.
      * Cost:
      * ~528,000 gas for batch of 10 (using reedeemStart)
-     * ~320,000 gas for batch of 10 *using reedeemStartBatch)
+     * ~320,000 gas for batch of 10 (using reedeemStartBatch)
+     * ~195,000 gas for batch of 5  (using reedeemStartBatch)
+     * ~135,000 gas for batch of 2  (using reedeemStartBatch)
      * Can be improved should only have to gen one code for all batch
      * May need separate contract to handle batch data better
      */
