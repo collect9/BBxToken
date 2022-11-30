@@ -7,9 +7,10 @@ import "./utils/EthPricer.sol";
 
 interface IC9Redeemer {    
     function cancel(uint256 _tokenId) external;
+    function cancelBatch(address _tokensOwner) external returns(uint32[] memory _tokenId);
     function getRedemptionStep(uint256 _tokenId) external view returns (uint256);
     function start(uint256 _tokenId) external;
-    function startBatch(address _tokensOwner, uint256[] calldata _tokenId, uint256 batchSize) external;
+    function startBatch(address _tokensOwner, uint256[] calldata _tokenId) external;
 }
 
 contract C9Redeemer is IC9Redeemer, C9OwnerControl {
@@ -28,6 +29,11 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         address indexed tokenOwner,
         uint32 indexed redemptionStep
     );
+    event RedeemerBatchCancel(
+        address indexed tokensOwner,
+        uint256 batchSize,
+        uint32 indexed redemptionStep
+    );
     event RedeemerGenCode(
         uint256 indexed tokenId,
         address indexed tokenOwner
@@ -37,8 +43,8 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         address indexed tokenOwner,
         bool indexed registered
     );
-    event RedeemerInitBatch(
-        address indexed tokenOwner,
+    event RedeemerBatchInit(
+        address indexed tokensOwner,
         uint256 batchSize,
         bool indexed registered
     );
@@ -77,8 +83,15 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     }
 
     modifier redemptionStepBatch(address _tokenOwner, uint256 _step) {
-        if (_step != _batchRedemptionData[_tokenOwner][1]) {
-            _errMsg("wrong batch redemption step");
+        if (_step == 0) {
+            if (_batchRedemptionData[_tokenOwner].length != 0) {
+                _errMsg("wrong batch redemption step");
+            }
+        }
+        else {
+            if (_step != _batchRedemptionData[_tokenOwner][1]) {
+                _errMsg("wrong batch redemption step");
+            }
         }
         _;
     }
@@ -90,7 +103,8 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         _;
     }
 
-    modifier tokenLockedBatch(uint256[] calldata _tokenId, uint256 _batchSize) {
+    modifier tokenLockedBatch(uint256[] calldata _tokenId) {
+        uint256 _batchSize = _tokenId.length;
         for(uint i; i<_batchSize; i++) {
             if (!IC9Token(contractToken).tokenLocked(_tokenId[i])) {
                 _errMsg("batch token not locked");
@@ -109,9 +123,35 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
      * or if token own calls this contract (from the token contract) 
      * having caneled redemption.
      */
-    function _removeRedemptionInfo(uint256 _tokenId)
+    function _genCode() 
+        internal view
+        returns(uint256) {
+            return uint256(
+                keccak256(
+                    abi.encodePacked(
+                        block.timestamp,
+                        block.difficulty,
+                        block.number,
+                        msg.sender,
+                        _incrementer
+                    )
+                )
+            ) % 10**6;
+    }
+
+    /**
+     * @dev Removes any redemption info after redemption is finished 
+     * or if token own calls this contract (from the token contract) 
+     * having caneled redemption.
+     */
+    function _removeRedemptionData(uint256 _tokenId)
         internal {
             delete _redemptionData[_tokenId];
+    }
+
+    function _removeBatchRedemptionData(address _tokensOwner)
+        internal {
+            delete _batchRedemptionData[_tokensOwner];
     }
 
     function getRedemptionStep(uint256 _tokenId)
@@ -131,12 +171,27 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             if (_redemptionData[_tokenId][1] == 0) {
                 _errMsg("token not in process");
             }
-            _removeRedemptionInfo(_tokenId);
+            _removeRedemptionData(_tokenId);
             emit RedeemerCancel(_tokenId, msg.sender, _redemptionData[_tokenId][1]);
     }
 
+    function cancelBatch(address _tokensOwner)
+        external override
+        onlyRole(NFTCONTRACT_ROLE)
+        returns(uint32[] memory _tokenId) {
+            if (_batchRedemptionData[_tokensOwner].length == 0) {
+                _errMsg("token not in process");
+            }
+            uint32[] memory _data = _batchRedemptionData[_tokensOwner];
+            for (uint i=2; i<_data.length; i++) {
+                _tokenId[i] = _data[i];
+            }
+            _removeBatchRedemptionData(_tokensOwner);
+            emit RedeemerBatchCancel(_tokensOwner, _data.length, _data[1]);
+    }
+
     /**
-     * @dev Step 1. User initializes redemption
+     * @dev Step 1. User initializes redemption.
      */
     function start(uint256 _tokenId)
         external override
@@ -155,62 +210,42 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             }
             else {
                 // Else move to next step
-                uint256 _randomCode = uint256(
-                    keccak256(
-                        abi.encodePacked(
-                            block.timestamp,
-                            block.difficulty,
-                            block.number,
-                            msg.sender,
-                            _incrementer
-                        )
-                    )
-                ) % 10**6;
-                _redemptionData[_tokenId][0] = uint32(_randomCode);
+                _redemptionData[_tokenId][0] = uint32(_genCode());
                 _redemptionData[_tokenId][1] = 2;
                 emit RedeemerInit(_tokenId, msg.sender, false);
             }
     }
 
-    function startBatch(address _tokensOwner, uint256[] calldata _tokenId, uint256 batchSize)
+    /**
+     * @dev Step 1 (BATCH). User initializes redemption.
+     */
+    function startBatch(address _tokensOwner, uint256[] calldata _tokenId)
         external override
         onlyRole(NFTCONTRACT_ROLE)
-        tokenLockedBatch(_tokenId, batchSize)
+        tokenLockedBatch(_tokenId)
         redemptionStepBatch(_tokensOwner, 0)
         notFrozen() {
+            uint256 batchSize = _tokenId.length;
+            bool _registerOwner = IC9Registrar(contractRegistrar).addressRegistered(_tokensOwner);
+            _incrementer += uint96(batchSize);
+            if (_registerOwner) {
+                // If registered jump to step 4
+                _batchRedemptionData[_tokensOwner].push(0); // dummy code
+                _batchRedemptionData[_tokensOwner].push(4);
+                emit RedeemerBatchInit(msg.sender, batchSize, true);
+            }
+            else {
+                // Else move to next step
+                _batchRedemptionData[_tokensOwner].push(uint32(_genCode()));
+                _batchRedemptionData[_tokensOwner].push(2);
+                emit RedeemerBatchInit(msg.sender, batchSize, false);
+            }
+
             // Check to make sure all tokenId are of the same owner - make batch ownerOf?
             for (uint256 i; i<batchSize; i++) {
                 if (C9Token(contractToken).ownerOf(_tokenId[i]) != _tokensOwner) {
                     _errMsg("unauthorized");
                 }
-            }
-            _incrementer += uint96(batchSize);
-
-            bool _registerOwner = IC9Registrar(contractRegistrar).addressRegistered(_tokensOwner);
-            if (_registerOwner) {
-                // If registered jump to step 4
-                _batchRedemptionData[_tokensOwner].push(0); // dummy code
-                _batchRedemptionData[_tokensOwner].push(4);
-                emit RedeemerInitBatch(msg.sender, batchSize, true);
-            }
-            else {
-                // Else move to next step
-                uint256 _randomCode = uint256(
-                    keccak256(
-                        abi.encodePacked(
-                            block.timestamp,
-                            block.difficulty,
-                            block.number,
-                            msg.sender,
-                            _incrementer
-                        )
-                    )
-                ) % 10**6;
-                _batchRedemptionData[_tokensOwner].push(uint32(_randomCode));
-                _batchRedemptionData[_tokensOwner].push(2);
-                emit RedeemerInitBatch(msg.sender, batchSize, false);
-            }
-            for (uint256 i; i<batchSize; i++) {
                 _batchRedemptionData[_tokensOwner].push(uint32(_tokenId[i]));
             }
     }
@@ -300,7 +335,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         notFrozen() {
             address _tokenOwner = C9Token(contractToken).ownerOf(_tokenId);
             IC9Token(contractToken).redeemFinish(_tokenId);
-            _removeRedemptionInfo(_tokenId);
+            _removeRedemptionData(_tokenId);
             emit RedeemerAdminApprove(_tokenId, _tokenOwner, 5);
     }
 

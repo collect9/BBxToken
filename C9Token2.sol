@@ -13,9 +13,11 @@ import "./utils/Helpers.sol";
 
 interface IC9Token {
     function preRedeemable(uint256 _tokenId) external view returns(bool);
+    function redeemCancel(uint256 _tokenId) external;
+    function redeemBatchCancel() external;
     function redeemFinish(uint256 _tokenId) external;
     function redeemStart(uint256 _tokenId) external;
-    function redeemStartBatch(uint256[] calldata _tokenId, uint256 _batchSize) external;
+    function redeemBatchStart(uint256[] calldata _tokenId) external;
     function setTokenUpgraded(uint256 _tokenId) external;
     function tokenLocked(uint256 _tokenId) external view returns(bool);
     function tokenUpgraded(uint256 _tokenId) external view returns(bool);
@@ -66,6 +68,10 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         address indexed tokenOwner,
         uint256 indexed tokenId
     );
+    event RedemptionBatchCancel(
+        address indexed tokenOwner,
+        uint32[] indexed tokenId
+    );
     event RedemptionFinish(
         address indexed tokenOwner,
         uint256 indexed tokenId
@@ -74,7 +80,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         address indexed tokenOwner,
         uint256 indexed tokenId
     );
-    event RedemptionStartBatch(
+    event RedemptionBatchStart(
         address indexed tokenOwner,
         uint256 indexed batchSize
     );
@@ -545,10 +551,11 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * @dev Helps makes the overall minting process faster and cheaper 
      * on average per mint.
     */
-    function mintN(TokenData[] calldata _input, uint256 N)
+    function mintBatch(TokenData[] calldata _input)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            for (uint256 i; i<N; i++) {
+            uint256 _batchSize = _input.length;
+            for (uint256 i; i<_batchSize; i++) {
                 mint1(_input[i]);
             }
     }
@@ -570,7 +577,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * Cost: ~45,000 gas
      */
     function redeemCancel(uint256 _tokenId)
-        external
+        external override
         isOwner(_tokenId)
         inRedemption(_tokenId, true) {
             IC9Redeemer(contractRedeemer).cancel(_tokenId);
@@ -581,6 +588,20 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
                 255
             );
             emit RedemptionCancel(msg.sender, _tokenId);
+    }
+
+    function redeemBatchCancel()
+        external override {
+            uint32[] memory _tokenId = IC9Redeemer(contractRedeemer).cancelBatch(msg.sender);
+            for (uint i; i<_tokenId.length; i++) {
+                _uTokenData[_tokenId[i]] = _setTokenParam(
+                    _uTokenData[_tokenId[i]],
+                    POS_LOCKED,
+                    0,
+                    255
+                );
+            }
+            emit RedemptionBatchCancel(msg.sender, _tokenId);
     }
 
     /**
@@ -634,17 +655,20 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * @dev Starts the redemption process. Only the token holder can start.
      * Once started, the token is locked from further exchange. The user 
      * can still cancel the process before finishing.
-     * Cost: ~528,000 gas for batch of 10
+     * Cost:
+     * ~528,000 gas for batch of 10 (using reedeemStart)
+     * ~320,000 gas for batch of 10 *using reedeemStartBatch)
      * Can be improved should only have to gen one code for all batch
      * May need separate contract to handle batch data better
      */
-    function redeemStartBatch(uint256[] calldata _tokenId, uint256 _batchSize)
+    function redeemBatchStart(uint256[] calldata _tokenId)
         external override {
+            uint256 _batchSize = _tokenId.length;
             for (uint256 i; i<_batchSize; i++) {
                 _redeemPrepare(_tokenId[i]);
             }
-            IC9Redeemer(contractRedeemer).startBatch(msg.sender, _tokenId, _batchSize);
-            emit RedemptionStartBatch(msg.sender, _batchSize);
+            IC9Redeemer(contractRedeemer).startBatch(msg.sender, _tokenId);
+            emit RedemptionBatchStart(msg.sender, _batchSize);
     }
 
     /**
