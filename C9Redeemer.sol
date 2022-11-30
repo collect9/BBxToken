@@ -9,7 +9,7 @@ interface IC9Redeemer {
     function cancel(uint256 _tokenId) external;
     function cancelBatch(address _tokensOwner) external returns(uint32[22] memory _tokenId);
     function getRedemptionStep(uint256 _tokenId) external view returns (uint256);
-    function getBatchRedemptionStep() external view returns(uint256);
+    function getBatchRedemptionStep(address _tokenOwner) external view returns(uint256);
     function start(uint256 _tokenId) external;
     function startBatch(address _tokensOwner, uint256[] calldata _tokenId) external;
 }
@@ -17,8 +17,8 @@ interface IC9Redeemer {
 contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     bytes32 public constant NFTCONTRACT_ROLE = keccak256("NFTCONTRACT_ROLE");
     
-    mapping(uint256 => uint32[2]) _redemptionData; //code, step
-    mapping(address => uint32[]) _batchRedemptionData; //code, step, token1, token2..., tokenN
+    mapping(uint256 => uint32[2]) _redemptionData; //tokenId => code, step
+    mapping(address => uint32[]) _batchRedemptionData; //tokenOwner => code, step, token1, token2.., tokenN
 
     event RedeemerAdminApprove(
         uint256 indexed tokenId,
@@ -77,14 +77,6 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         _grantRole(NFTCONTRACT_ROLE, _contractToken);
     }
 
-    modifier isOwner(uint256 _tokenId) {
-        address _tokenOwner = C9Token(contractToken).ownerOf(_tokenId);
-        if (msg.sender != _tokenOwner) {
-            _errMsg("unauthorized");
-        }
-        _;
-    }
-
     modifier redemptionStep(uint256 _tokenId, uint256 _step) {
         if (_step != _redemptionData[_tokenId][1]) {
             _errMsg("wrong redemption step");
@@ -92,34 +84,9 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         _;
     }
 
-    modifier redemptionStepBatch(address _tokenOwner, uint256 _step) {
-        uint32[] memory _batchData = _batchRedemptionData[_tokenOwner];
-        if (_step == 0) {
-            if (_batchData.length > 0) {
-                _errMsg("wrong batch redemption step");
-            }
-        }
-        else {
-            if (_step != _batchData[1]) {
-                _errMsg("wrong batch redemption step");
-            }
-        }
-        _;
-    }
-
-    modifier tokenLocked(uint256 _tokenId) {
-        if (!IC9Token(contractToken).tokenLocked(_tokenId)) {
-            _errMsg("token not locked");
-        }
-        _;
-    }
-
-    modifier tokenLockedBatch(uint256[] calldata _tokenId) {
-        uint256 _batchSize = _tokenId.length;
-        for(uint i; i<_batchSize; i++) {
-            if (!IC9Token(contractToken).tokenLocked(_tokenId[i])) {
-                _errMsg("batch token not locked");
-            }
+    modifier redemptionBatchStep(address _tokenOwner, uint256 _step) {
+        if (_step != getBatchRedemptionStep(_tokenOwner)) {
+            _errMsg("wrong batch redemption step");
         }
         _;
     }
@@ -130,9 +97,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     }
 
     /**
-     * @dev Removes any redemption info after redemption is finished 
-     * or if token own calls this contract (from the token contract) 
-     * having caneled redemption.
+     * @dev
      */
     function _genCode() 
         internal view
@@ -171,16 +136,11 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             return uint256(_redemptionData[_tokenId][1]);
     }
 
-    function getBatchRedemptionStep()
-        external view override
+    function getBatchRedemptionStep(address _tokenOwner)
+        public view override
         returns(uint256) {
-            uint32[] memory _data = _batchRedemptionData[msg.sender];
-            if (_data.length == 0) {
-                return 0;
-            }
-            else {
-                return _data[1];
-            }
+            uint32[] memory _data = _batchRedemptionData[_tokenOwner];
+            return _data.length == 0 ? 0 : _data[1];
     }
 
     /**
@@ -220,7 +180,6 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     function start(uint256 _tokenId)
         external override
         onlyRole(NFTCONTRACT_ROLE)
-        tokenLocked(_tokenId)
         redemptionStep(_tokenId, 0)
         notFrozen() {
             // Check to see if owner is already registered
@@ -246,8 +205,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     function startBatch(address _tokensOwner, uint256[] calldata _tokenId)
         external override
         onlyRole(NFTCONTRACT_ROLE)
-        tokenLockedBatch(_tokenId)
-        redemptionStepBatch(_tokensOwner, 0)
+        redemptionBatchStep(_tokensOwner, 0)
         notFrozen() {
             uint256 batchSize = _tokenId.length;
             if (batchSize > 22) {
@@ -324,7 +282,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     function adminVerifyRedemptionCodeBatch(address _tokensOwner, uint256 _code)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
-        redemptionStepBatch(_tokensOwner, 2) {
+        redemptionBatchStep(_tokensOwner, 2) {
             if (_code != _batchRedemptionData[_tokensOwner][0]) {
                 _errMsg("code mismatch");
             }
@@ -354,7 +312,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
      */
     function userVerifyRedemptionBatch(uint256 _code)
         external
-        redemptionStepBatch(msg.sender, 3) {
+        redemptionBatchStep(msg.sender, 3) {
             if (_code != _batchRedemptionData[msg.sender][0]) {
                 _errMsg("code mismatch");
             }
@@ -395,7 +353,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
      */
     function userFinishRedemptionBatch()
         external payable
-        redemptionStepBatch(msg.sender, 4) {
+        redemptionBatchStep(msg.sender, 4) {
             /*
             address _contractPriceFeed = C9Token(tokenContract).contractPriceFeed();
             uint256 _minRedeemWei = IC9EthPriceFeed(_contractPriceFeed).getTokenWeiPrice(20*_batchSize);
@@ -436,7 +394,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     function adminFinalApprovalBatch(address _tokensOwner)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
-        redemptionStepBatch(_tokensOwner, 5)
+        redemptionBatchStep(_tokensOwner, 5)
         notFrozen() {
             IC9Token(contractToken).redeemBatchFinish(_batchRedemptionData[_tokensOwner]);
             _removeBatchRedemptionData(_tokensOwner);

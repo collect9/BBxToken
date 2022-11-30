@@ -654,7 +654,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             emit RedemptionBatchFinish(ownerOf(_tokenId[2]), _batchSize);
     }
 
-    function _redeemPrepare(uint256 _tokenId)
+    function _redeemStart(uint256 _tokenId)
         internal
         isOwner(_tokenId)
         inRedemption(_tokenId, false) {
@@ -680,7 +680,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      */
     function redeemStart(uint256 _tokenId)
         public override {
-            _redeemPrepare(_tokenId);
+            _redeemStart(_tokenId);
             IC9Redeemer(contractRedeemer).start(_tokenId);
             emit RedemptionStart(msg.sender, _tokenId);
     }
@@ -691,17 +691,16 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * can still cancel the process before finishing.
      * Cost:
      * ~528,000 gas for batch of 10 (using reedeemStart)
-     * ~320,000 gas for batch of 10 (using reedeemStartBatch)
-     * ~195,000 gas for batch of 5  (using reedeemStartBatch)
-     * ~135,000 gas for batch of 2  (using reedeemStartBatch)
-     * Can be improved should only have to gen one code for all batch
-     * May need separate contract to handle batch data better
+     * ~290,000 gas for batch of 10 (using reedeemStartBatch)
+     * ~180,000 gas for batch of 5  (using reedeemStartBatch)
+     * ~130,000 gas for batch of 2  (using reedeemStartBatch)
+     * ~113, 000 gas for batch of 1  (using reedeemStartBatch)
      */
     function redeemBatchStart(uint256[] calldata _tokenId)
         external override {
             uint256 _batchSize = _tokenId.length;
             for (uint256 i; i<_batchSize; i++) {
-                _redeemPrepare(_tokenId[i]);
+                _redeemStart(_tokenId[i]);
             }
             IC9Redeemer(contractRedeemer).startBatch(msg.sender, _tokenId);
             emit RedemptionBatchStart(msg.sender, _batchSize);
