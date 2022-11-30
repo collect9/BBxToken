@@ -11,7 +11,7 @@ interface IC9Registrar {
 }
 
 contract C9Registrar is IC9Registrar, C9OwnerControl {
-    address public contractToken;
+    address public immutable contractToken;
     mapping(address => uint32[3]) private _registrationData; //step, code, isRegistered
     
     event RegistrarAdminApprove(
@@ -27,6 +27,10 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
     event RegistrarUserVerify(
         address indexed tokenOwner
     );
+
+    constructor(address _contractToken) {
+        contractToken = _contractToken;
+    }
 
     modifier isOwner(address _address) {
         // Will revert if not an owner
@@ -74,7 +78,7 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
         external override {
             uint32 lastStep = _registrationData[msg.sender][0];
             if (lastStep == 0) {
-                _errMsg("address not in process");
+                _errMsg("caller not in process");
             }
             _removeRegistrationData(msg.sender);
             emit RegistrarCancel(msg.sender, lastStep);
@@ -92,27 +96,24 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
 
     /**
      * @dev Step 1. User initializes redemption
-     * Cost: ~60,000 gas
+     * Cost: ~58,000 gas
      */
     function start()
         external override
         isOwner(msg.sender)
         registrationStep(msg.sender, 0)
         notFrozen() {
-            uint32 _randomCode = uint32(
-                uint256(
-                    keccak256(
-                        abi.encodePacked(
-                            block.timestamp,
-                            block.difficulty,
-                            block.number,
-                            msg.sender
-                        )
+            uint256 _randomCode =uint256(
+                keccak256(
+                    abi.encodePacked(
+                        block.timestamp,
+                        block.number,
+                        msg.sender
                     )
                 )
             ) % 10**6;
             _registrationData[msg.sender][0] = 2;
-            _registrationData[msg.sender][1] = _randomCode;
+            _registrationData[msg.sender][1] = uint32(_randomCode);
             emit RegistrarInitCode(msg.sender);
     }
     /**
@@ -135,7 +136,7 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
         onlyRole(DEFAULT_ADMIN_ROLE)
         registrationStep(_address, 2) {
             if (_code != _registrationData[_address][1]) {
-                 _errMsg("code incorrect");
+                 _errMsg("code mismatch");
             }
             _registrationData[_address][0] = 3;
             emit RegistrarAdminApprove(_address);
@@ -151,21 +152,9 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
         registrationStep(msg.sender, 3)
         notFrozen() {
             if (_code != _registrationData[msg.sender][1]) {
-                 _errMsg("code incorrect");
+                 _errMsg("code mismatch");
             }
             _registrationData[msg.sender][2] = 1;
             emit RegistrarUserVerify(msg.sender);
-    }
-
-    /**
-     * @dev Updates the token contract address.
-     */
-    function setContractToken(address _address)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (contractToken == _address) {
-                _errMsg("address already set");
-            }
-            contractToken = _address;
     }
 }

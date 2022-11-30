@@ -118,7 +118,8 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         external override
         onlyRole(NFTCONTRACT_ROLE)
         tokenLock(_tokenId)
-        redemptionStep(_tokenId, 0) {
+        redemptionStep(_tokenId, 0)
+        notFrozen() {
             // Check if already registered
             address _tokenOwner = C9Token(contractToken).ownerOf(_tokenId);
             bool _registerOwner = IC9Registrar(contractRegistrar).addressRegistered(_tokenOwner);
