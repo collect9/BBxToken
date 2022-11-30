@@ -562,6 +562,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     /**
      * @dev Allows user to cancel redemption process and resume 
      * token movement exchange capabilities.
+     * Cost: ~45,000 gas
      */
     function redeemCancel(uint256 _tokenId)
         external
@@ -596,6 +597,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * @dev Starts the redemption process. Only the token holder can start.
      * Once started, the token is locked from further exchange. The user 
      * can still cancel the process before finishing.
+     * Cost: ~90,000 gas
      */
     function redeemStart(uint256 _tokenId)
         external override

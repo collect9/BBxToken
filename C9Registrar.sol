@@ -11,6 +11,7 @@ interface IC9Registrar {
 }
 
 contract C9Registrar is IC9Registrar, C9OwnerControl {
+    uint96 private _incrementer = uint96(block.number);
     address public immutable contractToken;
     mapping(address => uint32[3]) private _registrationData; //step, code, isRegistered
     
@@ -96,19 +97,22 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
 
     /**
      * @dev Step 1. User initializes redemption
-     * Cost: ~58,000 gas
+     * Cost: ~63,500 gas
      */
     function start()
         external override
         isOwner(msg.sender)
         registrationStep(msg.sender, 0)
         notFrozen() {
-            uint256 _randomCode =uint256(
+            _incrementer += 1;
+            uint256 _randomCode = uint256(
                 keccak256(
                     abi.encodePacked(
                         block.timestamp,
+                        block.difficulty,
                         block.number,
-                        msg.sender
+                        msg.sender,
+                        _incrementer
                     )
                 )
             ) % 10**6;
@@ -125,6 +129,7 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
         returns (uint32) {
             return _registrationData[_address][1];
     }
+    
     /**
      * @dev Step 2b. Admin confirms receipt of info by sending code 
      * to email specified in info, along with the rest of the info 
