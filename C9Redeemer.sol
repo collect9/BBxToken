@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.7 <0.9.0;
 import "./C9OwnerControl.sol";
-import "./C9Register.sol";
+import "./C9Registrar.sol";
 import "./C9Token2.sol";
 import "./utils/EthPricer.sol";
 
@@ -58,7 +58,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         _;
     }
 
-    modifier redemptionStep(uint256 _tokenId, uint32 _step) {
+    modifier redemptionStep(uint256 _tokenId, uint256 _step) {
         if (_frozen) {
             _errMsg("contract frozen");
         }
@@ -82,6 +82,16 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             revert(string(bytes.concat("C9Redeemer: ", message)));
     }
 
+    /**
+     * @dev Removes any redemption info after redemption is finished 
+     * or if token own calls this contract (from the token contract) 
+     * having caneled redemption.
+     */
+    function _removeRedemptionInfo(uint256 _tokenId)
+        internal {
+            delete _redemptionData[_tokenId];
+    }
+
     function getRedemptionStep(uint256 _tokenId)
         external view override
         returns(uint32) {
@@ -102,16 +112,6 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     }
 
     /**
-     * @dev Removes any redemption info after redemption is finished 
-     * or if token own calls this contract (from the token contract) 
-     * having caneled redemption.
-     */
-    function _removeRedemptionInfo(uint256 _tokenId)
-        internal {
-            delete _redemptionData[_tokenId];
-    }
-
-    /**
      * @dev Step 1. User initializes redemption
      */
     function startRedemption(uint256 _tokenId)
@@ -120,8 +120,9 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         tokenLock(_tokenId)
         redemptionStep(_tokenId, 0) {
             // Check if already registered
-            address _registerOwner = IC9Registrar(contractRegistrar).getRegisteredOwner(_tokenId);
-            if (_registerOwner != address(0)) {
+            address _tokenOwner = C9Token(contractToken).ownerOf(_tokenId);
+            bool _registerOwner = IC9Registrar(contractRegistrar).addressRegistered(_tokenOwner);
+            if (_registerOwner) {
                 // If registered jump to step 4
                 _redemptionData[_tokenId][1] = 4;
                 emit RedeemerInit(_tokenId, msg.sender, true);
@@ -171,7 +172,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
      * to email specified in info, along with the rest of the info 
      * for the user to verify.
      */
-    function adminVerifyRedemptionCode(uint256 _tokenId, uint32 _code)
+    function adminVerifyRedemptionCode(uint256 _tokenId, uint256 _code)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
         redemptionStep(_tokenId, 2) {
@@ -187,7 +188,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
      * @dev Step 3. User verifies info submitted by submitting 
      * confirmation code.
      */
-    function userVerifyRedemption(uint256 _tokenId, uint32 _code)
+    function userVerifyRedemption(uint256 _tokenId, uint256 _code)
         external
         isOwner(_tokenId)
         redemptionStep(_tokenId, 3) {
