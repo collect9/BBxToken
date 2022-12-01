@@ -391,7 +391,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         onlyRole(DEFAULT_ADMIN_ROLE)
         redemptionBatchStep(_tokensOwner, 5)
         notFrozen() {
-            IC9Token(contractToken).redeemBatchFinish(_batchRedemptionData[_tokensOwner]);
+            IC9Token(contractToken).batchRedeemFinish(_batchRedemptionData[_tokensOwner]);
             _removeBatchRedemptionData(_tokensOwner);
             emit RedeemerAdminApproveBatch(_tokensOwner);
     }

@@ -14,13 +14,13 @@ import "./utils/Helpers.sol";
 uint256 constant MAX_BATCH_SIZE = 22;
 
 interface IC9Token {
+    function batchRedeemCancel() external;
+    function batchRedeemFinish(uint32[] calldata _tokenId) external;
+    function batchRedeemStart(uint256[] calldata _tokenId) external;
     function preRedeemable(uint256 _tokenId) external view returns(bool);
     function redeemCancel(uint256 _tokenId) external;
-    function redeemBatchCancel() external;
     function redeemFinish(uint256 _tokenId) external;
-    function redeemBatchFinish(uint32[] calldata _tokenId) external;
     function redeemStart(uint256 _tokenId) external;
-    function redeemBatchStart(uint256[] calldata _tokenId) external;
     function setTokenUpgraded(uint256 _tokenId) external;
     function tokenLocked(uint256 _tokenId) external view returns(bool);
     function tokenUpgraded(uint256 _tokenId) external view returns(bool);
@@ -225,44 +225,6 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             return super.supportsInterface(interfaceId);
     }
 
-    /**
-     * @dev uTokenData is packed into a single uint256. This function
-     * returns an unpacked array. It overrides the C9Struct defintion 
-     * so only the _tokenId needs to be passed in.
-     */
-    function getTokenParams(uint256 _tokenId)
-        public view override
-        returns(uint256[18] memory params) {
-            uint256 _packedToken = _uTokenData[_tokenId];
-            params[0] = uint256(uint8(_packedToken>>POS_UPGRADED));
-            params[1] = uint256(uint8(_packedToken>>POS_DISPLAY));
-            params[2] = uint256(uint8(_packedToken>>POS_LOCKED));
-            params[3] = uint256(uint8(_packedToken>>POS_VALIDITY));
-            params[4] = uint256(uint8(_packedToken>>POS_EDITION));
-            params[5] = uint256(uint8(_packedToken>>POS_CNTRYTAG));
-            params[6] = uint256(uint8(_packedToken>>POS_CNTRYTUSH));
-            params[7] = uint256(uint8(_packedToken>>POS_GENTAG));
-            params[8] = uint256(uint8(_packedToken>>POS_GENTUSH));
-            params[9] = uint256(uint8(_packedToken>>POS_MARKERTUSH));
-            params[10] = uint256(uint8(_packedToken>>POS_SPECIAL));
-            params[11] = uint256(uint8(_packedToken>>POS_RARITYTIER));
-            params[12] = uint256(uint16(_packedToken>>POS_MINTID));
-            params[13] = uint256(uint16(_packedToken>>POS_ROYALTY));
-            params[14] = uint256(uint16(_packedToken>>POS_ROYALTIESDUE));
-            params[15] = uint256(uint32(_packedToken>>POS_TOKENID));
-            params[16] = uint256(uint40(_packedToken>>POS_VALIDITYSTAMP));
-            params[17] = uint256(uint40(_packedToken>>POS_MINTSTAMP));
-    }
-
-    /**
-     * @dev Get a single entry from uTokenData based on an enum index.
-     */
-    function _getTokenParam(uint256 _tokenId, TokenProps _idx)
-        internal view override
-        returns(uint256) {
-            return getTokenParams(_tokenId)[uint256(_idx)];
-    }
-
     //>>>>>>> CUSTOM ERC2981 START
 
     /*
@@ -385,6 +347,153 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     }
 
     /**
+     * @dev Get a single entry from uTokenData based on an enum index.
+     */
+    function _getTokenParam(uint256 _tokenId, TokenProps _idx)
+        internal view override
+        returns(uint256) {
+            return getTokenParams(_tokenId)[uint256(_idx)];
+    }
+
+    /**
+     * @dev The function that start the redeemer (either single token
+     * or batch) both call this to lock the token. Since both call this 
+     * right away, the modifiers are here.
+     */
+    function _lockToken(uint256 _tokenId)
+        internal
+        isOwner(_tokenId)
+        inRedemption(_tokenId, false) {
+            if (_getTokenParam(_tokenId, TokenProps.VALIDITY) != VALID) {
+                _errMsg("token status not valid");
+            }
+            if (preRedeemable(_tokenId)) {
+                _errMsg("token still pre-redeemable");
+            }
+            _uTokenData[_tokenId] = _setTokenParam(
+                _uTokenData[_tokenId],
+                POS_LOCKED,
+                1,
+                255
+            );
+    }
+
+    /**
+     * @dev Once the token validity is set to 4, it is 
+     * not possible to change it back. Only the redemption 
+     * finisher functions call this.
+     */
+    function _setTokenRedeemed(uint256 _tokenId)
+        internal
+        tokenExists(_tokenId)
+        inRedemption(_tokenId, true) {
+            _setTokenValidity(_tokenId, REDEEMED);
+    }
+
+    /**
+     * @dev Updates the token validity status.
+     * Validity will not prevent or pause transfers. It is 
+     * only a display flag to let users know of the token's 
+     * status.
+     */
+    function _setTokenValidity(uint256 _tokenId, uint256 _vId)
+        internal
+        notRedeemed(_tokenId) {
+            if (_vId > 4) {
+                _errMsg("invalid internal vId");
+            }
+            uint256 _tokenData = _uTokenData[_tokenId];
+            uint256 _tokenValidity = uint256(uint8(_tokenData>>POS_VALIDITY));
+            if (_tokenValidity == _vId) {
+                _errMsg("vId already set");
+            }
+            _tokenData = _setTokenParam(
+                _tokenData,
+                POS_VALIDITY,
+                _vId,
+                255
+            );
+            _tokenData = _setTokenParam(
+                _tokenData,
+                POS_VALIDITYSTAMP,
+                block.timestamp,
+                1099511627775
+            );
+            _uTokenData[_tokenId] = _tokenData;
+    }
+
+    /**
+     * @dev Redeem cancel functions (either single token or 
+     * batch) both call this to unlock the token.
+     */
+    function _unlockToken(uint256 _tokenId)
+        internal
+        inRedemption(_tokenId, true)
+        isOwner(_tokenId) {
+            _uTokenData[_tokenId] = _setTokenParam(
+                _uTokenData[_tokenId],
+                POS_LOCKED,
+                0,
+                255
+            );
+    }
+
+    /**
+     * @dev Allows user to cancel redemption process and resume 
+     * token movement exchange capabilities.
+     * Cost:
+     * ~100,000 gas for batch of 10 (using redeemBatchCancel)
+     * ~72,000 gas for batch of 5   (using redeemBatchCancel)
+     * ~53,000 gas for batch of 2   (using redeemBatchCancel)
+     * ~47,000 gas for batch of 1   (using redeemBatchCancel)
+     */
+    function batchRedeemCancel()
+        external override {
+            uint256[MAX_BATCH_SIZE] memory _tokenIdBatch = IC9Redeemer(contractRedeemer).cancelBatch(msg.sender);
+            uint256 _batchSize;
+            for (uint256 i; i<MAX_BATCH_SIZE; i++) {
+                uint256 _tokenId = _tokenIdBatch[i];
+                if (_tokenId != 0) {
+                    _unlockToken(_tokenId);
+                }
+                else {
+                    break;
+                }
+                _batchSize += 1;
+            }
+            emit RedemptionBatchCancel(msg.sender, _batchSize);
+    }
+
+    function batchRedeemFinish(uint32[] calldata _tokenId)
+        external override
+        onlyRole(REDEEMER_ROLE) {
+            for (uint i=2; i<_tokenId.length; i++) {
+                _setTokenRedeemed(_tokenId[i]);
+            }
+            emit RedemptionBatchFinish(ownerOf(_tokenId[2]), _tokenId.length);
+    }
+
+    /**
+     * @dev Starts the redemption process. Only the token holder can start.
+     * Once started, the token is locked from further exchange. The user 
+     * can still cancel the process before finishing.
+     * Cost:
+     * ~488,000 gas for batch of 10 (using reedeemStart)
+     * ~268,000 gas for batch of 10 (using reedeemStartBatch)
+     * ~170,000 gas for batch of 5  (using reedeemStartBatch)
+     * ~126,000 gas for batch of 2  (using reedeemStartBatch)
+     * ~111,000 gas for batch of 1  (using reedeemStartBatch)
+     */
+    function batchRedeemStart(uint256[] calldata _tokenId)
+        external override {
+            for (uint256 i; i<_tokenId.length; i++) {
+                _lockToken(_tokenId[i]);
+            }
+            IC9Redeemer(contractRedeemer).startBatch(msg.sender, _tokenId);
+            emit RedemptionBatchStart(msg.sender, _tokenId.length);
+    }
+
+    /**
      * @dev The token burning required for the redemption process.
      * Require statement is the same as in ERC721Burnable.
      * Note the `tokenComboExists` of the token is not removed, thus 
@@ -463,6 +572,35 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
                     _input.name
                 )
             );
+    }
+
+    /**
+     * @dev uTokenData is packed into a single uint256. This function
+     * returns an unpacked array. It overrides the C9Struct defintion 
+     * so only the _tokenId needs to be passed in.
+     */
+    function getTokenParams(uint256 _tokenId)
+        public view override
+        returns(uint256[18] memory params) {
+            uint256 _packedToken = _uTokenData[_tokenId];
+            params[0] = uint256(uint8(_packedToken>>POS_UPGRADED));
+            params[1] = uint256(uint8(_packedToken>>POS_DISPLAY));
+            params[2] = uint256(uint8(_packedToken>>POS_LOCKED));
+            params[3] = uint256(uint8(_packedToken>>POS_VALIDITY));
+            params[4] = uint256(uint8(_packedToken>>POS_EDITION));
+            params[5] = uint256(uint8(_packedToken>>POS_CNTRYTAG));
+            params[6] = uint256(uint8(_packedToken>>POS_CNTRYTUSH));
+            params[7] = uint256(uint8(_packedToken>>POS_GENTAG));
+            params[8] = uint256(uint8(_packedToken>>POS_GENTUSH));
+            params[9] = uint256(uint8(_packedToken>>POS_MARKERTUSH));
+            params[10] = uint256(uint8(_packedToken>>POS_SPECIAL));
+            params[11] = uint256(uint8(_packedToken>>POS_RARITYTIER));
+            params[12] = uint256(uint16(_packedToken>>POS_MINTID));
+            params[13] = uint256(uint16(_packedToken>>POS_ROYALTY));
+            params[14] = uint256(uint16(_packedToken>>POS_ROYALTIESDUE));
+            params[15] = uint256(uint32(_packedToken>>POS_TOKENID));
+            params[16] = uint256(uint40(_packedToken>>POS_VALIDITYSTAMP));
+            params[17] = uint256(uint40(_packedToken>>POS_MINTSTAMP));
     }
 
     /**
@@ -578,102 +716,23 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             return block.timestamp-_getTokenParam(_tokenId, TokenProps.MINTSTAMP) < preRedeemPeriod;
     }
 
-    function _unlockToken(uint256 _tokenId)
-        internal {
-            _uTokenData[_tokenId] = _setTokenParam(
-                _uTokenData[_tokenId],
-                POS_LOCKED,
-                0,
-                255
-            );
-    }
-
     /**
      * @dev Allows user to cancel redemption process and resume 
      * token movement exchange capabilities.
      * Cost: ~45,000 gas
      */
     function redeemCancel(uint256 _tokenId)
-        external override
-        isOwner(_tokenId)
-        inRedemption(_tokenId, true) {
+        external override {
             IC9Redeemer(contractRedeemer).cancel(_tokenId);
             _unlockToken(_tokenId);
             emit RedemptionCancel(msg.sender, _tokenId);
     }
 
-    /**
-     * @dev Allows user to cancel redemption process and resume 
-     * token movement exchange capabilities.
-     * Cost:
-     * ~100,000 gas for batch of 10 (using redeemBatchCancel)
-     * ~72,000 gas for batch of 5   (using redeemBatchCancel)
-     * ~53,000 gas for batch of 2   (using redeemBatchCancel)
-     * ~47,000 gas for batch of 1   (using redeemBatchCancel)
-     */
-    function redeemBatchCancel()
-        external override {
-            uint256[MAX_BATCH_SIZE] memory _tokenIdBatch = IC9Redeemer(contractRedeemer).cancelBatch(msg.sender);
-            uint256 _batchSize;
-            for (uint256 i; i<MAX_BATCH_SIZE; i++) {
-                uint256 _tokenId = _tokenIdBatch[i];
-                if (_tokenId != 0) {
-                    _unlockToken(_tokenId);
-                }
-                else {
-                    break;
-                }
-                _batchSize += 1;
-            }
-            emit RedemptionBatchCancel(msg.sender, _batchSize);
-    }
-
-    /**
-     * @dev Redeemer function that can only be accessed by the external 
-     * contract calling it. That contract calling it will be assigned 
-     * to the redeemer role. Once the token validity is set to 4, it is 
-     * not possible to change it back.
-     */
-    function _redeemFinish(uint256 _tokenId)
-        internal
-        tokenExists(_tokenId)
-        inRedemption(_tokenId, true) {
-            _setTokenValidity(_tokenId, REDEEMED);
-        }
-
     function redeemFinish(uint256 _tokenId)
         external override
         onlyRole(REDEEMER_ROLE) {
-            _redeemFinish(_tokenId);
+            _setTokenRedeemed(_tokenId);
             emit RedemptionFinish(ownerOf(_tokenId), _tokenId);
-    }
-
-    function redeemBatchFinish(uint32[] calldata _tokenId)
-        external override
-        onlyRole(REDEEMER_ROLE) {
-            uint256 _batchSize = _tokenId.length;
-            for (uint i=2; i<_batchSize; i++) {
-                _setTokenValidity(_tokenId[i], REDEEMED);
-            }
-            emit RedemptionBatchFinish(ownerOf(_tokenId[2]), _batchSize);
-    }
-
-    function _lockToken(uint256 _tokenId)
-        internal
-        isOwner(_tokenId)
-        inRedemption(_tokenId, false) {
-            if (_getTokenParam(_tokenId, TokenProps.VALIDITY) != VALID) {
-                _errMsg("token status not valid");
-            }
-            if (preRedeemable(_tokenId)) {
-                _errMsg("token still pre-redeemable");
-            }
-            _uTokenData[_tokenId] = _setTokenParam(
-                _uTokenData[_tokenId],
-                POS_LOCKED,
-                1,
-                255
-            );
     }
 
     /**
@@ -683,30 +742,10 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * Cost: ~85,500 gas
      */
     function redeemStart(uint256 _tokenId)
-        public override {
+        external override {
             _lockToken(_tokenId);
             IC9Redeemer(contractRedeemer).start(msg.sender, _tokenId);
             emit RedemptionStart(msg.sender, _tokenId);
-    }
-
-    /**
-     * @dev Starts the redemption process. Only the token holder can start.
-     * Once started, the token is locked from further exchange. The user 
-     * can still cancel the process before finishing.
-     * Cost:
-     * ~528,000 gas for batch of 10 (using reedeemStart)
-     * ~268,000 gas for batch of 10 (using reedeemStartBatch)
-     * ~170,000 gas for batch of 5  (using reedeemStartBatch)
-     * ~126,000 gas for batch of 2  (using reedeemStartBatch)
-     * ~111,000 gas for batch of 1  (using reedeemStartBatch)
-     */
-    function redeemBatchStart(uint256[] calldata _tokenId)
-        external override {
-            for (uint256 i; i<_tokenId.length; i++) {
-                _lockToken(_tokenId[i]);
-            }
-            IC9Redeemer(contractRedeemer).startBatch(msg.sender, _tokenId);
-            emit RedemptionBatchStart(msg.sender, _tokenId.length);
     }
 
     /**
@@ -767,13 +806,15 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             uint256 _tokenData = _uTokenData[_tokenId];
             bool _externalView = uint256(uint8(_tokenData>>POS_DISPLAY)) == 1;
             bytes memory image;
-            if (svgOnly || !_externalView) {// Onchain SVG
+            if (svgOnly || !_externalView) {
+                // Onchain SVG
                 image = abi.encodePacked(
                     ',"image":"data:image/svg+xml;base64,',
                     b64SVGImage(_tokenId)
                 );
             }
-            else {// Token upgraded, get view URI based on if redeemed or not
+            else {
+                // Token upgraded, get view URI based on if redeemed or not
                 uint256 _viewIdx = uint256(uint8(_tokenData>>POS_VALIDITY)) == REDEEMED ? 1 : 0;
                 image = abi.encodePacked(
                     ',"image":"',
@@ -948,45 +989,13 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         uint256 _tokenId,
         uint256 _newRoyalty,
         address _receiver
-    )
+        )
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
         limitRoyalty(_newRoyalty)
         tokenExists(_tokenId)
         notRedeemed(_tokenId) {
             _setTokenRoyalty(_tokenId, _receiver, _newRoyalty);
-    }
-
-    /**
-     * @dev Updates the token validity status.
-     * Validity will not prevent or pause transfers. It is 
-     * only a display flag to let users know of the token's 
-     * status.
-     */
-    function _setTokenValidity(uint256 _tokenId, uint256 _vId)
-        internal
-        notRedeemed(_tokenId) {
-            if (_vId > 4) {
-                _errMsg("invalid internal vId");
-            }
-            uint256 _tokenData = _uTokenData[_tokenId];
-            uint256 _tokenValidity = uint256(uint8(_tokenData>>POS_VALIDITY));
-            if (_tokenValidity == _vId) {
-                _errMsg("vId already set");
-            }
-            _tokenData = _setTokenParam(
-                _tokenData,
-                POS_VALIDITY,
-                _vId,
-                255
-            );
-            _tokenData = _setTokenParam(
-                _tokenData,
-                POS_VALIDITYSTAMP,
-                block.timestamp,
-                1099511627775
-            );
-            _uTokenData[_tokenId] = _tokenData;
     }
 
     /*
@@ -1038,8 +1047,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         onlyRole(DEFAULT_ADMIN_ROLE)
         tokenExists(_tokenId) {
             uint256 _tokenData = _uTokenData[_tokenId];
-            uint256 _val = uint256(uint8(_tokenData>>POS_UPGRADED));
-            if (_val == 1) {
+            if (uint256(uint8(_tokenData>>POS_UPGRADED)) == 1) {
                 _errMsg("token is already upgraded");
             }
             _uTokenData[_tokenId] = _setTokenParam(
