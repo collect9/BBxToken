@@ -5,9 +5,11 @@ import "./C9Registrar.sol";
 import "./C9Token2.sol";
 import "./utils/EthPricer.sol";
 
+uint256 constant maxBatchSize = 22;
+
 interface IC9Redeemer {    
     function cancel(uint256 _tokenId) external;
-    function cancelBatch(address _tokensOwner) external returns(uint32[22] memory _tokenId);
+    function cancelBatch(address _tokensOwner) external returns(uint256[maxBatchSize] memory _tokenId);
     function getRedemptionStep(uint256 _tokenId) external view returns (uint256);
     function getBatchRedemptionStep(address _tokenOwner) external view returns(uint256);
     function start(uint256 _tokenId) external;
@@ -16,10 +18,9 @@ interface IC9Redeemer {
 
 contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     bytes32 public constant NFTCONTRACT_ROLE = keccak256("NFTCONTRACT_ROLE");
-    
     mapping(uint256 => uint32[2]) _redemptionData; //tokenId => code, step
     mapping(address => uint32[]) _batchRedemptionData; //tokenOwner => code, step, token1, token2.., tokenN
-
+    
     event RedeemerAdminApprove(
         uint256 indexed tokenId,
         address indexed tokenOwner
@@ -161,13 +162,13 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     function cancelBatch(address _tokensOwner)
         external override
         onlyRole(NFTCONTRACT_ROLE)
-        returns(uint32[22] memory _tokenId) {
+        returns(uint256[maxBatchSize] memory _tokenIdBatch) {
             uint32[] memory _data = _batchRedemptionData[_tokensOwner];
             if (_data.length == 0) {
-                _errMsg("batch tokens not in process");
+                _errMsg("batch of tokens not in process");
             }
-            for (uint i=2; i<_data.length; i++) {
-                _tokenId[i-2] = _data[i];
+            for (uint256 i=2; i<_data.length; i++) {
+                _tokenIdBatch[i-2] = uint256(_data[i]);
             }
             _removeBatchRedemptionData(_tokensOwner);
             emit RedeemerBatchCancel(_tokensOwner, _data.length, _data[1]);
@@ -207,32 +208,28 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         onlyRole(NFTCONTRACT_ROLE)
         redemptionBatchStep(_tokensOwner, 0)
         notFrozen() {
-            uint256 batchSize = _tokenId.length;
-            if (batchSize > 22) {
+            if (_tokenId.length > maxBatchSize) {
                 _errMsg("max batch size is 22");
             }
+
             bool _registerOwner = IC9Registrar(contractRegistrar).addressRegistered(_tokensOwner);
-            _incrementer += uint96(batchSize);
+            _incrementer += uint96(_tokenId.length);
             if (_registerOwner) {
                 // If registered jump to step 4
                 _batchRedemptionData[_tokensOwner].push(0); // dummy code
                 _batchRedemptionData[_tokensOwner].push(4);
-                emit RedeemerBatchInit(msg.sender, batchSize, true);
+                emit RedeemerBatchInit(msg.sender, _tokenId.length, true);
             }
             else {
                 // Else move to next step
                 _batchRedemptionData[_tokensOwner].push(uint32(_genCode()));
                 _batchRedemptionData[_tokensOwner].push(2);
-                emit RedeemerBatchInit(msg.sender, batchSize, false);
+                emit RedeemerBatchInit(msg.sender, _tokenId.length, false);
             }
 
-            // Check to make sure all tokenId are of the same owner - make batch ownerOf?
-            for (uint256 i; i<batchSize; i++) {
-                if (C9Token(contractToken).ownerOf(_tokenId[i]) != _tokensOwner) {
-                    _errMsg("unauthorized");
-                }
+            for (uint256 i; i<_tokenId.length; i++) {
                 _batchRedemptionData[_tokensOwner].push(uint32(_tokenId[i]));
-            }
+            }            
     }
 
     /**

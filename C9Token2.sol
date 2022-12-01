@@ -599,18 +599,20 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * @dev Allows user to cancel redemption process and resume 
      * token movement exchange capabilities.
      * Cost:
-     * ~105,000 gas for batch of 10 (using redeemBatchCancel)
+     * ~100,000 gas for batch of 10 (using redeemBatchCancel)
      * ~72,000 gas for batch of 5   (using redeemBatchCancel)
-     * ~54,000 gas for batch of 2   (using redeemBatchCancel)
+     * ~53,000 gas for batch of 2   (using redeemBatchCancel)
+     * ~47,000 gas for batch of 1   (using redeemBatchCancel)
      */
     function redeemBatchCancel()
         external override {
-            uint32[22] memory _tokenId = IC9Redeemer(contractRedeemer).cancelBatch(msg.sender);
+            uint256[22] memory _tokenIdBatch = IC9Redeemer(contractRedeemer).cancelBatch(msg.sender);
             uint256 _batchSize;
-            for (uint i; i<22; i++) {
-                if (_tokenId[i] != 0) {
-                    _uTokenData[_tokenId[i]] = _setTokenParam(
-                        _uTokenData[_tokenId[i]],
+            for (uint256 i; i<22; i++) {
+                uint256 _tokenId = _tokenIdBatch[i];
+                if (_tokenId != 0) {
+                    _uTokenData[_tokenId] = _setTokenParam(
+                        _uTokenData[_tokenId],
                         POS_LOCKED,
                         0,
                         255
@@ -654,7 +656,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             emit RedemptionBatchFinish(ownerOf(_tokenId[2]), _batchSize);
     }
 
-    function _redeemStart(uint256 _tokenId)
+    function _lockToken(uint256 _tokenId)
         internal
         isOwner(_tokenId)
         inRedemption(_tokenId, false) {
@@ -676,11 +678,11 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * @dev Starts the redemption process. Only the token holder can start.
      * Once started, the token is locked from further exchange. The user 
      * can still cancel the process before finishing.
-     * Cost: ~90,000 gas
+     * Cost: ~87,500 gas
      */
     function redeemStart(uint256 _tokenId)
         public override {
-            _redeemStart(_tokenId);
+            _lockToken(_tokenId);
             IC9Redeemer(contractRedeemer).start(_tokenId);
             emit RedemptionStart(msg.sender, _tokenId);
     }
@@ -691,19 +693,18 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * can still cancel the process before finishing.
      * Cost:
      * ~528,000 gas for batch of 10 (using reedeemStart)
-     * ~290,000 gas for batch of 10 (using reedeemStartBatch)
-     * ~180,000 gas for batch of 5  (using reedeemStartBatch)
-     * ~130,000 gas for batch of 2  (using reedeemStartBatch)
-     * ~113, 000 gas for batch of 1  (using reedeemStartBatch)
+     * ~268,000 gas for batch of 10 (using reedeemStartBatch)
+     * ~170,000 gas for batch of 5  (using reedeemStartBatch)
+     * ~126,000 gas for batch of 2  (using reedeemStartBatch)
+     * ~111,000 gas for batch of 1  (using reedeemStartBatch)
      */
     function redeemBatchStart(uint256[] calldata _tokenId)
         external override {
-            uint256 _batchSize = _tokenId.length;
-            for (uint256 i; i<_batchSize; i++) {
-                _redeemStart(_tokenId[i]);
+            for (uint256 i; i<_tokenId.length; i++) {
+                _lockToken(_tokenId[i]);
             }
             IC9Redeemer(contractRedeemer).startBatch(msg.sender, _tokenId);
-            emit RedemptionBatchStart(msg.sender, _batchSize);
+            emit RedemptionBatchStart(msg.sender, _tokenId.length);
     }
 
     /**
