@@ -2,17 +2,16 @@
 pragma solidity >=0.8.7 <0.9.0;
 import "./C9OwnerControl.sol";
 import "./C9Registrar.sol";
+import "./C9Struct.sol";
 import "./C9Token2.sol";
 import "./utils/EthPricer.sol";
 
-uint256 constant maxBatchSize = 22;
-
 interface IC9Redeemer {    
     function cancel(uint256 _tokenId) external;
-    function cancelBatch(address _tokensOwner) external returns(uint256[maxBatchSize] memory _tokenId);
+    function cancelBatch(address _tokensOwner) external returns(uint256[MAX_BATCH_SIZE] memory _tokenId);
     function getRedemptionStep(uint256 _tokenId) external view returns (uint256);
     function getBatchRedemptionStep(address _tokenOwner) external view returns(uint256);
-    function start(uint256 _tokenId) external;
+    function start(address _tokenOwner, uint256 _tokenId) external;
     function startBatch(address _tokensOwner, uint256[] calldata _tokenId) external;
 }
 
@@ -34,9 +33,9 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         uint256 indexed processStep
     );
     event RedeemerBatchCancel(
-        address indexed tokensOwner,
         uint256 indexed batchSize,
-        uint32 indexed processStep
+        address indexed tokensOwner,
+        uint256 indexed processStep
     );
     event RedeemerGenCode(
         uint256 indexed tokenId,
@@ -48,8 +47,8 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         bool indexed registered
     );
     event RedeemerBatchInit(
+        uint256 indexed batchSize,
         address indexed tokensOwner,
-        uint256 batchSize,
         bool indexed registered
     );
     event RedeemerUserFinalize(
@@ -162,7 +161,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     function cancelBatch(address _tokensOwner)
         external override
         onlyRole(NFTCONTRACT_ROLE)
-        returns(uint256[maxBatchSize] memory _tokenIdBatch) {
+        returns(uint256[MAX_BATCH_SIZE] memory _tokenIdBatch) {
             uint32[] memory _data = _batchRedemptionData[_tokensOwner];
             if (_data.length == 0) {
                 _errMsg("batch of tokens not in process");
@@ -171,20 +170,19 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
                 _tokenIdBatch[i-2] = uint256(_data[i]);
             }
             _removeBatchRedemptionData(_tokensOwner);
-            emit RedeemerBatchCancel(_tokensOwner, _data.length, _data[1]);
+            emit RedeemerBatchCancel(_data.length, _tokensOwner, _data[1]);
     }
 
     /**
      * @dev Step 1.
      * User initializes redemption.
      */
-    function start(uint256 _tokenId)
+    function start(address _tokenOwner, uint256 _tokenId)
         external override
         onlyRole(NFTCONTRACT_ROLE)
         redemptionStep(_tokenId, 0)
         notFrozen() {
             // Check to see if owner is already registered
-            address _tokenOwner = C9Token(contractToken).ownerOf(_tokenId);
             bool _registerOwner = IC9Registrar(contractRegistrar).addressRegistered(_tokenOwner);
             _incrementer += 1;
             if (_registerOwner) {
@@ -208,7 +206,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         onlyRole(NFTCONTRACT_ROLE)
         redemptionBatchStep(_tokensOwner, 0)
         notFrozen() {
-            if (_tokenId.length > maxBatchSize) {
+            if (_tokenId.length > MAX_BATCH_SIZE) {
                 _errMsg("max batch size is 22");
             }
 
@@ -218,13 +216,13 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
                 // If registered jump to step 4
                 _batchRedemptionData[_tokensOwner].push(0); // dummy code
                 _batchRedemptionData[_tokensOwner].push(4);
-                emit RedeemerBatchInit(msg.sender, _tokenId.length, true);
+                emit RedeemerBatchInit(_tokenId.length, msg.sender, true);
             }
             else {
                 // Else move to next step
                 _batchRedemptionData[_tokensOwner].push(uint32(_genCode()));
                 _batchRedemptionData[_tokensOwner].push(2);
-                emit RedeemerBatchInit(msg.sender, _tokenId.length, false);
+                emit RedeemerBatchInit(_tokenId.length, msg.sender, false);
             }
 
             for (uint256 i; i<_tokenId.length; i++) {

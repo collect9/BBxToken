@@ -11,6 +11,8 @@ import "./C9SVG.sol";
 import "./utils/Base64.sol";
 import "./utils/Helpers.sol";
 
+uint256 constant MAX_BATCH_SIZE = 22;
+
 interface IC9Token {
     function preRedeemable(uint256 _tokenId) external view returns(bool);
     function redeemCancel(uint256 _tokenId) external;
@@ -576,6 +578,16 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             return block.timestamp-_getTokenParam(_tokenId, TokenProps.MINTSTAMP) < preRedeemPeriod;
     }
 
+    function _unlockToken(uint256 _tokenId)
+        internal {
+            _uTokenData[_tokenId] = _setTokenParam(
+                _uTokenData[_tokenId],
+                POS_LOCKED,
+                0,
+                255
+            );
+    }
+
     /**
      * @dev Allows user to cancel redemption process and resume 
      * token movement exchange capabilities.
@@ -586,12 +598,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         isOwner(_tokenId)
         inRedemption(_tokenId, true) {
             IC9Redeemer(contractRedeemer).cancel(_tokenId);
-            _uTokenData[_tokenId] = _setTokenParam(
-                _uTokenData[_tokenId],
-                POS_LOCKED,
-                0,
-                255
-            );
+            _unlockToken(_tokenId);
             emit RedemptionCancel(msg.sender, _tokenId);
     }
 
@@ -606,17 +613,12 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      */
     function redeemBatchCancel()
         external override {
-            uint256[22] memory _tokenIdBatch = IC9Redeemer(contractRedeemer).cancelBatch(msg.sender);
+            uint256[MAX_BATCH_SIZE] memory _tokenIdBatch = IC9Redeemer(contractRedeemer).cancelBatch(msg.sender);
             uint256 _batchSize;
-            for (uint256 i; i<22; i++) {
+            for (uint256 i; i<MAX_BATCH_SIZE; i++) {
                 uint256 _tokenId = _tokenIdBatch[i];
                 if (_tokenId != 0) {
-                    _uTokenData[_tokenId] = _setTokenParam(
-                        _uTokenData[_tokenId],
-                        POS_LOCKED,
-                        0,
-                        255
-                    );
+                    _unlockToken(_tokenId);
                 }
                 else {
                     break;
@@ -678,12 +680,12 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * @dev Starts the redemption process. Only the token holder can start.
      * Once started, the token is locked from further exchange. The user 
      * can still cancel the process before finishing.
-     * Cost: ~87,500 gas
+     * Cost: ~85,500 gas
      */
     function redeemStart(uint256 _tokenId)
         public override {
             _lockToken(_tokenId);
-            IC9Redeemer(contractRedeemer).start(_tokenId);
+            IC9Redeemer(contractRedeemer).start(msg.sender, _tokenId);
             emit RedemptionStart(msg.sender, _tokenId);
     }
 
