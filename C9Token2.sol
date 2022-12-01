@@ -66,7 +66,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * defines how long a token must exist before it can be 
      * redeemed.
      */
-    uint256 public preRedeemPeriod = 31556926; //seconds
+    uint256 public preRedeemablePeriod = 31556926; //seconds
     event RedemptionCancel(
         address indexed tokenOwner,
         uint256 indexed tokenId
@@ -449,7 +449,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      */
     function batchRedeemCancel()
         external override {
-            uint256[MAX_BATCH_SIZE] memory _tokenIdBatch = IC9Redeemer(contractRedeemer).cancelBatch(msg.sender);
+            uint256[MAX_BATCH_SIZE] memory _tokenIdBatch = IC9Redeemer(contractRedeemer).cancel(msg.sender);
             uint256 _batchSize;
             for (uint256 i; i<MAX_BATCH_SIZE; i++) {
                 uint256 _tokenId = _tokenIdBatch[i];
@@ -489,7 +489,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             for (uint256 i; i<_tokenId.length; i++) {
                 _lockToken(_tokenId[i]);
             }
-            IC9Redeemer(contractRedeemer).startBatch(msg.sender, _tokenId);
+            IC9Redeemer(contractRedeemer).start(msg.sender, _tokenId);
             emit RedemptionBatchStart(msg.sender, _tokenId.length);
     }
 
@@ -713,7 +713,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         public view override
         tokenExists(_tokenId)
         returns (bool) {
-            return block.timestamp-_getTokenParam(_tokenId, TokenProps.MINTSTAMP) < preRedeemPeriod;
+            return block.timestamp-_getTokenParam(_tokenId, TokenProps.MINTSTAMP) < preRedeemablePeriod;
     }
 
     /**
@@ -919,21 +919,19 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     function setPreRedeemPeriod(uint256 _period)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (preRedeemPeriod == _period) {
+            if (preRedeemablePeriod == _period) {
                 _errMsg("period already set");
             }
             if (_period > 63113852) { // 2 years max
                 _errMsg("period too long");
             }
-            preRedeemPeriod = _period;
+            preRedeemablePeriod = _period;
     }
 
     /**
-     * @dev Updates the SVG display contract address.
-     * This function will allow future SVG image display 
-     * upgrades.
-     * This will be most useful when trying to make a generic 
-     * SVG template that will include other collectible classes.
+     * @dev Sets royalties due if token validity status 
+     * is royalties.
+     * Cost: ~32,000 gas
      */
     function setRoyaltiesDue(uint256 _tokenId, uint256 _amount)
         external
