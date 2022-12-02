@@ -197,6 +197,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     }
 
     /*
+
     */
     function remove(address _tokensOwner, uint32[] calldata _tokenId)
         external //overide
@@ -207,19 +208,21 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             _errMsg("no batch in process");
         }
         uint256 _existingPending = _data.length-2;
-        if (_tokenId.length >= _existingPending) {
-            _errMsg("call to remove more than in batch");
+        if (_tokenId.length == _existingPending) {
+            _errMsg("use cancel to remove whole batch");
+        }
+        if (_tokenId.length > _existingPending) {
+            _errMsg("cannot remove more than in batch");
         }
         
-        for (uint i; i<_tokenId.length; i++) {
-            uint256 _tokenIdx;
-            _data = redeemerData[_tokensOwner];
+        for (uint256 i; i<_tokenId.length; i++) {
             for (uint j; j<_data.length; j++) {
                 if (_tokenId[i] == _data[j+2]) {
-                    _tokenIdx = j+2;
-                    _data[_tokenIdx] = _data[_data.length-1];
+                    // Swap, copy to storage, pop, copy back to memory
+                    _data[j+2] = _data[_data.length-1];
                     redeemerData[_tokensOwner] = _data;
                     redeemerData[_tokensOwner].pop();
+                    _data = redeemerData[_tokensOwner];
                     break;
                 }
             }
