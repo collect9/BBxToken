@@ -494,12 +494,12 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * canceling. Thus if a user plans to remove a 
      * majority of tokens then it may be cheaper to just 
      * cancel and restart.
-     * Cost: 
-     * 1x token = 65,000 gas    -> 65,000 gas per
-     * 2x token = 84,000 gas    -> 42,000 gas per
-     * 5x token = 145,000 gas   -> 29,000 gas per
-     * 10x token = 273,500 gas  -> 27,500 gas per
-     * 14x token = 385,000 gas  -> 27,500 gas per
+     * Cost:
+     * 1x token = 73,000 gas    -> 73,000 gas per
+     * 2x token = 87,000 gas    -> 43,500 gas per
+     * 5x token = 144,000 gas   -> 28,800 gas per 
+     * 10x token = 209,000 gas  -> 20,900 gas per
+     * 14x token = 262,000 gas  -> 18,700 gas per
      */
     function redeemRemove(uint32[] calldata _tokenId)
         external override {

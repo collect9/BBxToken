@@ -7,12 +7,13 @@ import "./C9Token2.sol";
 import "./utils/EthPricer.sol";
 
 interface IC9Redeemer {
-    function add(address _tokensOwner, uint32[] calldata _tokenId) external;
-    function cancel(address _tokensOwner) external returns(uint32[] memory _data, uint256 _batchSize);
+    function add(address _tokenOwner, uint32[] calldata _tokenId) external;
+    function cancel(address _tokenOwner) external returns(uint32[] memory _data, uint256 _batchSize);
+    function getMinRedeemUsd(uint256 _batchSize) external view returns(uint256);
     function getRedemptionStep(address _tokenOwner) external view returns(uint256);
-    function getRedemptionInfo(address _tokensOwner) external view returns(uint32[] memory);
-    function remove(address _tokensOwner, uint32[] calldata _tokenId) external;
-    function start(address _tokensOwner, uint32[] calldata _tokenId) external;
+    function getRedemptionInfo(address _tokenOwner) external view returns(uint32[] memory);
+    function remove(address _tokenOwner, uint32[] calldata _tokenId) external;
+    function start(address _tokenOwner, uint32[] calldata _tokenId) external;
 }
 
 contract C9Redeemer is IC9Redeemer, C9OwnerControl {
@@ -28,10 +29,10 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         uint256 indexed newBatchSize
     );
     event RedeemerAdminApprove(
-        address indexed tokenOwner
+        address indexed tokensOwner
     );
     event RedeemerAdminFinalApproval(
-        address indexed tokenOwner
+        address indexed tokensOwner
     );
     event RedeemerCancel(
         address indexed tokensOwner,
@@ -49,11 +50,11 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         uint256 indexed newBatchSize
     );
     event RedeemerUserFinalize(
-        address indexed tokenOwner,
+        address indexed tokensOwner,
         uint256 indexed fees
     );
     event RedeemerUserVerify(
-        address indexed tokenOwner
+        address indexed tokensOwner
     );
 
     address public contractRegistrar;
@@ -76,47 +77,18 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             revert(string(bytes.concat("C9Redeemer: ", message)));
     }
 
-    /**
-     * @dev
-     */
-    function _genCode() 
-        internal view
-        returns(uint256) {
-            return uint256(
-                keccak256(
-                    abi.encodePacked(
-                        block.timestamp,
-                        block.difficulty,
-                        block.number,
-                        msg.sender
-                    )
-                )
-            ) % 10**6;
-    }
-
-    function _paymentHandler(uint256 _minRedeemWei)
+    function _removeRedemptionData(address _tokenOwner)
         internal {
-            if (msg.value < _minRedeemWei) {
-                _errMsg("invalid payment amount");
-            }
-            (bool success,) = payable(owner).call{value: msg.value}("");
-            if (!success) {
-                _errMsg("payment failure");
-            }
+            delete redeemerData[_tokenOwner];
     }
 
-    function _removeRedemptionData(address _tokensOwner)
-        internal {
-            delete redeemerData[_tokensOwner];
-    }
-
-    function add(address _tokensOwner, uint32[] calldata _tokenId)
+    function add(address _tokenOwner, uint32[] calldata _tokenId)
         external override
         onlyRole(NFTCONTRACT_ROLE)
         notFrozen() {
-            uint32[] memory _data = redeemerData[_tokensOwner];
+            uint32[] memory _data = redeemerData[_tokenOwner];
             if (_data.length == 0) {
-                _errMsg("no batch in process");
+                _errMsg("no batch in process, use start");
             }
             if (_data[0] > 3) {
                 _errMsg("current batch too far in process");
@@ -127,136 +99,162 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
                 _errMsg("max batch size is 22");
             }
             for (uint256 i; i<_tokenId.length; i++) {
-                redeemerData[_tokensOwner].push(_tokenId[i]);
+                redeemerData[_tokenOwner].push(_tokenId[i]);
             }
-            emit RedeemerAdd(_tokensOwner, _existingPending, _newBatchSize);     
+            emit RedeemerAdd(_tokenOwner, _existingPending, _newBatchSize);     
     }
 
     /**
-     * @dev (batch version)
-     * This needs to return the tokenId array to know which tokens to
-     * unlock in the main contract.
+     * @dev
+     * Cancels redemption process from the token contract. It 
+     * returns the redemption data that contains the list of 
+     * tokenId to unlock.
      */
-    function cancel(address _tokensOwner)
+    function cancel(address _tokenOwner)
         external override
         onlyRole(NFTCONTRACT_ROLE)
         returns(uint32[] memory _data, uint256 _batchSize) {
-            _data = redeemerData[_tokensOwner];
+            _data = redeemerData[_tokenOwner];
             if (_data.length == 0) {
                 _errMsg("no batch in process");
             }
             _batchSize = _data.length-2;
-            _removeRedemptionData(_tokensOwner);
-            emit RedeemerCancel(_tokensOwner, _data[0], _data.length-2);
+            _removeRedemptionData(_tokenOwner);
+            emit RedeemerCancel(_tokenOwner, _data[0], _data.length-2);
     }
 
     /*
-     * @dev Gets the redemption (batch) _tokenOwner is at.
+     * @dev
+     * Gets the redemption info/array of _tokenOwner.
      */
-    function getRedemptionInfo(address _tokensOwner)
+    function getRedemptionInfo(address _tokenOwner)
         public view override
         returns(uint32[] memory) {
-            return redeemerData[_tokensOwner];
+            return redeemerData[_tokenOwner];
     }
 
     /*
      * @dev Gets the redemption (batch) _tokenOwner is at.
      */
-    function getRedemptionStep(address _tokensOwner)
+    function getRedemptionStep(address _tokenOwner)
         public view override
         returns(uint256) {
-            uint32[] memory _data = getRedemptionInfo(_tokensOwner);
+            uint32[] memory _data = getRedemptionInfo(_tokenOwner);
             return _data.length > 0 ? _data[0] : 0;
     }
 
-    function remove(address _tokensOwner, uint32[] calldata _tokenId)
+    /*
+     * @dev
+     * Remove individual tokens from the redemption process.
+     * This is useful is a tokenOwner only wants to remove a 
+     * fraction of tokens in the process. Otherwise it may 
+     * end up being more expensive than cancel.
+     */
+    function remove(address _tokenOwner, uint32[] calldata _tokenId)
         external override
         onlyRole(NFTCONTRACT_ROLE) {
-            uint32[] memory _data = redeemerData[_tokensOwner];
-            if (_data.length == 0) {
+            uint32[] memory _data = redeemerData[_tokenOwner];
+            uint256 _currentDataLength = _data.length;
+            if (_currentDataLength == 0) {
                 _errMsg("no batch in process");
             }
-            uint256 _existingPending = _data.length-2;
-            if (_tokenId.length == _existingPending) {
-                _errMsg("use cancel to remove whole batch");
+            if (_tokenId.length >= _data.length-2) {
+                _errMsg("cancel to remove remaining batch");
             }
-            if (_tokenId.length > _existingPending) {
-                _errMsg("cannot remove more than in batch");
-            }
+            /*
+            Swap and pop in memory instead of storage. This keeps 
+            gas cost down for larger _tokenId arrays.
+            */
             for (uint256 i; i<_tokenId.length; i++) {
-                for (uint j; j<_data.length; j++) {
-                    if (_tokenId[i] == _data[j+2]) {
-                        // Swap, copy to storage, pop, copy back to memory
-                        _data[j+2] = _data[_data.length-1];
-                        redeemerData[_tokensOwner] = _data;
-                        redeemerData[_tokensOwner].pop();
-                        _data = redeemerData[_tokensOwner];
+                for (uint j=2; j<_currentDataLength; j++) {
+                    if (_tokenId[i] == _data[j]) {
+                        _data[j] = _data[_currentDataLength-1];
+                        _currentDataLength -= 1;
                         break;
                     }
                 }
             }
-            emit RedeemerRemove(_tokensOwner, _existingPending, _data.length-2);  
+            /*
+            Copy swapped array and the pop off all removed 
+            tokeIds which will appear at the end of the array.
+            */
+            redeemerData[_tokenOwner] = _data;
+            for (uint i; i<_tokenId.length; i++) {
+                redeemerData[_tokenOwner].pop();
+            }
+
+            emit RedeemerRemove(
+                _tokenOwner,
+                _data.length-2,
+                _data.length-2-_tokenId.length
+            );  
     }
 
     /**
-     * @dev Step 1. (batch version)
-     * Cost: mentioned in C9Token redeemStart()
-     * 1x token = 108,000 gas   -> 108,000 gas per
-     * 2x token = 123,000 gas   -> 61,500 gas per
-     * 6x token = 185,000 gas   -> 31,800 gas per
-     * 10x token = 269,000 gas  -> 26,900 gas per
-     * 14x token = 332,000 gas  -> 23,700 gas per
+     * @dev Step 1.
+     * Token owner initiates redemption process from token contract.
+     * The step and code are pushed into the array first for convenience
+     * as those are accessed more often throughout the process.
     */
-    function start(address _tokensOwner, uint32[] calldata _tokenId)
+    function start(address _tokenOwner, uint32[] calldata _tokenId)
         external override
         onlyRole(NFTCONTRACT_ROLE)
-        redemptionStep(_tokensOwner, 0)
+        redemptionStep(_tokenOwner, 0)
         notFrozen() {
             if (_tokenId.length > MAX_BATCH_SIZE) {
                 _errMsg("max batch size is 22");
             }
-            bool _registerOwner = IC9Registrar(contractRegistrar).addressRegistered(_tokensOwner);
-            uint256 step = _registerOwner ? 4 : 2;
-            redeemerData[_tokensOwner].push(uint32(step));
-            redeemerData[_tokensOwner].push(uint32(_genCode()));
+            bool _registerOwner = IC9Registrar(contractRegistrar).addressRegistered(_tokenOwner);
+            uint256 _step = _registerOwner ? 4 : 2;
+            uint256 _code = uint256(
+                keccak256(
+                    abi.encodePacked(
+                        block.timestamp,
+                        block.difficulty,
+                        block.number,
+                        msg.sender
+                    )
+                )
+            ) % 10**6;
+            redeemerData[_tokenOwner].push(uint32(_step));
+            redeemerData[_tokenOwner].push(uint32(_code));
             for (uint256 i; i<_tokenId.length; i++) {
-                redeemerData[_tokensOwner].push(_tokenId[i]);
+                redeemerData[_tokenOwner].push(_tokenId[i]);
             }
-            emit RedeemerInit(_tokensOwner, _registerOwner, _tokenId.length);     
+            emit RedeemerInit(_tokenOwner, _registerOwner, _tokenId.length);     
     }
 
-    /*
-
-    */
-
-
-    function adminGetRedemptionCode(address _tokensOwner)
+     /**
+     * @dev Step 2a.
+     * Admin retrieves code.
+     */
+    function adminGetRedemptionCode(address _tokenOwner)
         external view
         onlyRole(DEFAULT_ADMIN_ROLE)
         returns (uint256) {
-            return redeemerData[_tokensOwner][1];
+            return redeemerData[_tokenOwner][1];
     }
 
     /**
-     * @dev Step 2b. (batch version)
+     * @dev Step 2b.
      * Admin confirms user info via front end was received. Code  
      * is emailed to that specified within info, along with the 
-     * rest of the info for the user to verify.
+     * rest of the info for the user to verify info is correct.
      * Cost: ~38,000 gas
      */
-    function adminVerifyRedemptionCode(address _tokensOwner, uint256 _code)
+    function adminVerifyRedemptionCode(address _tokenOwner, uint256 _code)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
-        redemptionStep(_tokensOwner, 2) {
-            if (_code != redeemerData[_tokensOwner][1]) {
+        redemptionStep(_tokenOwner, 2) {
+            if (_code != redeemerData[_tokenOwner][1]) {
                 _errMsg("code mismatch");
             }
-            redeemerData[_tokensOwner][0] = 3;
-            emit RedeemerAdminApprove(_tokensOwner);
+            redeemerData[_tokenOwner][0] = 3;
+            emit RedeemerAdminApprove(_tokenOwner);
     }
 
     /**
-     * @dev Step 3. (batch version)
+     * @dev Step 3.
      * User verifies their info submitted to the frontend by checking 
      * email confirmation with code, then submitting confirmation code.
      * Cost: ~35,000 gas
@@ -264,15 +262,23 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     function userVerifyRedemption(uint256 _code)
         external
         redemptionStep(msg.sender, 3) {
-            if (_code !=redeemerData[msg.sender][1]) {
+            if (_code != redeemerData[msg.sender][1]) {
                 _errMsg("code mismatch");
             }
             redeemerData[msg.sender][0] = 4;
             emit RedeemerUserVerify(msg.sender);
     }
 
+    function getMinRedeemUsd(uint256 _batchSize)
+        public view override
+        returns (uint256) {
+            uint256 _n = _batchSize-1;
+            uint256 _bps = _n == 0 ? 100 : 98**_n / 10**(_n*2-2);
+            return redeemMinPrice*_batchSize*_bps/100;
+    }
+
     /**
-     * @dev Step 4. (batch version)
+     * @dev Step 4.
      * User pays final fees that include insured shipping and 
      * handling costs. 
      * Note: Fee will need to be done externally, as periodically updating 
@@ -286,31 +292,34 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     function userFinishRedemption()
         external payable
         redemptionStep(msg.sender, 4) {
-            // uint256 _batchSize = _redemptionData[msg.sender].tokenId.length;
-            // uint256 _n = _batchSize-1;
-            // uint256 _bps = _n == 0 ? 100 : 98**_n / 10**(_n*2-2);
-            // uint256 _minRedeemUsd = redeemMinPrice*_batchSize*_bps/100;
+            uint256 _minRedeemUsd = getMinRedeemUsd(redeemerData[msg.sender].length-2);
             // uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_minRedeemUsd);
-            // _paymentHandler(_minRedeemWei);
+            // if (msg.value < _minRedeemWei) {
+            //     _errMsg("invalid payment amount");
+            // }
+            // (bool success,) = payable(owner).call{value: msg.value}("");
+            // if (!success) {
+            //     _errMsg("payment failure");
+            // }
             redeemerData[msg.sender][0] = 5;
             emit RedeemerUserFinalize(msg.sender, msg.value);
     }
 
     /**
-     * @dev Step 5. (BATCH)
+     * @dev Step 5.
      * Admin final approval. Admin verifies that all 
      * redemption fees have been paid. Beyond this step, the redemption 
      * user will receive tracking information by the email they provided 
      * in a prior step.
      */
-    function adminFinalApproval(address _tokensOwner)
+    function adminFinalApproval(address _tokenOwner)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
-        redemptionStep(_tokensOwner, 5)
+        redemptionStep(_tokenOwner, 5)
         notFrozen() {
-            IC9Token(contractToken).redeemFinish(redeemerData[_tokensOwner]);
-            _removeRedemptionData(_tokensOwner);
-            emit RedeemerAdminFinalApproval(_tokensOwner);
+            IC9Token(contractToken).redeemFinish(redeemerData[_tokenOwner]);
+            _removeRedemptionData(_tokenOwner);
+            emit RedeemerAdminFinalApproval(_tokenOwner);
     }
 
     /**
