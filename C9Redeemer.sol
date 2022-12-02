@@ -82,6 +82,12 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             delete redeemerData[_tokenOwner];
     }
 
+    /*
+     * @dev
+     * Add individual tokens to an existing redemption process. 
+     * Once user final fees have been paid, tokens can no longer 
+     * be added to the existing batch.
+     */
     function add(address _tokenOwner, uint32[] calldata _tokenId)
         external override
         onlyRole(NFTCONTRACT_ROLE)
@@ -90,7 +96,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             if (_data.length == 0) {
                 _errMsg("no batch in process, use start");
             }
-            if (_data[0] > 3) {
+            if (_data[0] > 4) {
                 _errMsg("current batch too far in process");
             }
             uint256 _existingPending = _data.length-2;
@@ -120,7 +126,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             }
             _batchSize = _data.length-2;
             _removeRedemptionData(_tokenOwner);
-            emit RedeemerCancel(_tokenOwner, _data[0], _data.length-2);
+            emit RedeemerCancel(_tokenOwner, _data[0], _batchSize);
     }
 
     /*
@@ -134,7 +140,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     }
 
     /*
-     * @dev Gets the redemption (batch) _tokenOwner is at.
+     * @dev Gets the redemption step _tokenOwner is at.
      */
     function getRedemptionStep(address _tokenOwner)
         public view override
@@ -146,7 +152,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     /*
      * @dev
      * Remove individual tokens from the redemption process.
-     * This is useful is a tokenOwner only wants to remove a 
+     * This is useful is a tokenOwner wants to remove a 
      * fraction of tokens in the process. Otherwise it may 
      * end up being more expensive than cancel.
      */
@@ -182,7 +188,6 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             for (uint i; i<_tokenId.length; i++) {
                 redeemerData[_tokenOwner].pop();
             }
-
             emit RedeemerRemove(
                 _tokenOwner,
                 _data.length-2,
@@ -295,12 +300,13 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             uint256 _minRedeemUsd = getMinRedeemUsd(redeemerData[msg.sender].length-2);
             // uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_minRedeemUsd);
             // if (msg.value < _minRedeemWei) {
-            //     _errMsg("invalid payment amount");
-            // }
-            // (bool success,) = payable(owner).call{value: msg.value}("");
-            // if (!success) {
-            //     _errMsg("payment failure");
-            // }
+            if (msg.value == 0) {
+                _errMsg("invalid payment amount");
+            }
+            (bool success,) = payable(owner).call{value: msg.value}("");
+            if (!success) {
+                _errMsg("payment failure");
+            }
             redeemerData[msg.sender][0] = 5;
             emit RedeemerUserFinalize(msg.sender, msg.value);
     }

@@ -516,7 +516,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * can still cancel the process before finishing.
      * Cost:
      * 1x token = 108,000 gas   -> 108,000 gas per
-     * 2x token = 123,000 gas   -> 61,500 gas per
+     * 2x token = 124,000 gas   -> 62,000 gas per
      * 6x token = 185,000 gas   -> 31,800 gas per
      * 10x token = 269,000 gas  -> 26,900 gas per
      * 14x token = 332,000 gas  -> 23,700 gas per
