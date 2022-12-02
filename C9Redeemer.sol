@@ -11,6 +11,7 @@ interface IC9Redeemer {
     function cancel(address _tokensOwner) external returns(uint32[] memory _data, uint256 _batchSize);
     function getRedemptionStep(address _tokenOwner) external view returns(uint256);
     function getRedemptionInfo(address _tokensOwner) external view returns(uint32[] memory);
+    function remove(address _tokensOwner, uint32[] calldata _tokenId) external;
     function start(address _tokensOwner, uint32[] calldata _tokenId) external;
 }
 
@@ -41,6 +42,11 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         address indexed tokensOwner,
         bool indexed registered,
         uint256 indexed batchSize
+    );
+    event RedeemerRemove(
+        address indexed tokensOwner,
+        uint256 indexed existingPending,
+        uint256 indexed newBatchSize
     );
     event RedeemerUserFinalize(
         address indexed tokenOwner,
@@ -104,16 +110,32 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             delete redeemerData[_tokensOwner];
     }
 
+    function add(address _tokensOwner, uint32[] calldata _tokenId)
+        external override
+        onlyRole(NFTCONTRACT_ROLE)
+        notFrozen() {
+            uint32[] memory _data = redeemerData[_tokensOwner];
+            if (_data.length == 0) {
+                _errMsg("no batch in process");
+            }
+            if (_data[0] > 3) {
+                _errMsg("current batch too far in process");
+            }
+            uint256 _existingPending = _data.length-2;
+            uint256 _newBatchSize = _tokenId.length+_existingPending;
+            if (_newBatchSize > MAX_BATCH_SIZE) {
+                _errMsg("max batch size is 22");
+            }
+            for (uint256 i; i<_tokenId.length; i++) {
+                redeemerData[_tokensOwner].push(_tokenId[i]);
+            }
+            emit RedeemerAdd(_tokensOwner, _existingPending, _newBatchSize);     
+    }
+
     /**
      * @dev (batch version)
      * This needs to return the tokenId array to know which tokens to
      * unlock in the main contract.
-     * Cost:
-     * 1x token = 48,900 gas    -> 48,900 gas per
-     * 2x token = 60,600 gas    -> 30,300 gas per
-     * 6x token = 108,000 gas   -> 18,000 gas per
-     * 10x token = 155,000 gas  -> 15,500 gas per
-     * 14x token = 203,000 gas  -> 14,500 gas per
      */
     function cancel(address _tokensOwner)
         external override
@@ -147,6 +169,35 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             return _data.length > 0 ? _data[0] : 0;
     }
 
+    function remove(address _tokensOwner, uint32[] calldata _tokenId)
+        external override
+        onlyRole(NFTCONTRACT_ROLE) {
+            uint32[] memory _data = redeemerData[_tokensOwner];
+            if (_data.length == 0) {
+                _errMsg("no batch in process");
+            }
+            uint256 _existingPending = _data.length-2;
+            if (_tokenId.length == _existingPending) {
+                _errMsg("use cancel to remove whole batch");
+            }
+            if (_tokenId.length > _existingPending) {
+                _errMsg("cannot remove more than in batch");
+            }
+            for (uint256 i; i<_tokenId.length; i++) {
+                for (uint j; j<_data.length; j++) {
+                    if (_tokenId[i] == _data[j+2]) {
+                        // Swap, copy to storage, pop, copy back to memory
+                        _data[j+2] = _data[_data.length-1];
+                        redeemerData[_tokensOwner] = _data;
+                        redeemerData[_tokensOwner].pop();
+                        _data = redeemerData[_tokensOwner];
+                        break;
+                    }
+                }
+            }
+            emit RedeemerRemove(_tokensOwner, _existingPending, _data.length-2);  
+    }
+
     /**
      * @dev Step 1. (batch version)
      * Cost: mentioned in C9Token redeemStart()
@@ -174,60 +225,10 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             emit RedeemerInit(_tokensOwner, _registerOwner, _tokenId.length);     
     }
 
-    function add(address _tokensOwner, uint32[] calldata _tokenId)
-        external override
-        //onlyRole(NFTCONTRACT_ROLE)
-        notFrozen() {
-            uint32[] memory _data = redeemerData[_tokensOwner];
-            if (_data.length == 0) {
-                _errMsg("no batch in process");
-            }
-            if (_data[0] > 3) {
-                _errMsg("current batch too far in process");
-            }
-            uint256 _existingPending = _data.length-2;
-            uint256 _newBatchSize = _tokenId.length+_existingPending;
-            if (_newBatchSize > MAX_BATCH_SIZE) {
-                _errMsg("max batch size is 22");
-            }
-            for (uint256 i; i<_tokenId.length; i++) {
-                redeemerData[_tokensOwner].push(_tokenId[i]);
-            }
-            emit RedeemerAdd(_tokensOwner, _existingPending, _newBatchSize);     
-    }
-
     /*
 
     */
-    function remove(address _tokensOwner, uint32[] calldata _tokenId)
-        external //overide
-        //onlyRole(NFTCONTRACT_ROLE)
-        {
-        uint32[] memory _data = redeemerData[_tokensOwner];
-        if (_data.length == 0) {
-            _errMsg("no batch in process");
-        }
-        uint256 _existingPending = _data.length-2;
-        if (_tokenId.length == _existingPending) {
-            _errMsg("use cancel to remove whole batch");
-        }
-        if (_tokenId.length > _existingPending) {
-            _errMsg("cannot remove more than in batch");
-        }
-        
-        for (uint256 i; i<_tokenId.length; i++) {
-            for (uint j; j<_data.length; j++) {
-                if (_tokenId[i] == _data[j+2]) {
-                    // Swap, copy to storage, pop, copy back to memory
-                    _data[j+2] = _data[_data.length-1];
-                    redeemerData[_tokensOwner] = _data;
-                    redeemerData[_tokensOwner].pop();
-                    _data = redeemerData[_tokensOwner];
-                    break;
-                }
-            }
-        }
-    }
+
 
     function adminGetRedemptionCode(address _tokensOwner)
         external view

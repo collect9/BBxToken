@@ -14,8 +14,10 @@ import "./utils/Helpers.sol";
 uint256 constant MAX_BATCH_SIZE = 22;
 
 interface IC9Token {
+    function redeemAdd(uint32[] calldata _tokenId) external;
     function redeemCancel() external;
     function redeemFinish(uint32[] calldata _tokenId) external;
+    function redeemRemove(uint32[] calldata _tokenId) external;
     function redeemStart(uint32[] calldata _tokenId) external;
     function preRedeemable(uint256 _tokenId) external view returns(bool);
     //function redeemCancel(uint256 _tokenId) external;
@@ -69,25 +71,21 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     uint256 public preRedeemablePeriod = 31556926; //seconds
     event RedemptionCancel(
         address indexed tokenOwner,
-        uint256 indexed tokenId
-    );
-    event RedemptionBatchCancel(
-        address indexed tokenOwner,
         uint256 indexed batchSize
     );
     event RedemptionFinish(
-        address indexed tokenOwner,
-        uint256 indexed tokenId
-    );
-    event RedemptionBatchFinish(
         address indexed tokenOwner,
         uint256 indexed batchSize
     );
     event RedemptionStart(
         address indexed tokenOwner,
-        uint256 indexed tokenId
+        uint256 indexed batchSize
     );
-    event RedemptionBatchStart(
+    event RedemptionAdd(
+        address indexed tokenOwner,
+        uint256 indexed batchSize
+    );
+    event RedemptionRemove(
         address indexed tokenOwner,
         uint256 indexed batchSize
     );
@@ -428,8 +426,8 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      */
     function _unlockToken(uint256 _tokenId)
         internal
-        inRedemption(_tokenId, true)
-        isOwner(_tokenId) {
+        isOwner(_tokenId)
+        inRedemption(_tokenId, true) {
             _uTokenData[_tokenId] = _setTokenParam(
                 _uTokenData[_tokenId],
                 POS_LOCKED,
@@ -439,9 +437,37 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     }
 
     /**
+     * @dev Add tokens to an existing redemption process.
+     * Once added, the token is locked from further exchange until 
+     * either canceled or removed.
+     * Note: While costs appear lower per token than the 
+     * start process, the reported costs below ignore the 
+     * initial start cost.
+     * Cost:
+     * 1x token = 65,000 gas    -> 65,000 gas per
+     * 2x token = 80,000 gas    -> 40,000 gas per
+     * 5x token = 126,000 gas   -> 25,200 gas per
+     * 10x token = 226,000 gas  -> 22,600 gas per
+     * 13x token = 273,000 gas  -> 21,000 gas per
+     */
+    function redeemAdd(uint32[] calldata _tokenId)
+        external override {
+            for (uint256 i; i<_tokenId.length; i++) {
+                _lockToken(_tokenId[i]);
+            }
+            IC9Redeemer(contractRedeemer).add(msg.sender, _tokenId);
+            emit RedemptionAdd(msg.sender, _tokenId.length);
+    }
+
+    /**
      * @dev Allows user to cancel redemption process and resume 
      * token movement exchange capabilities.
-     * Cost: in C9Redeemer contract.
+     * Cost:
+     * 1x token = 48,900 gas    -> 48,900 gas per
+     * 2x token = 60,600 gas    -> 30,300 gas per
+     * 6x token = 108,000 gas   -> 18,000 gas per
+     * 10x token = 155,000 gas  -> 15,500 gas per
+     * 14x token = 203,000 gas  -> 14,500 gas per
      */
     function redeemCancel()
         external override {
@@ -449,7 +475,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             for (uint256 i; i<_batchSize; i++) {
                 _unlockToken(_tokenId[i+2]);
             }
-            emit RedemptionBatchCancel(msg.sender, _batchSize);
+            emit RedemptionCancel(msg.sender, _batchSize);
     }
 
     function redeemFinish(uint32[] calldata _tokenId)
@@ -458,14 +484,42 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             for (uint i=2; i<_tokenId.length; i++) {
                 _setTokenRedeemed(_tokenId[i]);
             }
-            emit RedemptionBatchFinish(ownerOf(_tokenId[2]), _tokenId.length);
+            emit RedemptionFinish(ownerOf(_tokenId[2]), _tokenId.length);
+    }
+
+    /**
+     * @dev Allows user to remove specified tokens from 
+     * an existing redemption process.
+     * Note that this is quite a bit more expensive than 
+     * canceling. Thus if a user plans to remove a 
+     * majority of tokens then it may be cheaper to just 
+     * cancel and restart.
+     * Cost: 
+     * 1x token = 65,000 gas    -> 65,000 gas per
+     * 2x token = 84,000 gas    -> 42,000 gas per
+     * 5x token = 145,000 gas   -> 29,000 gas per
+     * 10x token = 273,500 gas  -> 27,500 gas per
+     * 14x token = 385,000 gas  -> 27,500 gas per
+     */
+    function redeemRemove(uint32[] calldata _tokenId)
+        external override {
+            IC9Redeemer(contractRedeemer).remove(msg.sender, _tokenId);
+            for (uint256 i; i<_tokenId.length; i++) {
+                _unlockToken(_tokenId[i]);
+            }
+            emit RedemptionRemove(msg.sender, _tokenId.length);
     }
 
     /**
      * @dev Starts the redemption process. Only the token holder can start.
      * Once started, the token is locked from further exchange. The user 
      * can still cancel the process before finishing.
-     * Cost: in C9Redeemer contract.
+     * Cost:
+     * 1x token = 108,000 gas   -> 108,000 gas per
+     * 2x token = 123,000 gas   -> 61,500 gas per
+     * 6x token = 185,000 gas   -> 31,800 gas per
+     * 10x token = 269,000 gas  -> 26,900 gas per
+     * 14x token = 332,000 gas  -> 23,700 gas per
      */
     function redeemStart(uint32[] calldata _tokenId)
         external override {
@@ -473,7 +527,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
                 _lockToken(_tokenId[i]);
             }
             IC9Redeemer(contractRedeemer).start(msg.sender, _tokenId);
-            emit RedemptionBatchStart(msg.sender, _tokenId.length);
+            emit RedemptionStart(msg.sender, _tokenId.length);
     }
 
     /**
