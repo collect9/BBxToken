@@ -4,25 +4,22 @@ import "./utils/ERC721Enum32.sol";
 
 import "./C9MetaData.sol";
 import "./C9OwnerControl.sol";
-import "./C9Redeemer2.sol";
+import "./C9Redeemer4.sol";
 import "./C9Struct.sol";
 import "./C9SVG.sol";
 
 import "./utils/Base64.sol";
 import "./utils/Helpers.sol";
 
-uint256 constant MAX_BATCH_SIZE = 22;
+uint256 constant MAX_BATCH_SIZE = 7;
 
 interface IC9Token {
     function redeemAdd(uint32[] calldata _tokenId) external;
     function redeemCancel() external;
-    function redeemFinish(uint32[] calldata _tokenId) external;
+    function redeemFinish(uint256 _redeemerData) external;
     function redeemRemove(uint32[] calldata _tokenId) external;
-    function redeemStart(uint32[] calldata _tokenId) external;
+    function redeemStart(uint256[] calldata _tokenId) external;
     function preRedeemable(uint256 _tokenId) external view returns(bool);
-    //function redeemCancel(uint256 _tokenId) external;
-    //function redeemFinish(uint256 _tokenId) external;
-    //function redeemStart(uint256 _tokenId) external;
     function setTokenUpgraded(uint256 _tokenId) external;
     function tokenLocked(uint256 _tokenId) external view returns(bool);
     function tokenUpgraded(uint256 _tokenId) external view returns(bool);
@@ -471,20 +468,25 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      */
     function redeemCancel()
         external override {
-            (uint32[] memory _tokenId, uint256 _batchSize) = IC9Redeemer(contractRedeemer).cancel(msg.sender);
+            uint256 _redeemerData = IC9Redeemer(contractRedeemer).cancel(msg.sender);
+            uint256 _batchSize = uint256(uint8(_redeemerData>>24));
             for (uint256 i; i<_batchSize; i++) {
-                _unlockToken(_tokenId[i+2]);
+                _unlockToken(uint256(uint32(_redeemerData>>(32*(i+1)))));
             }
             emit RedemptionCancel(msg.sender, _batchSize);
     }
 
-    function redeemFinish(uint32[] calldata _tokenId)
+    function redeemFinish(uint256 _redeemerData)
         external override
         onlyRole(REDEEMER_ROLE) {
-            for (uint i=2; i<_tokenId.length; i++) {
-                _setTokenRedeemed(_tokenId[i]);
+            uint256 _batchSize = uint256(uint8(_redeemerData>>24));
+            for (uint i; i<_batchSize; i++) {
+                _setTokenRedeemed(uint256(uint32(_redeemerData>>32*(i+1))));
             }
-            emit RedemptionFinish(ownerOf(_tokenId[2]), _tokenId.length);
+            emit RedemptionFinish(
+                ownerOf(uint256(uint32(_redeemerData>>32))),
+                _batchSize
+            );
     }
 
     /**
@@ -521,7 +523,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * 10x token = 269,000 gas  -> 26,900 gas per
      * 14x token = 332,000 gas  -> 23,700 gas per
      */
-    function redeemStart(uint32[] calldata _tokenId)
+    function redeemStart(uint256[] calldata _tokenId)
         external override {
             for (uint256 i; i<_tokenId.length; i++) {
                 _lockToken(_tokenId[i]);
