@@ -14,7 +14,7 @@ import "./utils/Helpers.sol";
 uint256 constant MAX_BATCH_SIZE = 7;
 
 interface IC9Token {
-    function redeemAdd(uint32[] calldata _tokenId) external;
+    function redeemAdd(uint256[] calldata _tokenId) external;
     function redeemCancel() external;
     function redeemFinish(uint256 _redeemerData) external;
     function redeemRemove(uint32[] calldata _tokenId) external;
@@ -447,7 +447,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * 10x token = 226,000 gas  -> 22,600 gas per
      * 13x token = 273,000 gas  -> 21,000 gas per
      */
-    function redeemAdd(uint32[] calldata _tokenId)
+    function redeemAdd(uint256[] calldata _tokenId)
         external override {
             for (uint256 i; i<_tokenId.length; i++) {
                 _lockToken(_tokenId[i]);

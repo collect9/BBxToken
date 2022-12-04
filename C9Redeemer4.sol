@@ -7,7 +7,7 @@ import "./C9Token2.sol";
 import "./utils/EthPricer.sol";
 
 interface IC9Redeemer {
-    function add(address _tokenOwner, uint32[] calldata _tokenId) external;
+    function add(address _tokenOwner, uint256[] calldata _tokenId) external;
     function cancel(address _tokenOwner) external returns(uint256 _data);
     function getMinRedeemUSD(uint256 _batchSize) external view returns(uint256);
     function getRedemptionStep(address _tokenOwner) external view returns(uint256);
@@ -102,26 +102,29 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
      * Once user final fees have been paid, tokens can no longer 
      * be added to the existing batch.
      */
-    function add(address _tokenOwner, uint32[] calldata _tokenId)
+    function add(address _tokenOwner, uint256[] calldata _tokenId)
         external override
         onlyRole(NFTCONTRACT_ROLE)
         notFrozen() {
-            uint32[] memory _data = redeemerData[_tokenOwner];
-            if (_data.length == 0) {
-                _errMsg("no batch in process, use start");
+            uint256 _data = redeemerData4[_tokenOwner];
+            uint256 _batchSize = uint256(uint8(_data>>24));
+            if (_batchSize == 0) {
+                _errMsg("no batch in process");
             }
-            if (_data[0] > 4) {
+            if (uint256(uint8(_data>>0)) > 4) {
                 _errMsg("current batch too far in process");
             }
-            uint256 _existingPending = _data.length-2;
-            uint256 _newBatchSize = _tokenId.length+_existingPending;
+            uint256 _newBatchSize = _tokenId.length+_batchSize;
             if (_newBatchSize > MAX_BATCH_SIZE) {
-                _errMsg("max batch size is 22");
+                _errMsg("max batch size is 7");
             }
+            _data = _setTokenParam(_data, 24, _newBatchSize, 255);
+            uint256 _offset = 32*_batchSize + 32;
             for (uint256 i; i<_tokenId.length; i++) {
-                redeemerData[_tokenOwner].push(_tokenId[i]);
+                _data |=  _tokenId[i]<<(32*i+_offset);
             }
-            emit RedeemerAdd(_tokenOwner, _existingPending, _newBatchSize);     
+            redeemerData4[_tokenOwner] = _data;
+            emit RedeemerAdd(_tokenOwner, _batchSize, _newBatchSize);     
     }
 
     /**
@@ -207,6 +210,9 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
                     }
                 }
             }
+            /*
+            Make indices array then use indices to create 
+            new data.*/
             /*
             Copy swapped array and the pop off all removed 
             tokeIds which will appear at the end of the array.
