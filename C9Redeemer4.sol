@@ -120,8 +120,9 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             }
             _data = _setTokenParam(_data, 24, _newBatchSize, 255);
             uint256 _offset = 32*_batchSize + 32;
-            for (uint256 i; i<_tokenId.length; i++) {
+            for (uint256 i; i<_tokenId.length;) {
                 _data |=  _tokenId[i]<<(32*i+_offset);
+                unchecked {i++;}
             }
             redeemerData4[_tokenOwner] = _data;
             emit RedeemerAdd(_tokenOwner, _batchSize, _newBatchSize);     
@@ -201,14 +202,16 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             Swap and pop in memory instead of storage. This keeps 
             gas cost down for larger _tokenId arrays.
             */
-            for (uint256 i; i<_tokenId.length; i++) {
-                for (uint j=2; j<_currentDataLength; j++) {
+            for (uint256 i; i<_tokenId.length;) {
+                for (uint j=2; j<_currentDataLength;) {
                     if (_tokenId[i] == _data[j]) {
                         _data[j] = _data[_currentDataLength-1];
                         _currentDataLength -= 1;
+                        unchecked {j++;}
                         break;
                     }
                 }
+                unchecked {i++;}
             }
             /*
             Make indices array then use indices to create 
@@ -255,15 +258,21 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
                         _seed
                     )
                 )
-            ) % 65535;
-            _seed += _code;
+            );
+            unchecked {
+                _code %= 65535;
+                _seed += _code;
+            }
 
             uint256 _newRedeemerData;
             _newRedeemerData |= _step<<0;
             _newRedeemerData |= _code<<8;
             _newRedeemerData |= _batchSize<<24;
-            for (uint256 i; i<_batchSize; i++) {
-                _newRedeemerData |= _tokenId[i]<<(32*(i+1));
+            uint256 _offset;
+            for (uint256 i; i<_batchSize;) {
+                unchecked {_offset = 32*(i+1);}
+                _newRedeemerData |= _tokenId[i]<<_offset;
+                unchecked {i++;}
             }
             redeemerData4[_tokenOwner] = _newRedeemerData;
             emit RedeemerInit(_tokenOwner, _registerOwner, _batchSize);     

@@ -280,9 +280,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             if (receiver == address(0)) {
                 receiver = royaltyDefaultReceiver;
             }
-            uint256 _tokenData = _uTokenData[_tokenId];
-            uint256 _fraction = uint256(uint16(_tokenData>>POS_ROYALTY));
-            //uint256 _fraction = _getTokenParam(_tokenId, TokenProps.ROYALTY);
+            uint256 _fraction = uint256(uint16(_uTokenData[_tokenId]>>POS_ROYALTY));
             uint256 royaltyAmount = (_salePrice * _fraction) / 10000;
             return (receiver, royaltyAmount);
     }
@@ -449,10 +447,11 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      */
     function redeemAdd(uint256[] calldata _tokenId)
         external override {
-            for (uint256 i; i<_tokenId.length; i++) {
-                _lockToken(_tokenId[i]);
-            }
             IC9Redeemer(contractRedeemer).add(msg.sender, _tokenId);
+            for (uint256 i; i<_tokenId.length;) {
+                _lockToken(_tokenId[i]);
+                unchecked {i++;} //checked in IC9Redeemer
+            }
             emit RedemptionAdd(msg.sender, _tokenId.length);
     }
 
@@ -470,8 +469,9 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         external override {
             uint256 _redeemerData = IC9Redeemer(contractRedeemer).cancel(msg.sender);
             uint256 _batchSize = uint256(uint8(_redeemerData>>24));
-            for (uint256 i; i<_batchSize; i++) {
+            for (uint256 i; i<_batchSize;) {
                 _unlockToken(uint256(uint32(_redeemerData>>(32*(i+1)))));
+                unchecked {i++;}
             }
             emit RedemptionCancel(msg.sender, _batchSize);
     }
@@ -480,8 +480,9 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         external override
         onlyRole(REDEEMER_ROLE) {
             uint256 _batchSize = uint256(uint8(_redeemerData>>24));
-            for (uint i; i<_batchSize; i++) {
+            for (uint i; i<_batchSize;) {
                 _setTokenRedeemed(uint256(uint32(_redeemerData>>32*(i+1))));
+                unchecked {i++;}
             }
             emit RedemptionFinish(
                 ownerOf(uint256(uint32(_redeemerData>>32))),
@@ -525,10 +526,12 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      */
     function redeemStart(uint256[] calldata _tokenId)
         external override {
-            for (uint256 i; i<_tokenId.length; i++) {
-                _lockToken(_tokenId[i]);
-            }
             IC9Redeemer(contractRedeemer).start(msg.sender, _tokenId);
+            for (uint256 i; i<_tokenId.length;) {
+                _lockToken(_tokenId[i]);
+                unchecked {i++;}
+            }
+            
             emit RedemptionStart(msg.sender, _tokenId.length);
     }
 
@@ -562,8 +565,9 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
             uint256 totalSupply = totalSupply();
-            for (uint256 i; i<totalSupply; i++) {
+            for (uint256 i; i<totalSupply;) {
                 burn(tokenByIndex(0));
+                unchecked {i++;}
             }
     }
 
@@ -661,12 +665,13 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             uint256 _edition = _input.edition;
             bytes32 _data;
             if (_edition == 0) {
-                for (uint256 i; i<_mintId.length; i++) {
-                    _data = getPhysicalHash(_input, i+1);
+                for (uint256 i; i<_mintId.length;) {
+                    unchecked {_edition = i+1;}
+                    _data = getPhysicalHash(_input, _edition);
                     if (!_tokenComboExists[_data]) {
-                        _edition = i+1;
                         break;
                     }
+                    unchecked {i++;}
                 }
             }
 
@@ -739,8 +744,9 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
             uint256 _batchSize = _input.length;
-            for (uint256 i; i<_batchSize; i++) {
+            for (uint256 i; i<_batchSize;) {
                 mint1(_input[i]);
+                unchecked {i++;}
             }
     }
 
