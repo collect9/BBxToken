@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.7 <0.9.0;
-import "./utils/ERC721Enum32.sol";
+import "./utils/ERC721Enum32packed.sol";
 
 import "./C9MetaData.sol";
 import "./C9OwnerControl.sol";
@@ -138,10 +138,11 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * redemption process.
      */ 
     modifier inRedemption(uint256 _tokenId, bool status) {
-        if (_getTokenParam(_tokenId, TokenProps.VALIDITY) == REDEEMED) {
+        uint256 _tokenData = _uTokenData[_tokenId];
+        if (uint256(uint8(_tokenData>>POS_VALIDITY)) == REDEEMED) {
             _errMsg("token is redeemed");
         }
-        bool _locked = _getTokenParam(_tokenId, TokenProps.LOCKED) == 1 ? true : false;
+        bool _locked = uint256(uint8(_tokenData>>POS_LOCKED)) == 1 ? true : false;
         if (_locked != status) {
             _errMsg("redemption status disallows");
         }
@@ -177,7 +178,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * outside of the redemption process.
      */ 
     modifier notRedeemed(uint256 _tokenId) {
-        if (_getTokenParam(_tokenId, TokenProps.VALIDITY) == REDEEMED) {
+        if (uint256(uint8(_uTokenData[_tokenId]>>POS_VALIDITY)) == REDEEMED) {
             _errMsg("token is redeemed");
         }
         _;
@@ -324,7 +325,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      */
     function _checkActivity(uint256 _tokenId)
         internal {
-            if (_getTokenParam(_tokenId, TokenProps.VALIDITY) == INACTIVE) {
+            if (uint256(uint8(_uTokenData[_tokenId]>>POS_VALIDITY)) == INACTIVE) {
                 _setTokenValidity(_tokenId, VALID);
             }
     }
@@ -357,7 +358,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         internal
         isOwner(_tokenId)
         inRedemption(_tokenId, false) {
-            if (_getTokenParam(_tokenId, TokenProps.VALIDITY) != VALID) {
+            if (uint256(uint8(_uTokenData[_tokenId]>>POS_VALIDITY)) != VALID) {
                 _errMsg("token status not valid");
             }
             if (preRedeemable(_tokenId)) {
@@ -758,7 +759,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         public view override
         tokenExists(_tokenId)
         returns (bool) {
-            return block.timestamp-_getTokenParam(_tokenId, TokenProps.MINTSTAMP) < preRedeemablePeriod;
+            return block.timestamp-uint256(uint40(_uTokenData[_tokenId]>>POS_MINTSTAMP)) < preRedeemablePeriod;
     }
 
     /**
@@ -820,14 +821,14 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         external view override
         tokenExists(_tokenId)
         returns(bool) {
-            return _getTokenParam(_tokenId, TokenProps.LOCKED) == 1;
+            return uint256(uint8(_uTokenData[_tokenId]>>POS_LOCKED)) == 1;
     }
 
     function tokenUpgraded(uint256 _tokenId)
         external view override
         tokenExists(_tokenId)
         returns (bool) {
-            return _getTokenParam(_tokenId, TokenProps.UPGRADED) == 1;
+            return uint256(uint8(_uTokenData[_tokenId]>>POS_UPGRADED)) == 1;
     }
 
     /**
