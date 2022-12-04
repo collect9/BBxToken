@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.7 <0.9.0;
+pragma solidity >=0.8.10 <0.9.0;
 import "./C9OwnerControl.sol";
 import "./C9Registrar.sol";
 import "./C9Struct.sol";
@@ -114,15 +114,16 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             if (uint256(uint8(_data>>0)) > 4) {
                 _errMsg("current batch too far in process");
             }
-            uint256 _newBatchSize = _tokenId.length+_batchSize;
+            uint256 _addBatchSize = _tokenId.length;
+            uint256 _newBatchSize = _addBatchSize+_batchSize;
             if (_newBatchSize > MAX_BATCH_SIZE) {
                 _errMsg("max batch size is 7");
             }
             _data = _setTokenParam(_data, 24, _newBatchSize, 255);
             uint256 _offset = 32*_batchSize + 32;
-            for (uint256 i; i<_tokenId.length;) {
+            for (uint256 i; i<_addBatchSize;) {
                 _data |=  _tokenId[i]<<(32*i+_offset);
-                unchecked {i++;}
+                unchecked {++i;}
             }
             redeemerData4[_tokenOwner] = _data;
             emit RedeemerAdd(_tokenOwner, _batchSize, _newBatchSize);     
@@ -206,12 +207,12 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
                 for (uint j=2; j<_currentDataLength;) {
                     if (_tokenId[i] == _data[j]) {
                         _data[j] = _data[_currentDataLength-1];
-                        _currentDataLength -= 1;
-                        unchecked {j++;}
+                        --_currentDataLength;
+                        unchecked {++j;}
                         break;
                     }
                 }
-                unchecked {i++;}
+                unchecked {++i;}
             }
             /*
             Make indices array then use indices to create 
@@ -221,7 +222,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             tokeIds which will appear at the end of the array.
             */
             redeemerData[_tokenOwner] = _data;
-            for (uint i; i<_tokenId.length; i++) {
+            for (uint i; i<_tokenId.length; ++i) {
                 redeemerData[_tokenOwner].pop();
             }
             emit RedeemerRemove(
@@ -248,19 +249,19 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             }
             bool _registerOwner = IC9Registrar(contractRegistrar).addressRegistered(_tokenOwner);
             uint256 _step = _registerOwner ? 4 : 2;
-            uint256 _code = uint256(
-                keccak256(
-                    abi.encodePacked(
-                        block.timestamp,
-                        block.difficulty,
-                        block.number,
-                        msg.sender,
-                        _seed
-                    )
-                )
-            );
+            uint256 _code;
             unchecked {
-                _code %= 65535;
+                _code = uint256(
+                    keccak256(
+                        abi.encodePacked(
+                            block.timestamp,
+                            block.difficulty,
+                            block.number,
+                            msg.sender,
+                            _seed
+                        )
+                    )
+                ) % 65535;
                 _seed += _code;
             }
 
@@ -270,9 +271,9 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             _newRedeemerData |= _batchSize<<24;
             uint256 _offset;
             for (uint256 i; i<_batchSize;) {
-                unchecked {_offset = 32*(i+1);}
+                unchecked {_offset = 32*i+32;}
                 _newRedeemerData |= _tokenId[i]<<_offset;
-                unchecked {i++;}
+                unchecked {++i;}
             }
             redeemerData4[_tokenOwner] = _newRedeemerData;
             emit RedeemerInit(_tokenOwner, _registerOwner, _batchSize);     

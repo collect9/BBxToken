@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.7 <0.9.0;
+pragma solidity >=0.8.10 <0.9.0;
 import "./utils/ERC721Enum32packed.sol";
 
 import "./C9MetaData.sol";
@@ -92,6 +92,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * construct the 100% on chain SVG. The properties that define 
      * the physical collectible cannot be modified once set.
      */
+    // Consider combining into one mapping
     mapping(uint256 => address) private _rTokenData;
     mapping(uint256 => uint256) private _uTokenData;
     mapping(uint256 => string[3]) private _sTokenData;
@@ -137,13 +138,12 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * @dev Checks to see whether or not the token is in the 
      * redemption process.
      */ 
-    modifier inRedemption(uint256 _tokenId, bool status) {
+    modifier inRedemption(uint256 _tokenId, uint256 status) {
         uint256 _tokenData = _uTokenData[_tokenId];
         if (uint256(uint8(_tokenData>>POS_VALIDITY)) == REDEEMED) {
             _errMsg("token is redeemed");
         }
-        bool _locked = uint256(uint8(_tokenData>>POS_LOCKED)) == 1 ? true : false;
-        if (_locked != status) {
+        if (uint256(uint8(_tokenData>>POS_LOCKED)) != status) {
             _errMsg("redemption status disallows");
         }
         _;
@@ -209,7 +209,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         )
         internal
         override(ERC721Enumerable)
-        inRedemption(tokenId, false) {
+        inRedemption(tokenId, 0) {
             super._beforeTokenTransfer(from, to, tokenId, batchSize);
             _checkActivity(tokenId);
     }
@@ -343,11 +343,11 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     /**
      * @dev Get a single entry from uTokenData based on an enum index.
      */
-    function _getTokenParam(uint256 _tokenId, TokenProps _idx)
-        internal view override
-        returns(uint256) {
-            return getTokenParams(_tokenId)[uint256(_idx)];
-    }
+    // function _getTokenParam(uint256 _tokenId, TokenProps _idx)
+    //     internal view override
+    //     returns(uint256) {
+    //         return getTokenParams(_tokenId)[uint256(_idx)];
+    // }
 
     /**
      * @dev The function that start the redeemer (either single token
@@ -357,7 +357,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     function _lockToken(uint256 _tokenId)
         internal
         isOwner(_tokenId)
-        inRedemption(_tokenId, false) {
+        inRedemption(_tokenId, 0) {
             if (uint256(uint8(_uTokenData[_tokenId]>>POS_VALIDITY)) != VALID) {
                 _errMsg("token status not valid");
             }
@@ -380,7 +380,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     function _setTokenRedeemed(uint256 _tokenId)
         internal
         tokenExists(_tokenId)
-        inRedemption(_tokenId, true) {
+        inRedemption(_tokenId, 1) {
             _setTokenValidity(_tokenId, REDEEMED);
     }
 
@@ -423,7 +423,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     function _unlockToken(uint256 _tokenId)
         internal
         isOwner(_tokenId)
-        inRedemption(_tokenId, true) {
+        inRedemption(_tokenId, 1) {
             _uTokenData[_tokenId] = _setTokenParam(
                 _uTokenData[_tokenId],
                 POS_LOCKED,
@@ -449,11 +449,12 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     function redeemAdd(uint256[] calldata _tokenId)
         external override {
             IC9Redeemer(contractRedeemer).add(msg.sender, _tokenId);
-            for (uint256 i; i<_tokenId.length;) {
+            uint256 _batchSize = _tokenId.length;
+            for (uint256 i; i<_batchSize;) {
                 _lockToken(_tokenId[i]);
-                unchecked {i++;} //checked in IC9Redeemer
+                unchecked {++i;} //checked in IC9Redeemer
             }
-            emit RedemptionAdd(msg.sender, _tokenId.length);
+            emit RedemptionAdd(msg.sender, _batchSize);
     }
 
     /**
@@ -472,7 +473,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             uint256 _batchSize = uint256(uint8(_redeemerData>>24));
             for (uint256 i; i<_batchSize;) {
                 _unlockToken(uint256(uint32(_redeemerData>>(32*(i+1)))));
-                unchecked {i++;}
+                unchecked {++i;}
             }
             emit RedemptionCancel(msg.sender, _batchSize);
     }
@@ -483,7 +484,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             uint256 _batchSize = uint256(uint8(_redeemerData>>24));
             for (uint i; i<_batchSize;) {
                 _setTokenRedeemed(uint256(uint32(_redeemerData>>32*(i+1))));
-                unchecked {i++;}
+                unchecked {++i;}
             }
             emit RedemptionFinish(
                 ownerOf(uint256(uint32(_redeemerData>>32))),
@@ -508,10 +509,12 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     function redeemRemove(uint32[] calldata _tokenId)
         external override {
             IC9Redeemer(contractRedeemer).remove(msg.sender, _tokenId);
-            for (uint256 i; i<_tokenId.length; i++) {
+            uint256 _batchSize = _tokenId.length;
+            for (uint256 i; i<_batchSize;) {
                 _unlockToken(_tokenId[i]);
+                unchecked {++i;}
             }
-            emit RedemptionRemove(msg.sender, _tokenId.length);
+            emit RedemptionRemove(msg.sender, _batchSize);
     }
 
     /**
@@ -528,12 +531,13 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     function redeemStart(uint256[] calldata _tokenId)
         external override {
             IC9Redeemer(contractRedeemer).start(msg.sender, _tokenId);
-            for (uint256 i; i<_tokenId.length;) {
+            uint256 _batchSize = _tokenId.length;
+            for (uint256 i; i<_batchSize;) {
                 _lockToken(_tokenId[i]);
-                unchecked {i++;}
+                unchecked {++i;}
             }
             
-            emit RedemptionStart(msg.sender, _tokenId.length);
+            emit RedemptionStart(msg.sender, _batchSize);
     }
 
     /**
@@ -568,7 +572,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             uint256 totalSupply = totalSupply();
             for (uint256 i; i<totalSupply;) {
                 burn(tokenByIndex(0));
-                unchecked {i++;}
+                unchecked {++i;}
             }
     }
 
@@ -666,13 +670,13 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             uint256 _edition = _input.edition;
             bytes32 _data;
             if (_edition == 0) {
-                for (uint256 i; i<_mintId.length;) {
+                for (uint256 i; i<99;) {
                     unchecked {_edition = i+1;}
                     _data = getPhysicalHash(_input, _edition);
                     if (!_tokenComboExists[_data]) {
                         break;
                     }
-                    unchecked {i++;}
+                    unchecked {++i;}
                 }
             }
 
@@ -693,7 +697,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             if (_edition == 0) {
                 _errMsg("edition cannot be 0");
             }
-            if (_edition >= _mintId.length) {
+            if (_edition >= 99) {
                 _errMsg("edition overflow");
             }
             if (__mintId == 0) {
@@ -747,7 +751,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             uint256 _batchSize = _input.length;
             for (uint256 i; i<_batchSize;) {
                 mint1(_input[i]);
-                unchecked {i++;}
+                unchecked {++i;}
             }
     }
 
