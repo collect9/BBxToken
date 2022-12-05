@@ -294,7 +294,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * recever address and amount.
      * Cost: ~29,000 gas
      */
-    function setRoyaltyDefault(uint256 _royaltyDefaultValue)
+    function setRoyaltyDefaultValue(uint256 _royaltyDefaultValue)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
         limitRoyalty(_royaltyDefaultValue) {
@@ -979,11 +979,11 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
 
     /**
      * @dev Allows the compressed data that is used to display the 
-     * micro QR code on the SVG to be updated. This is likely an 
-     * option that is too expensive to really utilize, but is available 
-     * in case it is needed.
+     * micro QR code on the SVG to be updated. Each update costs 
+     * around ~75,000 to ~100,000 gas based on the original 
+     * minting data length.
      */
-    function setSTokenData(uint256 _tokenId, string[3] memory _sData)
+    function setTokenSData(uint256 _tokenId, string[3] memory _sData)
         public 
         onlyRole(DEFAULT_ADMIN_ROLE)
         tokenExists(_tokenId) {
