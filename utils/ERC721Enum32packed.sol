@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.8.0) (token/ERC721/extensions/ERC721Enumerable.sol)
 
-pragma solidity >=0.8.7 <0.9.0;
+pragma solidity >=0.8.10 <0.9.0;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+//import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "./ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
 
 /**
@@ -31,7 +32,7 @@ abstract contract ERC721Enumerable is ERC721, IERC721Enumerable {
         uint256 _pos,
         uint256 _val
     )
-        internal pure virtual
+        internal pure
         returns(uint256) {
             _packedToken &= ~(uint256(340282366920938463463374607431768211455)<<_pos); //zero out only its portion
             _packedToken |= _val<<_pos; //write value back in
@@ -49,7 +50,7 @@ abstract contract ERC721Enumerable is ERC721, IERC721Enumerable {
      * @dev See {IERC721Enumerable-tokenOfOwnerByIndex}.
      */
     function tokenOfOwnerByIndex(address owner, uint256 index) public view virtual override returns (uint256) {
-        require(index < ERC721.balanceOf(owner), "ERC721Enumerable: owner index out of bounds");
+        require(index < ERC721.balanceOf(owner), "ERC721Enum: owner index oob");
         return uint256(_ownedTokens[owner][index]);
     }
 
@@ -64,7 +65,7 @@ abstract contract ERC721Enumerable is ERC721, IERC721Enumerable {
      * @dev See {IERC721Enumerable-tokenByIndex}.
      */
     function tokenByIndex(uint256 index) public view virtual override returns (uint256) {
-        require(index < ERC721Enumerable.totalSupply(), "ERC721Enumerable: global index out of bounds");
+        require(index < ERC721Enumerable.totalSupply(), "ERC721Enum: global index oob");
         return uint256(_allTokens[index]);
     }
 
@@ -81,7 +82,7 @@ abstract contract ERC721Enumerable is ERC721, IERC721Enumerable {
 
         if (batchSize > 1) {
             // Will only trigger during construction. Batch transferring (minting) is not available afterwards.
-            revert("ERC721Enumerable: consecutive transfers not supported");
+            revert("ERC721Enum: batch xfer not allow");
         }
 
         uint256 tokenId = firstTokenId;

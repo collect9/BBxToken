@@ -17,7 +17,7 @@ interface IC9Token {
     function redeemAdd(uint256[] calldata _tokenId) external;
     function redeemCancel() external;
     function redeemFinish(uint256 _redeemerData) external;
-    function redeemRemove(uint32[] calldata _tokenId) external;
+    function redeemRemove(uint256[] calldata _tokenId) external;
     function redeemStart(uint256[] calldata _tokenId) external;
     function preRedeemable(uint256 _tokenId) external view returns(bool);
     function setTokenUpgraded(uint256 _tokenId) external;
@@ -506,7 +506,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * 10x token = 209,000 gas  -> 20,900 gas per
      * 14x token = 262,000 gas  -> 18,700 gas per
      */
-    function redeemRemove(uint32[] calldata _tokenId)
+    function redeemRemove(uint256[] calldata _tokenId)
         external override {
             IC9Redeemer(contractRedeemer).remove(msg.sender, _tokenId);
             uint256 _batchSize = _tokenId.length;
@@ -663,16 +663,17 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * - `_input` royalty is <= 9.99%.
     */
     function mint1(TokenData calldata _input)
-        public
-        onlyRole(DEFAULT_ADMIN_ROLE)
+        internal
         limitRoyalty(_input.royalty) {
             // Get physical edition id
             uint256 _edition = _input.edition;
             bytes32 _data;
             if (_edition == 0) {
                 for (uint256 i; i<99;) {
-                    unchecked {_edition = i+1;}
-                    _data = getPhysicalHash(_input, _edition);
+                    unchecked {
+                        _edition = i+1;
+                        _data = getPhysicalHash(_input, _edition);
+                    }
                     if (!_tokenComboExists[_data]) {
                         break;
                     }
@@ -765,38 +766,6 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         returns (bool) {
             return block.timestamp-uint256(uint40(_uTokenData[_tokenId]>>POS_MINTSTAMP)) < preRedeemablePeriod;
     }
-
-    /**
-     * @dev Allows user to cancel redemption process and resume 
-     * token movement exchange capabilities.
-     * Cost: ~45,000 gas
-     */
-    // function redeemCancel(uint256 _tokenId)
-    //     external override {
-    //         IC9Redeemer(contractRedeemer).cancel(_tokenId);
-    //         _unlockToken(_tokenId);
-    //         emit RedemptionCancel(msg.sender, _tokenId);
-    // }
-
-    // function redeemFinish(uint256 _tokenId)
-    //     external override
-    //     onlyRole(REDEEMER_ROLE) {
-    //         _setTokenRedeemed(_tokenId);
-    //         emit RedemptionFinish(ownerOf(_tokenId), _tokenId);
-    // }
-
-    /**
-     * @dev Starts the redemption process. Only the token holder can start.
-     * Once started, the token is locked from further exchange. The user 
-     * can still cancel the process before finishing.
-     * Cost: ~85,500 gas
-     */
-    // function redeemStart(uint256 _tokenId)
-    //     external override {
-    //         _lockToken(_tokenId);
-    //         IC9Redeemer(contractRedeemer).start(msg.sender, _tokenId);
-    //         emit RedemptionStart(msg.sender, _tokenId);
-    // }
 
     /**
      * @dev Returns the base64 representation of the SVG string. 

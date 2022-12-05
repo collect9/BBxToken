@@ -12,7 +12,7 @@ interface IC9Redeemer {
     function getMinRedeemUSD(uint256 _batchSize) external view returns(uint256);
     function getRedemptionStep(address _tokenOwner) external view returns(uint256);
     function getRedemptionInfo(address _tokenOwner) external view returns(uint32[] memory);
-    function remove(address _tokenOwner, uint32[] calldata _tokenId) external;
+    function remove(address _tokenOwner, uint256[] calldata _tokenId) external;
     function start(address _tokenOwner, uint256[] calldata _tokenId) external;
 }
 
@@ -188,47 +188,54 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
      * fraction of tokens in the process. Otherwise it may 
      * end up being more expensive than cancel.
      */
-    function remove(address _tokenOwner, uint32[] calldata _tokenId)
+    function remove(address _tokenOwner, uint256[] calldata _tokenId)
         external override
         onlyRole(NFTCONTRACT_ROLE) {
-            uint32[] memory _data = redeemerData[_tokenOwner];
-            uint256 _currentDataLength = _data.length;
-            if (_currentDataLength == 0) {
+            uint256 _data = redeemerData4[_tokenOwner];
+            uint256 _currentBatchSize = uint256(uint8(_data>>24));
+            if (_currentBatchSize == 0) {
                 _errMsg("no batch in process");
             }
-            if (_tokenId.length >= _data.length-2) {
+            uint256 _removedBatchSize = _tokenId.length;
+            if (_removedBatchSize >= _currentBatchSize) {
                 _errMsg("cancel to remove remaining batch");
             }
             /*
             Swap and pop in memory instead of storage. This keeps 
             gas cost down for larger _tokenId arrays.
             */
-            for (uint256 i; i<_tokenId.length;) {
-                for (uint j=2; j<_currentDataLength;) {
-                    if (_tokenId[i] == _data[j]) {
-                        _data[j] = _data[_currentDataLength-1];
-                        --_currentDataLength;
+            uint256 _currentTokenId;
+            uint256 _lastTokenId;
+            uint256 _tokenOffset;
+            for (uint256 i; i<_removedBatchSize;) {
+                for (uint j; j<_currentBatchSize;) {
+                    _tokenOffset = 32+32*j;
+                    _currentTokenId = uint256(uint32(_data>>_tokenOffset));
+                    if (_tokenId[i] == _currentTokenId) {
+                        _lastTokenId = uint256(uint32(_data>>(32+32*(_currentBatchSize-1))));
+                        _data = _setTokenParam(
+                            _data,
+                            _tokenOffset,
+                            _lastTokenId,
+                            4294967295
+                        );
+                        --_currentBatchSize;
                         unchecked {++j;}
                         break;
                     }
                 }
                 unchecked {++i;}
             }
-            /*
-            Make indices array then use indices to create 
-            new data.*/
-            /*
-            Copy swapped array and the pop off all removed 
-            tokeIds which will appear at the end of the array.
-            */
-            redeemerData[_tokenOwner] = _data;
-            for (uint i; i<_tokenId.length; ++i) {
-                redeemerData[_tokenOwner].pop();
-            }
+
+            // Update new length in packed _data
+            uint256 _newBatchSize = _currentBatchSize-_removedBatchSize;
+            _data = _setTokenParam(_data, 24, _newBatchSize, 255);
+
+            redeemerData4[_tokenOwner] = _data;
             emit RedeemerRemove(
                 _tokenOwner,
-                _data.length-2,
-                _data.length-2-_tokenId.length
+                _currentBatchSize,
+                _newBatchSize
             );  
     }
 
