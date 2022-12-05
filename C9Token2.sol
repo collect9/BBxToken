@@ -38,7 +38,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * @dev Default royalty. These should be packed into one slot.
      */
     address public royaltyDefaultReceiver;
-    uint96 public royaltyDefault;
+    uint96 public royaltyDefaultValue;
 
     /**
      * @dev The meta and SVG contracts that this token contract
@@ -67,6 +67,10 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * redeemed.
      */
     uint256 public preRedeemablePeriod = 31556926; //seconds
+    event RedemptionAdd(
+        address indexed tokenOwner,
+        uint256 indexed batchSize
+    );
     event RedemptionCancel(
         address indexed tokenOwner,
         uint256 indexed batchSize
@@ -75,29 +79,25 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         address indexed tokenOwner,
         uint256 indexed batchSize
     );
-    event RedemptionStart(
-        address indexed tokenOwner,
-        uint256 indexed batchSize
-    );
-    event RedemptionAdd(
-        address indexed tokenOwner,
-        uint256 indexed batchSize
-    );
     event RedemptionRemove(
         address indexed tokenOwner,
         uint256 indexed batchSize
     );
-
+    event RedemptionStart(
+        address indexed tokenOwner,
+        uint256 indexed batchSize
+    );
+    
     /**
      * @dev Structure that holds all of the token info required to 
-     * construct the 100% on chain SVG. The properties that define 
+     * construct the 100% on chain SVG.
+     * The properties within _uTokenData that define 
      * the physical collectible cannot be modified once set.
      */
-    // Consider combining into one mapping
     mapping(uint256 => address) private _rTokenData;
     mapping(uint256 => uint256) private _uTokenData;
     mapping(uint256 => string[3]) private _sTokenData;
-
+    
     /**
      * @dev Mapping that checks whether or not some combination of 
      * TokenData has already been minted. The boolean determines
@@ -118,10 +118,10 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * Default receiver is set to owner. Both can be 
      * updated after deployment.
      */
-    constructor(uint256 _royaltyDefault)
+    constructor(uint256 _royaltyDefaultValue)
         ERC721("Collect9 NFTs", "C9T")
-        limitRoyalty(_royaltyDefault) {
-            royaltyDefault = uint96(_royaltyDefault);
+        limitRoyalty(_royaltyDefaultValue) {
+            royaltyDefaultValue = uint96(_royaltyDefaultValue);
             royaltyDefaultReceiver = owner;
     }
 
@@ -211,6 +211,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         )
         internal
         override(ERC721Enumerable)
+        notFrozen()
         inRedemption(tokenId, 0) {
             super._beforeTokenTransfer(from, to, tokenId, batchSize);
             _checkActivity(tokenId);
@@ -269,7 +270,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     function resetTokenRoyalty(uint256 _tokenId)
         onlyRole(DEFAULT_ADMIN_ROLE)
         external {
-            _setTokenRoyalty(_tokenId, royaltyDefaultReceiver, royaltyDefault);
+            _setTokenRoyalty(_tokenId, royaltyDefaultReceiver, royaltyDefaultValue);
     }
 
     /**
@@ -293,14 +294,14 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * recever address and amount.
      * Cost: ~29,000 gas
      */
-    function setRoyaltyDefault(uint256 _royaltyDefault)
+    function setRoyaltyDefault(uint256 _royaltyDefaultValue)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
-        limitRoyalty(_royaltyDefault) {
-            if (_royaltyDefault == royaltyDefault) {
+        limitRoyalty(_royaltyDefaultValue) {
+            if (_royaltyDefaultValue == royaltyDefaultValue) {
                 _errMsg("royalty val already set");
             }
-            royaltyDefault = uint96(_royaltyDefault);
+            royaltyDefaultValue = uint96(_royaltyDefaultValue);
     }
 
     /**
@@ -977,6 +978,19 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     }
 
     /**
+     * @dev Allows the compressed data that is used to display the 
+     * micro QR code on the SVG to be updated. This is likely an 
+     * option that is too expensive to really utilize, but is available 
+     * in case it is needed.
+     */
+    function setSTokenData(uint256 _tokenId, string[3] memory _sData)
+        public 
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        tokenExists(_tokenId) {
+            _sTokenData[_tokenId] = _sData;
+    }
+
+    /**
      * @dev Set SVG flag to either display on-chain SVG (true) or IPFS 
      * version (false). If set to true, it is still possible 
      * to retrieve the SVG image by calling svgImage(_tokenId).
@@ -1076,4 +1090,17 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
                 255
             );
     }
+
+    /**
+     * @dev Disables self-destruct functionality.
+     * Other contracts like the registrar and redeemer 
+     * that are upgradable also inherit but do not 
+     * override this.
+     */
+    function __destroy(address _receiver, bool confirm)
+        public override
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            confirm = false;
+            super.__destroy(_receiver, confirm);
+        }
 }

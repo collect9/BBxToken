@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.7 <0.9.0;
+pragma solidity >=0.8.10 <0.9.0;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
 /**
@@ -147,4 +147,15 @@ abstract contract C9OwnerControl is AccessControl {
             }
             _frozen = _toggle;
     }
+
+    function __destroy(address _receiver, bool confirm)
+        public virtual
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            if (confirm) {
+    		    selfdestruct(payable(_receiver));
+            }
+            else {
+                _errMsg("destruct not confirmed");
+            }
+        }
 }
