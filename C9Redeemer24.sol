@@ -1,10 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.10 <0.9.0;
 import "./C9OwnerControl.sol";
-import "./C9Registrar2.sol";
+import "./C9Registrar.sol";
 import "./C9Struct.sol";
 import "./C9Token2.sol";
 import "./utils/EthPricer.sol";
+
+uint256 constant RPOS_STEP = 0;
+uint256 constant RPOS_CODE = 8;
+uint256 constant RPOS_BATCHSIZE = 24;
+uint256 constant RPOS_TOKEN1 = 32;
+uint256 constant UINT_SIZE = 24;
+uint256 constant MAX_BATCH_SIZE = 9;
 
 interface IC9Redeemer {
     function add(address _tokenOwner, uint256[] calldata _tokenId) external;
@@ -17,12 +24,6 @@ interface IC9Redeemer {
 
 contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     bytes32 public constant NFTCONTRACT_ROLE = keccak256("NFTCONTRACT_ROLE");
-
-    uint256 constant POS_STEP = 0;
-    uint256 constant POS_CODE = 8;
-    uint256 constant POS_BATCHSIZE = 24;
-    uint256 constant POS_TOKEN1 = 32;
-
     uint96 public redeemMinPrice = 20;
     address public contractPricer;
     uint256 private _seed;
@@ -74,7 +75,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
 
     modifier redemptionStep(address _tokenOwner, uint256 _step) {
         uint256 _data = redeemerData4[_tokenOwner];
-        if (_step != uint256(uint8(_data>>POS_STEP))) {
+        if (_step != uint256(uint8(_data>>RPOS_STEP))) {
             _errMsg("wrong redemption step");
         }
         _;
@@ -121,9 +122,9 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         onlyRole(NFTCONTRACT_ROLE)
         notFrozen() {
             uint256 _data = redeemerData4[_tokenOwner];
-            uint256 _batchSize = uint256(uint8(_data>>POS_BATCHSIZE));
+            uint256 _batchSize = uint256(uint8(_data>>RPOS_BATCHSIZE));
             _checkBatchSize(_batchSize);
-            if (uint256(uint8(_data>>POS_STEP)) > 4) {
+            if (uint256(uint8(_data>>RPOS_STEP)) > 4) {
                 _errMsg("current batch too far in process");
             }
             uint256 _addBatchSize = _tokenId.length;
@@ -132,15 +133,18 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
                 _errMsg("max batch size is 9");
             }
             _data = _setTokenParam(_data, 24, _newBatchSize, 255);
-            uint256 _offset = POS_TOKEN1 + UINT_SIZE*_batchSize;
+            uint256 _offset = RPOS_TOKEN1 + UINT_SIZE*_batchSize;
             for (uint256 i; i<_addBatchSize;) {
                 _data = _setTokenParam(
                     _data,
-                    UINT_SIZE*i+_offset,
+                    _offset,
                     _tokenId[i],
                     4294967295
                 );
-                unchecked {++i;}
+                unchecked {
+                    _offset += UINT_SIZE;
+                    ++i;
+                }
             }
             redeemerData4[_tokenOwner] = _data;
             emit RedeemerAdd(_tokenOwner, _batchSize, _newBatchSize);     
@@ -157,9 +161,9 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         onlyRole(NFTCONTRACT_ROLE)
         returns(uint256 _data) {
             _data = redeemerData4[_tokenOwner];
-            uint256 _batchSize = uint256(uint8(_data>>POS_BATCHSIZE));
+            uint256 _batchSize = uint256(uint8(_data>>RPOS_BATCHSIZE));
             _checkBatchSize(_batchSize);
-            uint256 _lastStep = uint256(uint8(_data>>POS_STEP));
+            uint256 _lastStep = uint256(uint8(_data>>RPOS_STEP));
             _removeRedemptionData(_tokenOwner);
             emit RedeemerCancel(_tokenOwner, _lastStep, _batchSize);
     }
@@ -175,7 +179,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         external override
         onlyRole(NFTCONTRACT_ROLE) {
             uint256 _data = redeemerData4[_tokenOwner];
-            uint256 _originalBatchSize = uint256(uint8(_data>>POS_BATCHSIZE));
+            uint256 _originalBatchSize = uint256(uint8(_data>>RPOS_BATCHSIZE));
             _checkBatchSize(_originalBatchSize);
             uint256 _removedBatchSize = _tokenId.length;
             if (_removedBatchSize == _originalBatchSize) {
@@ -190,15 +194,14 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             */
             uint256 _currentTokenId;
             uint256 _lastTokenId;
-            uint256 _tokenOffset;
+            uint256 _tokenOffset = RPOS_TOKEN1;
             uint256 _currentBatchSize = _originalBatchSize;
             for (uint256 i; i<_removedBatchSize;) { // foreach token to remove
-                for (uint j; j<_currentBatchSize;) { // check it against each existing token
-                    unchecked {_tokenOffset = POS_TOKEN1+UINT_SIZE*j;}
+                for (uint256 j; j<_currentBatchSize;) { // check it against each existing token
                     _currentTokenId = uint256(uint24(_data>>_tokenOffset));
                     if (_currentTokenId == _tokenId[i]) { // if a match is found
                         // get the last token
-                        _lastTokenId = uint256(uint24(_data>>(POS_TOKEN1+UINT_SIZE*(_currentBatchSize-1))));
+                        _lastTokenId = uint256(uint24(_data>>(RPOS_TOKEN1+UINT_SIZE*(_currentBatchSize-1))));
                         // and swap it to the current position (to remove it)
                         _data = _setTokenParam(
                             _data,
@@ -210,7 +213,10 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
                         --_currentBatchSize;
                         break;
                     }
-                    unchecked {++j;}
+                    unchecked {
+                        _tokenOffset += UINT_SIZE;
+                        ++j;
+                    }
                 }
                 unchecked {++i;}
             }
@@ -247,15 +253,19 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         public view override
         returns(uint256[] memory _info) {
             uint256 _data = redeemerData4[_tokenOwner];
-            uint256 _batchSize = uint256(uint8(_data>>POS_BATCHSIZE));
+            uint256 _batchSize = uint256(uint8(_data>>RPOS_BATCHSIZE));
             _checkBatchSize(_batchSize);
             _info = new uint256[](_batchSize+3);
-            _info[0] = uint256(uint8(_data>>POS_STEP));
-            _info[1] = uint256(uint16(_data>>POS_CODE));
+            _info[0] = uint256(uint8(_data>>RPOS_STEP));
+            _info[1] = uint256(uint16(_data>>RPOS_CODE));
             _info[2] = _batchSize;
+            uint256 _offset = RPOS_TOKEN1;
             for (uint256 i; i<_batchSize;) {
-                _info[i+3] = uint256(uint24(_data>>(POS_TOKEN1+UINT_SIZE*i)));
-                unchecked {++i;}
+                _info[i+3] = uint256(uint24(_data>>_offset));
+                unchecked {
+                    _offset += UINT_SIZE;
+                    ++i;
+                }
             }
     }
 
@@ -298,11 +308,13 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             _newRedeemerData |= _step<<0;
             _newRedeemerData |= _code<<8;
             _newRedeemerData |= _batchSize<<24;
-            uint256 _offset;
+            uint256 _offset = RPOS_TOKEN1;
             for (uint256 i; i<_batchSize;) {
-                unchecked {_offset = UINT_SIZE*i+POS_TOKEN1;}
                 _newRedeemerData |= _tokenId[i]<<_offset;
-                unchecked {++i;}
+                unchecked {
+                    _offset += UINT_SIZE;
+                    ++i;
+                }
             }
             redeemerData4[_tokenOwner] = _newRedeemerData;
             emit RedeemerInit(_tokenOwner, _registerOwner, _batchSize);     
@@ -316,7 +328,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         external view
         onlyRole(DEFAULT_ADMIN_ROLE)
         returns (uint256) {
-            return uint256(uint16(redeemerData4[_tokenOwner]>>POS_CODE));
+            return uint256(uint16(redeemerData4[_tokenOwner]>>RPOS_CODE));
     }
 
     /**
@@ -331,7 +343,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         onlyRole(DEFAULT_ADMIN_ROLE)
         redemptionStep(_tokenOwner, 2) {
             uint256 _data = redeemerData4[_tokenOwner];
-            if (_code != uint256(uint16(_data>>POS_CODE))) {
+            if (_code != uint256(uint16(_data>>RPOS_CODE))) {
                 _errMsg("code mismatch");
             }
             _data = _setTokenParam(_data, 0, 3, 255);
@@ -349,7 +361,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         external
         redemptionStep(msg.sender, 3) {
             uint256 _data = redeemerData4[msg.sender];
-            if (_code != uint256(uint16(_data>>POS_CODE))) {
+            if (_code != uint256(uint16(_data>>RPOS_CODE))) {
                 _errMsg("code mismatch");
             }
             _data = _setTokenParam(_data, 0, 4, 255);
@@ -369,11 +381,11 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
      * prevent users purposely underpaying, an aminFinalApproval 
      * still follows this.
      */
-    function userFinishRedemption()
+    function userPayFinalFees()
         external payable
         redemptionStep(msg.sender, 4) {
             uint256 _data = redeemerData4[msg.sender];
-            uint256 _batchSize = uint256(uint8(_data>>POS_BATCHSIZE));
+            uint256 _batchSize = uint256(uint8(_data>>RPOS_BATCHSIZE));
             uint256 _minRedeemUsd = getMinRedeemUSD(_batchSize);
             // uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_minRedeemUsd);
             // if (msg.value < _minRedeemWei) {

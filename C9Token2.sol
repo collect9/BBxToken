@@ -11,9 +11,6 @@ import "./C9SVG.sol";
 import "./utils/Base64.sol";
 import "./utils/Helpers.sol";
 
-uint256 constant MAX_BATCH_SIZE = 9;
-uint256 constant UINT_SIZE = 24;
-
 interface IC9Token {
     function redeemAdd(uint256[] calldata _tokenId) external;
     function redeemCancel() external;
@@ -443,11 +440,11 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * start process, the reported costs below ignore the 
      * initial start cost.
      * Cost:
-     * 1x token = 65,000 gas    -> 65,000 gas per
-     * 2x token = 80,000 gas    -> 40,000 gas per
-     * 5x token = 126,000 gas   -> 25,200 gas per
-     * 10x token = 226,000 gas  -> 22,600 gas per
-     * 13x token = 273,000 gas  -> 21,000 gas per
+     * 1x token = 54,800 gas
+     * 2x token = 64,500 gas
+     * 5x token = 93,330 gas
+     * 6x token = 102,700 gas
+     * 8x token = 122,200 gas 
      */
     function redeemAdd(uint256[] calldata _tokenId)
         external override {
@@ -464,30 +461,42 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * @dev Allows user to cancel redemption process and resume 
      * token movement exchange capabilities.
      * Cost:
-     * 1x token = 48,900 gas    -> 48,900 gas per
-     * 2x token = 60,600 gas    -> 30,300 gas per
-     * 6x token = 108,000 gas   -> 18,000 gas per
-     * 10x token = 155,000 gas  -> 15,500 gas per
-     * 14x token = 203,000 gas  -> 14,500 gas per
+     * 1x token = 42,200 gas
+     * 2x token = 50,400 gas
+     * 6x token = 83,200 gas
+     * 7x token = 91,400 gas
+     * 9x token = 107,800 gas
      */
     function redeemCancel()
         external override {
             uint256 _redeemerData = IC9Redeemer(contractRedeemer).cancel(msg.sender);
-            uint256 _batchSize = uint256(uint8(_redeemerData>>24));
+            uint256 _batchSize = uint256(uint8(_redeemerData>>RPOS_BATCHSIZE));
+            uint256 _tokenOffset = RPOS_TOKEN1;
             for (uint256 i; i<_batchSize;) {
-                _unlockToken(uint256(uint24(_redeemerData>>(32+UINT_SIZE*i))));
-                unchecked {++i;}
+                _unlockToken(uint256(uint24(_redeemerData>>_tokenOffset)));
+                unchecked {
+                    _tokenOffset += UINT_SIZE;
+                    ++i;
+                }
             }
             emit RedemptionCancel(msg.sender, _batchSize);
     }
 
+    /**
+     * @dev Redeemer contract calls and does a final lock on the token
+     * after final admin approval.
+     */
     function redeemFinish(uint256 _redeemerData)
         external override
         onlyRole(REDEEMER_ROLE) {
-            uint256 _batchSize = uint256(uint8(_redeemerData>>24));
-            for (uint i; i<_batchSize;) {
-                _setTokenRedeemed(uint256(uint24(_redeemerData>>(32+UINT_SIZE*i))));
-                unchecked {++i;}
+            uint256 _batchSize = uint256(uint8(_redeemerData>>RPOS_BATCHSIZE));
+            uint256 _tokenOffset = RPOS_TOKEN1;
+            for (uint256 i; i<_batchSize;) {
+                _setTokenRedeemed(uint256(uint24(_redeemerData>>_tokenOffset)));
+                unchecked {
+                    _tokenOffset += UINT_SIZE;
+                    ++i;
+                }
             }
             emit RedemptionFinish(
                 ownerOf(uint256(uint24(_redeemerData>>32))),
@@ -503,11 +512,10 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * majority of tokens then it may be cheaper to just 
      * cancel and restart.
      * Cost:
-     * 1x token = 73,000 gas    -> 73,000 gas per
-     * 2x token = 87,000 gas    -> 43,500 gas per
-     * 5x token = 144,000 gas   -> 28,800 gas per 
-     * 10x token = 209,000 gas  -> 20,900 gas per
-     * 14x token = 262,000 gas  -> 18,700 gas per
+     * 1x token = 50,200 gas
+     * 5x token = 86,500 gas
+     * 6x token = 96,000 gas
+     * 9x token = 116,800 gas
      */
     function redeemRemove(uint256[] calldata _tokenId)
         external override {
@@ -525,11 +533,11 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * Once started, the token is locked from further exchange. The user 
      * can still cancel the process before finishing.
      * Cost:
-     * 1x token = 108,000 gas   -> 108,000 gas per
-     * 2x token = 124,000 gas   -> 62,000 gas per
-     * 6x token = 185,000 gas   -> 31,800 gas per
-     * 10x token = 269,000 gas  -> 26,900 gas per
-     * 14x token = 332,000 gas  -> 23,700 gas per
+     * 1x token = 83,100 gas
+     * 2x token = 92,500 gas
+     * 6x token = 130,300 gas
+     * 7x token = 139,700 gas
+     * 9x token = 158,600 gas
      */
     function redeemStart(uint256[] calldata _tokenId)
         external override {
@@ -672,15 +680,14 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             uint256 _edition = _input.edition;
             bytes32 _data;
             if (_edition == 0) {
-                for (uint256 i; i<99;) {
+                for (_edition; _edition<98;) {
                     unchecked {
-                        _edition = i+1;
+                        ++_edition;
                         _data = getPhysicalHash(_input, _edition);
                     }
                     if (!_tokenComboExists[_data]) {
                         break;
                     }
-                    unchecked {++i;}
                 }
             }
 
@@ -767,7 +774,8 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         public view override
         tokenExists(_tokenId)
         returns (bool) {
-            return block.timestamp-uint256(uint40(_uTokenData[_tokenId]>>POS_MINTSTAMP)) < preRedeemablePeriod;
+            uint256 _ds = block.timestamp-uint256(uint40(_uTokenData[_tokenId]>>POS_MINTSTAMP));
+            return _ds < preRedeemablePeriod;
     }
 
     /**
