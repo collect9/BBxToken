@@ -4,14 +4,15 @@ import "./utils/ERC721Enum32packed.sol";
 
 import "./C9MetaData.sol";
 import "./C9OwnerControl.sol";
-import "./C9Redeemer4.sol";
+import "./C9Redeemer24.sol";
 import "./C9Struct.sol";
 import "./C9SVG.sol";
 
 import "./utils/Base64.sol";
 import "./utils/Helpers.sol";
 
-uint256 constant MAX_BATCH_SIZE = 7;
+uint256 constant MAX_BATCH_SIZE = 9;
+uint256 constant UINT_SIZE = 24;
 
 interface IC9Token {
     function redeemAdd(uint256[] calldata _tokenId) external;
@@ -473,7 +474,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             uint256 _redeemerData = IC9Redeemer(contractRedeemer).cancel(msg.sender);
             uint256 _batchSize = uint256(uint8(_redeemerData>>24));
             for (uint256 i; i<_batchSize;) {
-                _unlockToken(uint256(uint32(_redeemerData>>(32*(i+1)))));
+                _unlockToken(uint256(uint24(_redeemerData>>(32+UINT_SIZE*i))));
                 unchecked {++i;}
             }
             emit RedemptionCancel(msg.sender, _batchSize);
@@ -484,11 +485,11 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         onlyRole(REDEEMER_ROLE) {
             uint256 _batchSize = uint256(uint8(_redeemerData>>24));
             for (uint i; i<_batchSize;) {
-                _setTokenRedeemed(uint256(uint32(_redeemerData>>32*(i+1))));
+                _setTokenRedeemed(uint256(uint24(_redeemerData>>(32+UINT_SIZE*i))));
                 unchecked {++i;}
             }
             emit RedemptionFinish(
-                ownerOf(uint256(uint32(_redeemerData>>32))),
+                ownerOf(uint256(uint24(_redeemerData>>32))),
                 _batchSize
             );
     }
