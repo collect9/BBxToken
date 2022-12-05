@@ -127,7 +127,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             uint256 _addBatchSize = _tokenId.length;
             uint256 _newBatchSize = _addBatchSize+_batchSize;
             if (_newBatchSize > MAX_BATCH_SIZE) {
-                _errMsg("max batch size is 7");
+                _errMsg("max batch size is 9");
             }
             _data = _setTokenParam(_data, 24, _newBatchSize, 255);
             uint256 _offset = POS_TOKEN1 + UINT_SIZE*_batchSize;
@@ -270,7 +270,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         notFrozen() {
             uint256 _batchSize = _tokenId.length;
             if (_batchSize > MAX_BATCH_SIZE) {
-                _errMsg("max batch size is 7");
+                _errMsg("max batch size is 9");
             }
             bool _registerOwner = IC9Registrar(contractRegistrar).addressRegistered(_tokenOwner);
             uint256 _step = _registerOwner ? 4 : 2;
