@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.10 <0.9.0;
 import "./C9OwnerControl.sol";
-import "./C9Registrar.sol";
+import "./C9Registrar2.sol";
 import "./C9Struct.sol";
 import "./C9Token2.sol";
 import "./utils/EthPricer.sol";
@@ -27,7 +27,9 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     address public contractPricer;
     uint256 private _seed;
 
-    mapping(address => uint256) redeemerData4; //tokenId[], code, step
+    // Consider adding status in case admin final approval needs to disapprove
+    // Status can represent some kind of error code
+    mapping(address => uint256) redeemerData4; //code, step, batchsize, tokenId[]
     
     event RedeemerAdd(
         address indexed tokensOwner,
@@ -272,22 +274,24 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             if (_batchSize > MAX_BATCH_SIZE) {
                 _errMsg("max batch size is 9");
             }
-            bool _registerOwner = IC9Registrar(contractRegistrar).addressRegistered(_tokenOwner);
+            bool _registerOwner = IC9Registrar(contractRegistrar).isRegistered(_tokenOwner);
             uint256 _step = _registerOwner ? 4 : 2;
             uint256 _code;
-            unchecked {
-                _code = uint256(
-                    keccak256(
-                        abi.encodePacked(
-                            block.timestamp,
-                            block.difficulty,
-                            block.number,
-                            msg.sender,
-                            _seed
+            if (_step == 2) {
+                unchecked {
+                    _code = uint256(
+                        keccak256(
+                            abi.encodePacked(
+                                block.timestamp,
+                                block.difficulty,
+                                block.number,
+                                msg.sender,
+                                _seed
+                            )
                         )
-                    )
-                ) % 65535;
-                _seed += _code;
+                    ) % 65535;
+                    _seed += _code;
+                }
             }
 
             uint256 _newRedeemerData;
