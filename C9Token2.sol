@@ -118,7 +118,8 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * updated after deployment.
      */
     constructor(uint256 _royaltyDefault)
-        ERC721("Collect9 NFTs", "C9T") {
+        ERC721("Collect9 NFTs", "C9T")
+        limitRoyalty(_royaltyDefault) {
             royaltyDefault = uint96(_royaltyDefault);
             royaltyDefaultReceiver = owner;
     }

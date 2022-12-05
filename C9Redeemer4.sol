@@ -10,14 +10,19 @@ interface IC9Redeemer {
     function add(address _tokenOwner, uint256[] calldata _tokenId) external;
     function cancel(address _tokenOwner) external returns(uint256 _data);
     function getMinRedeemUSD(uint256 _batchSize) external view returns(uint256);
-    function getRedemptionStep(address _tokenOwner) external view returns(uint256);
-    function getRedemptionInfo(address _tokenOwner) external view returns(uint32[] memory);
+    function getRedeemerInfo(address _tokenOwner) external view returns(uint256[] memory _info);
     function remove(address _tokenOwner, uint256[] calldata _tokenId) external;
     function start(address _tokenOwner, uint256[] calldata _tokenId) external;
 }
 
 contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     bytes32 public constant NFTCONTRACT_ROLE = keccak256("NFTCONTRACT_ROLE");
+
+    uint256 constant POS_STEP = 0;
+    uint256 constant POS_CODE = 8;
+    uint256 constant POS_BATCHSIZE = 24;
+    uint256 constant POS_TOKEN1 = 32;
+
     uint96 public redeemMinPrice = 20;
     address public contractPricer;
     uint256 private _seed;
@@ -67,10 +72,18 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     }
 
     modifier redemptionStep(address _tokenOwner, uint256 _step) {
-        if (_step != getRedemptionStep(_tokenOwner)) {
+        uint256 _data = redeemerData4[_tokenOwner];
+        if (_step != uint256(uint8(_data>>POS_STEP))) {
             _errMsg("wrong redemption step");
         }
         _;
+    }
+
+    function _checkBatchSize(uint256 _batchSize)
+        internal pure {
+            if (_batchSize == 0) {
+                _errMsg("no batch in process");
+            }
     }
 
     function _errMsg(bytes memory message) 
@@ -107,11 +120,9 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         onlyRole(NFTCONTRACT_ROLE)
         notFrozen() {
             uint256 _data = redeemerData4[_tokenOwner];
-            uint256 _batchSize = uint256(uint8(_data>>24));
-            if (_batchSize == 0) {
-                _errMsg("no batch in process");
-            }
-            if (uint256(uint8(_data>>0)) > 4) {
+            uint256 _batchSize = uint256(uint8(_data>>POS_BATCHSIZE));
+            _checkBatchSize(_batchSize);
+            if (uint256(uint8(_data>>POS_STEP)) > 4) {
                 _errMsg("current batch too far in process");
             }
             uint256 _addBatchSize = _tokenId.length;
@@ -122,7 +133,12 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             _data = _setTokenParam(_data, 24, _newBatchSize, 255);
             uint256 _offset = 32*_batchSize + 32;
             for (uint256 i; i<_addBatchSize;) {
-                _data |=  _tokenId[i]<<(32*i+_offset);
+                _data = _setTokenParam(
+                    _data,
+                    32*i+_offset,
+                    _tokenId[i],
+                    4294967295
+                );
                 unchecked {++i;}
             }
             redeemerData4[_tokenOwner] = _data;
@@ -140,13 +156,74 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         onlyRole(NFTCONTRACT_ROLE)
         returns(uint256 _data) {
             _data = redeemerData4[_tokenOwner];
-            uint256 _batchSize = uint256(uint8(_data>>24));
-            if (_batchSize == 0) {
-                _errMsg("no batch in process");
-            }
-            uint256 _lastStep = uint256(uint8(_data>>0));
+            uint256 _batchSize = uint256(uint8(_data>>POS_BATCHSIZE));
+            _checkBatchSize(_batchSize);
+            uint256 _lastStep = uint256(uint8(_data>>POS_STEP));
             _removeRedemptionData(_tokenOwner);
             emit RedeemerCancel(_tokenOwner, _lastStep, _batchSize);
+    }
+
+    /*
+     * @dev
+     * Remove individual tokens from the redemption process.
+     * This is useful is a tokenOwner wants to remove a 
+     * fraction of tokens in the process. Otherwise it may 
+     * end up being more expensive than cancel.
+     */
+    function remove(address _tokenOwner, uint256[] calldata _tokenId)
+        external override
+        onlyRole(NFTCONTRACT_ROLE) {
+            uint256 _data = redeemerData4[_tokenOwner];
+            uint256 _originalBatchSize = uint256(uint8(_data>>POS_BATCHSIZE));
+            _checkBatchSize(_originalBatchSize);
+            uint256 _removedBatchSize = _tokenId.length;
+            if (_removedBatchSize == _originalBatchSize) {
+                _errMsg("cancel to remove remaining batch");
+            }
+            if (_removedBatchSize > _originalBatchSize) {
+                _errMsg("some or all tokens not in batch");
+            }
+            /*
+            Swap and pop in memory instead of storage. This keeps 
+            gas cost down for larger _tokenId arrays.
+            */
+            uint256 _currentTokenId;
+            uint256 _lastTokenId;
+            uint256 _tokenOffset;
+            uint256 _currentBatchSize = _originalBatchSize;
+            for (uint256 i; i<_removedBatchSize;) { // foreach token to remove
+                for (uint j; j<_currentBatchSize;) { // check it against each existing token
+                    unchecked {_tokenOffset = POS_TOKEN1+32*j;}
+                    _currentTokenId = uint256(uint32(_data>>_tokenOffset));
+                    if (_currentTokenId == _tokenId[i]) { // if a match is found
+                        // get the last token
+                        _lastTokenId = uint256(uint32(_data>>(POS_TOKEN1+32*(_currentBatchSize-1))));
+                        // and swap it to the current position (to remove it)
+                        _data = _setTokenParam(
+                            _data,
+                            _tokenOffset,
+                            _lastTokenId,
+                            4294967295
+                        );
+                        // subtract 1 from current batch size
+                        --_currentBatchSize;
+                        break;
+                    }
+                    unchecked {++j;}
+                }
+                unchecked {++i;}
+            }
+
+            // Update new length in packed _data
+            uint256 _newBatchSize = _originalBatchSize-_removedBatchSize;
+            _data = _setTokenParam(_data, 24, _newBatchSize, 255);
+
+            redeemerData4[_tokenOwner] = _data;
+            emit RedeemerRemove(
+                _tokenOwner,
+                _originalBatchSize,
+                _newBatchSize
+            );  
     }
 
     /*
@@ -165,78 +242,20 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
      * @dev
      * Gets the redemption info/array of _tokenOwner.
      */
-    function getRedemptionInfo(address _tokenOwner)
+    function getRedeemerInfo(address _tokenOwner)
         public view override
-        returns(uint32[] memory) {
-            return redeemerData[_tokenOwner];
-    }
-
-    /*
-     * @dev Gets the redemption step _tokenOwner is at.
-     */
-    function getRedemptionStep(address _tokenOwner)
-        public view override
-        returns(uint256) {
+        returns(uint256[] memory _info) {
             uint256 _data = redeemerData4[_tokenOwner];
-            return uint256(uint8(_data>>0));
-    }
-
-    /*
-     * @dev
-     * Remove individual tokens from the redemption process.
-     * This is useful is a tokenOwner wants to remove a 
-     * fraction of tokens in the process. Otherwise it may 
-     * end up being more expensive than cancel.
-     */
-    function remove(address _tokenOwner, uint256[] calldata _tokenId)
-        external override
-        onlyRole(NFTCONTRACT_ROLE) {
-            uint256 _data = redeemerData4[_tokenOwner];
-            uint256 _currentBatchSize = uint256(uint8(_data>>24));
-            if (_currentBatchSize == 0) {
-                _errMsg("no batch in process");
-            }
-            uint256 _removedBatchSize = _tokenId.length;
-            if (_removedBatchSize >= _currentBatchSize) {
-                _errMsg("cancel to remove remaining batch");
-            }
-            /*
-            Swap and pop in memory instead of storage. This keeps 
-            gas cost down for larger _tokenId arrays.
-            */
-            uint256 _currentTokenId;
-            uint256 _lastTokenId;
-            uint256 _tokenOffset;
-            for (uint256 i; i<_removedBatchSize;) {
-                for (uint j; j<_currentBatchSize;) {
-                    _tokenOffset = 32+32*j;
-                    _currentTokenId = uint256(uint32(_data>>_tokenOffset));
-                    if (_tokenId[i] == _currentTokenId) {
-                        _lastTokenId = uint256(uint32(_data>>(32+32*(_currentBatchSize-1))));
-                        _data = _setTokenParam(
-                            _data,
-                            _tokenOffset,
-                            _lastTokenId,
-                            4294967295
-                        );
-                        --_currentBatchSize;
-                        unchecked {++j;}
-                        break;
-                    }
-                }
+            uint256 _batchSize = uint256(uint8(_data>>POS_BATCHSIZE));
+            _checkBatchSize(_batchSize);
+            _info = new uint256[](_batchSize+3);
+            _info[0] = uint256(uint8(_data>>POS_STEP));
+            _info[1] = uint256(uint16(_data>>POS_CODE));
+            _info[2] = _batchSize;
+            for (uint256 i; i<_batchSize;) {
+                _info[i+3] = uint256(uint32(_data>>(POS_TOKEN1+32*i)));
                 unchecked {++i;}
             }
-
-            // Update new length in packed _data
-            uint256 _newBatchSize = _currentBatchSize-_removedBatchSize;
-            _data = _setTokenParam(_data, 24, _newBatchSize, 255);
-
-            redeemerData4[_tokenOwner] = _data;
-            emit RedeemerRemove(
-                _tokenOwner,
-                _currentBatchSize,
-                _newBatchSize
-            );  
     }
 
     /**
@@ -294,7 +313,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         external view
         onlyRole(DEFAULT_ADMIN_ROLE)
         returns (uint256) {
-            return uint256(uint16(redeemerData4[_tokenOwner]>>8));
+            return uint256(uint16(redeemerData4[_tokenOwner]>>POS_CODE));
     }
 
     /**
@@ -309,7 +328,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         onlyRole(DEFAULT_ADMIN_ROLE)
         redemptionStep(_tokenOwner, 2) {
             uint256 _data = redeemerData4[_tokenOwner];
-            if (_code != uint256(uint16(_data>>8))) {
+            if (_code != uint256(uint16(_data>>POS_CODE))) {
                 _errMsg("code mismatch");
             }
             _data = _setTokenParam(_data, 0, 3, 255);
@@ -327,7 +346,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         external
         redemptionStep(msg.sender, 3) {
             uint256 _data = redeemerData4[msg.sender];
-            if (_code != uint256(uint16(_data>>8))) {
+            if (_code != uint256(uint16(_data>>POS_CODE))) {
                 _errMsg("code mismatch");
             }
             _data = _setTokenParam(_data, 0, 4, 255);
@@ -351,7 +370,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         external payable
         redemptionStep(msg.sender, 4) {
             uint256 _data = redeemerData4[msg.sender];
-            uint256 _batchSize = uint256(uint8(_data>>24));
+            uint256 _batchSize = uint256(uint8(_data>>POS_BATCHSIZE));
             uint256 _minRedeemUsd = getMinRedeemUSD(_batchSize);
             // uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_minRedeemUsd);
             // if (msg.value < _minRedeemWei) {
