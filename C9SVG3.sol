@@ -184,16 +184,15 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
         "<text x='50%' y='698' class='tXXXXXX'>";
 
     bytes constant _defaultQrData = "d80dC0G0G1D394F4dD596F6B7d08d58C8F90AFA0CGCGD0EFEBF0Gg2:T:2:U:4:V:7:T:8:V:8:6c:B:U:C:U:G"; //c9.ws
-    
     address public immutable tokenContract;
-    mapping(bytes1 => string) letterMap;
-
+    
     /* @dev 5.8M vs 5.1M gas deployment cost with letterMap.
      * This means it's probably not worth looking into 
      * functions that can determine mappings from bit shift
      * operations as relative to the cost of the entire 
      * contract it is not too significant and is also fast.
      */
+    mapping(bytes1 => string) letterMap;
     constructor (address _tokenContract) {
         letterMap[0x41] = "10"; // A
         letterMap[0x42] = "11"; // B
@@ -458,17 +457,16 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
                 barCodeSVG(bytes(_sTokenData[2]), _id),
                 "</a></g>"
             );
-            vb =  bytes.concat(vb, addUpgradeText(uint256(uint8(_uTokenData>>POS_UPGRADED))));
     }
 
     /**
      * @dev If token has been upgraded, add text that shows it has.
      */
     function addUpgradeText(uint256 _upgraded) internal pure returns(bytes memory upgradedText) {
-        upgradedText = "<text x='190' y='58' style='font-family: \"Brush Script MT\", cursive;' font-size='22'>        </text>";
-        assembly {
-            let dst := add(upgradedText, 117)
-            if eq(_upgraded, 1) {
+        if (_upgraded == 1) {
+            upgradedText = "<text x='190' y='58' style='font-family: \"Brush Script MT\", cursive;' font-size='22'>        </text>";
+            assembly {
+                let dst := add(upgradedText, 117)
                 mstore(dst, or(and(mload(dst), not(shl(192, 0xFFFFFFFFFFFFFFFF))), "upgraded"))
             }
         }
@@ -798,18 +796,6 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
                     entry = "      ";
                     continue;
                 }
-                else if (e0 == 0x77) {
-                    tmp = "<rect style='width: px;' ";
-                    e0 = entry[1];
-                    assembly {
-                        let dst := add(tmp, 51)
-                        mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), e0))
-                    }
-                    output = bytes.concat(output, tmp);
-                    xflg = true;
-                    entry = "      ";
-                    continue;
-                }
                 else if (e0 == 0x64) {
                     output = bytes.concat(output, "<use href='#d' ");
                     if(!delims) {
@@ -898,6 +884,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
                     uint256(uint8(_uTokenData>>POS_MARKERTUSH)),
                     uint256(uint8(_uTokenData>>POS_GENTAG))
                 ),
+                addUpgradeText(uint256(uint8(_uTokenData>>POS_UPGRADED))),
                 "</g></svg>"
             )
         );
