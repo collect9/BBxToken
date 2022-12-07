@@ -1021,7 +1021,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             );
     }
 
-        /**
+    /**
      * @dev Returns the base64 representation of the SVG string. 
      * This is desired when including the string in json data which 
      * does not allow special characters found in hmtl/xml code.

@@ -103,14 +103,18 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
         "<use href='#c9usa' x='182.4'/>"
         "<use href='#c9usa' x='243.2'/>"
         "<use href='#c9uso' x='304'/>";
-    
-    bytes constant _defaultQrData = "d80dC0G0G1dB3F4dD5F6B7d08d58C8F90AFA0CGC0EBF0Gg2:U:4:T:6:V:7:T:8:V:8:6.5:B:U:C:U:G";
+
+    bytes constant _defaultQrData = "d80dC0G0G1D394F4dD596F6B7d08d58C8F90AFA0CGCGD0EFEBF0Gg2:T:2:U:4:V:7:T:8:V:8:6c:B:U:C:U:G"; //c9.ws
     
     address public immutable tokenContract;
-    /**
-     * @dev Sets up the mapping for compressed/mapped SVG input data.
-     */
     mapping(bytes1 => string) letterMap;
+
+    /* @dev 5.8M vs 5.1M gas deployment cost with letterMap.
+     * This means it's probably not worth looking into 
+     * functions that can determine mappings from bit shift
+     * operations as relative to the cost of the entire 
+     * contract it is not too significant and is also fast.
+     */
     constructor (address _tokenContract) {
         letterMap[0x41] = "10"; // A
         letterMap[0x42] = "11"; // B
@@ -119,8 +123,14 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
         letterMap[0x45] = "14"; // E
         letterMap[0x46] = "15"; // F
         letterMap[0x47] = "16"; // G
-        letterMap[0x48] = "18"; // H
-        letterMap[0x49] = "38"; // I
+        letterMap[0x48] = "17"; // H
+        letterMap[0x49] = "18"; // I
+        letterMap[0x4a] = "19"; // J
+        letterMap[0x4b] = "24"; // K
+        letterMap[0x4c] = "28"; // L
+        letterMap[0x4d] = "29"; // M
+        letterMap[0x4e] = "30"; // N
+        letterMap[0x4f] = "38"; // O
         letterMap[0x52] = "2.5"; // R
         letterMap[0x53] = "2.67"; // S
         letterMap[0x54] = "4.5"; // T
@@ -135,6 +145,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
         letterMap[0x62] = ".33"; // b
         letterMap[0x63] = ".5"; // c
         letterMap[0x64] = ".67"; // d
+        letterMap[0x66] = "1."; // f
         tokenContract = _tokenContract;
     }
 
@@ -633,6 +644,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
                 if (e0 == 0x20) { //space
                     break;
                 }
+                // Custom mapping functions here
                 if (bytes1(bytes(letterMap[e0])) != 0x00) {
                     tmp = bytes.concat(tmp, bytes(letterMap[e0]));
                 }
