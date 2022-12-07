@@ -149,7 +149,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
 
     /*
      * @dev Checks if address is a smart contract (except from 
-     a constructor).
+     * a constructor).
      */ 
     modifier isContract(address _address) {
         uint256 size;
@@ -930,7 +930,8 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     function setTokenSData(uint256 _tokenId, string memory _sData)
         public 
         onlyRole(DEFAULT_ADMIN_ROLE)
-        tokenExists(_tokenId) {
+        tokenExists(_tokenId)
+        notRedeemed(_tokenId) {
             _sTokenData[_tokenId] = _sData;
     }
 
@@ -947,6 +948,33 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
                 _errMsg("bool already set");
             }
             svgOnly = _flag;
+    }
+
+    
+    /**
+     * @dev Allows holder to set back to SVG view after 
+     * token has already been upgraded. Flag must be set 
+     * back to true for upgraded view to show again.
+     * Cost: ~31,000 gas.
+     */
+    function setTokenDisplay(uint256 _tokenId, bool _flag)
+        external
+        isOwner(_tokenId) {
+            uint256 _tokenData = _uTokenData[_tokenId];
+            uint256 _val = uint256(uint8(_tokenData>>POS_UPGRADED));
+            if (_val != 1) {
+                _errMsg("token is not upgraded");
+            }
+            _val = uint256(uint8(_tokenData>>POS_DISPLAY));
+            if (Helpers.uintToBool(_val) == _flag) {
+                _errMsg("view already set");
+            }
+            _uTokenData[_tokenId] = _setTokenParam(
+                _tokenData,
+                POS_DISPLAY,
+                _flag ? 1 : 0,
+                255
+            );
     }
 
     /**
@@ -988,32 +1016,6 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
                 _errMsg("invalid external vId");
             }
             _setTokenValidity(_tokenId, _vId);
-    }
-
-    /**
-     * @dev Allows holder to set back to SVG view after 
-     * token has already been upgraded. Flag must be set 
-     * back to true for upgraded view to show again.
-     * Cost: ~31,000 gas.
-     */
-    function setTokenDisplay(uint256 _tokenId, bool _flag)
-        external
-        isOwner(_tokenId) {
-            uint256 _tokenData = _uTokenData[_tokenId];
-            uint256 _val = uint256(uint8(_tokenData>>POS_UPGRADED));
-            if (_val != 1) {
-                _errMsg("token is not upgraded");
-            }
-            _val = uint256(uint8(_tokenData>>POS_DISPLAY));
-            if (Helpers.uintToBool(_val) == _flag) {
-                _errMsg("view already set");
-            }
-            _uTokenData[_tokenId] = _setTokenParam(
-                _tokenData,
-                POS_DISPLAY,
-                _flag ? 1 : 0,
-                255
-            );
     }
 
     /**
@@ -1104,8 +1106,8 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
                     Base64.encode(
                         abi.encodePacked(
                             IC9MetaData(contractMeta).metaNameDesc(_tokenData, _sTokenData[_tokenId]),
-                            image,
-                            IC9MetaData(contractMeta).metaAttributes(_tokenData)
+                            image
+                            //IC9MetaData(contractMeta).metaAttributes(_tokenData)
                         )
                     )
                 )

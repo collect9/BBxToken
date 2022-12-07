@@ -2,8 +2,7 @@
 pragma solidity >=0.8.10 <0.9.0;
 import "./C9OwnerControl.sol";
 import "./C9Registrar.sol";
-import "./C9Struct.sol";
-import "./C9Token2.sol";
+import "./C9Token3.sol";
 import "./utils/EthPricer.sol";
 
 uint256 constant RPOS_STEP = 0;
@@ -23,6 +22,7 @@ interface IC9Redeemer {
 }
 
 contract C9Redeemer is IC9Redeemer, C9OwnerControl {
+    bytes32 public constant FRONTEND_ROLE = keccak256("FRONTEND_ROLE");
     bytes32 public constant NFTCONTRACT_ROLE = keccak256("NFTCONTRACT_ROLE");
     uint96 public redeemMinPrice = 20;
     address public contractPricer;
@@ -70,6 +70,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     constructor(uint256 seed_, address contractToken_) {
         contractToken = contractToken_;
         _seed = seed_;
+        _grantRole(FRONTEND_ROLE, msg.sender);
         _grantRole(NFTCONTRACT_ROLE, contractToken_);
     }
 
@@ -326,7 +327,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
      */
     function adminGetRedemptionCode(address _tokenOwner)
         external view
-        onlyRole(DEFAULT_ADMIN_ROLE)
+        onlyRole(FRONTEND_ROLE)
         returns (uint256) {
             return uint256(uint16(redeemerData4[_tokenOwner]>>RPOS_CODE));
     }
@@ -340,7 +341,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
      */
     function adminVerifyRedemptionCode(address _tokenOwner, uint256 _code)
         external
-        onlyRole(DEFAULT_ADMIN_ROLE)
+        onlyRole(FRONTEND_ROLE)
         redemptionStep(_tokenOwner, 2) {
             uint256 _data = redeemerData4[_tokenOwner];
             if (_code != uint256(uint16(_data>>RPOS_CODE))) {
@@ -410,7 +411,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
      */
     function adminFinalApproval(address _tokenOwner)
         external
-        onlyRole(DEFAULT_ADMIN_ROLE)
+        onlyRole(FRONTEND_ROLE)
         redemptionStep(_tokenOwner, 5)
         notFrozen() {
             IC9Token(contractToken).redeemFinish(redeemerData4[_tokenOwner]);

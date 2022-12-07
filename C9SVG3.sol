@@ -264,7 +264,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
         uint256 _tokenId = uint256(uint32(_uTokenData>>POS_TOKENID));
 
         bytes3 _clr;
-        bytes16 _validity = _vValidity[_validityIdx];
+        bytes16 _validity = _vValidity[_validityIdx%5];
         bool _lock = false;
         if (_validityIdx == 0) {
             bool _preRedeemable = IC9Token(tokenContract).preRedeemable(_tokenId);
@@ -346,7 +346,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
                 uint256(uint8(_uTokenData>>POS_RARITYTIER)),
                 uint256(uint8(_uTokenData>>POS_SPECIAL))
             );
-            bytes3 _rgc2 = hex3[_bgidx];
+            bytes3 _rgc2 = uint256(uint8(_uTokenData>>POS_VALIDITY)) < 3 ? hex3[_bgidx] : bytes3("888");
             bytes2 _namesize = getNameSize(uint256(bytes(_name).length));
         
             assembly {
@@ -590,34 +590,6 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
             }
         }
         return bytes7(_tmpout);
-    }
-
-    /**
-     * @dev Returns styling and textual information based on token attributes input 
-     * params `_spec` and `_rtier`.
-     */
-    function getGradientColors(uint256 _uTokenData) internal view returns (bytes3, bytes16) {
-        uint256 _genTag = uint256(uint8(_uTokenData>>POS_GENTAG));
-        uint256 _rarityTier = uint256(uint8(_uTokenData>>POS_RARITYTIER));
-        uint256 _specialTier = uint256(uint8(_uTokenData>>POS_SPECIAL));
-
-        bytes16 _b16Tier = rarityTiers[_rarityTier];
-        bytes memory _bTier = "                ";
-        assembly {
-            let dst := add(_bTier, 32)
-            mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _b16Tier))
-        }
-        
-        bytes3 _bgColor;
-        if (_specialTier > 0) {
-            bytes16 _sTier = specialTiers[_specialTier];
-            _bTier[0] = _sTier[0];
-            _bgColor = hex3[_specialTier+5];
-        }
-        else {
-            _bgColor = hex3[_genTag];
-        }
-        return (_bgColor, bytes16(_bTier));
     }
 
     /**
