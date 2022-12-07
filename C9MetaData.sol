@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.7 <0.9.0;
+pragma solidity >=0.8.10 <0.9.0;
 import "./utils/Helpers.sol";
 import "./C9Shared.sol";
-import "./C9Struct.sol";
+import "./C9Struct2.sol";
 
 
 interface IC9MetaData {
@@ -34,20 +34,22 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Struct {
      * @dev Constructs the json string portion containing the external_url, description, 
      * and name parts.
      */
-    function metaNameDesc(uint256 _uTokenData, string calldata _name)
+    function metaNameDesc(uint256 _uTokenData, string calldata _sTokenData)
         external view override
         returns(bytes memory) {
+            (uint256 sliceIndex1,) = _getSliceIndices(_sTokenData);
+            bytes calldata _name = bytes(_sTokenData[:sliceIndex1]);
             bytes6 _id = Helpers.tokenIdToBytes(
-                _getTokenParam(_uTokenData, TokenProps.TOKENID)
+                uint256(uint32(_uTokenData>>POS_TOKENID))
             );
             bytes3 _gentag = Helpers.uintToOrdinal(
-                _getTokenParam(_uTokenData, TokenProps.GENTAG)
+                uint256(uint8(_uTokenData>>POS_GENTAG))
             );
             bytes3 _gentush = Helpers.uintToOrdinal(
-                _getTokenParam(_uTokenData, TokenProps.GENTUSH)
+                uint256(uint8(_uTokenData>>POS_GENTUSH))
             );
-            bytes3 _cntrytag = _vFlags[_getTokenParam(_uTokenData, TokenProps.CNTRYTAG)];
-            bytes3 _cntrytush = _vFlags[_getTokenParam(_uTokenData, TokenProps.CNTRYTUSH)];
+            bytes3 _cntrytag = _vFlags[uint256(uint8(_uTokenData>>POS_CNTRYTAG))];
+            bytes3 _cntrytush = _vFlags[uint256(uint8(_uTokenData>>POS_CNTRYTUSH))];
             uint256 x = _cntrytag[2] == 0x20 ? 0 : 1;
             bytes memory _datap1 = '{'
                 '"external_url":"https://collect9.io/nft/      ",'
@@ -93,9 +95,9 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Struct {
             }
             return bytes.concat(
                 _datap1,
-                bytes(_name),
+                _name,
                 _datap2,
-                bytes(_name),
+                _name,
                 _datap3
             );
     }
@@ -107,29 +109,29 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Struct {
         external view override
         returns (bytes memory b) {
             (uint256 _bgidx, bytes16 _rclass) = _getRarityTier(
-                _getTokenParam(_uTokenData, TokenProps.GENTAG),
-                _getTokenParam(_uTokenData, TokenProps.RARITYTIER),
-                _getTokenParam(_uTokenData, TokenProps.SPECIAL)
+                uint256(uint8(_uTokenData>>POS_GENTAG)),
+                uint256(uint8(_uTokenData>>POS_RARITYTIER)),
+                uint256(uint8(_uTokenData>>POS_SPECIAL))
             );
             bytes10 _bgcolor = hex3ToColor[hex3[_bgidx]];
 
             bytes3 _gentag = Helpers.uintToOrdinal(
-                _getTokenParam(_uTokenData, TokenProps.GENTAG)
+                uint256(uint8(_uTokenData>>POS_GENTAG))
             );
             bytes3 _gentush = Helpers.uintToOrdinal(
-                _getTokenParam(_uTokenData, TokenProps.GENTUSH)
+                uint256(uint8(_uTokenData>>POS_GENTUSH))
             );
-            bytes3 _cntrytag = _vFlags[_getTokenParam(_uTokenData, TokenProps.CNTRYTAG)];
-            bytes3 _cntrytush = _vFlags[_getTokenParam(_uTokenData, TokenProps.CNTRYTUSH)];
+            bytes3 _cntrytag = _vFlags[uint256(uint8(_uTokenData>>POS_CNTRYTAG))];
+            bytes3 _cntrytush = _vFlags[uint256(uint8(_uTokenData>>POS_CNTRYTUSH))];
             bytes2 _edition = Helpers.remove2Null(bytes2(Helpers.uintToBytes(
-                _getTokenParam(_uTokenData, TokenProps.EDITION)
+                uint256(uint8(_uTokenData>>POS_EDITION))
             )));
             bytes4 __mintId = Helpers.flip4Space(bytes4(Helpers.uintToBytes(
-                _getTokenParam(_uTokenData, TokenProps.MINTID)
+                uint256(uint16(_uTokenData>>POS_MINTID))
             )));
 
-            bytes3 _upgraded = _getTokenParam(_uTokenData, TokenProps.UPGRADED) == 1 ? bytes3("YES") : bytes3("NO ");
-            bytes3 _redeemed = _getTokenParam(_uTokenData, TokenProps.VALIDITY) == REDEEMED ? bytes3("YES") : bytes3("NO ");
+            bytes3 _upgraded = uint256(uint8(_uTokenData>>POS_UPGRADED)) > 0 ? bytes3("YES") : bytes3("NO ");
+            bytes3 _redeemed = uint256(uint8(_uTokenData>>POS_VALIDITY)) == REDEEMED ? bytes3("YES") : bytes3("NO ");
 
             uint256 _offset = _cntrytag[2] == 0x20 ? 0 : 1;
             b = '","attributes":['
@@ -191,6 +193,6 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Struct {
                 dst := add(b, 739)
                 mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _redeemed))
             }
-            checkTushMarker(_getTokenParam(_uTokenData, TokenProps.MARKERTUSH), b, _offset);
+            checkTushMarker(uint256(uint8(_uTokenData>>POS_MARKERTUSH)), b, _offset);
         }
 }

@@ -2,11 +2,11 @@
 pragma solidity >=0.8.10 <0.9.0;
 import "./utils/ERC721Enum32packed.sol";
 
-//import "./C9MetaData.sol";
+import "./C9MetaData.sol";
 import "./C9OwnerControl.sol";
 import "./C9Redeemer24.sol";
 import "./C9Struct2.sol";
-import "./C9SVG2.sol";
+import "./C9SVG3.sol";
 
 import "./utils/Base64.sol";
 import "./utils/Helpers.sol";
@@ -146,6 +146,22 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         }
         _;
     }
+
+    /*
+     * @dev Checks if address is a smart contract (except from 
+     a constructor).
+     */ 
+    modifier isContract(address _address) {
+        uint256 size;
+        assembly {
+            size := extcodesize(_address)
+        }
+        if (size == 0) {
+            _errMsg("caller must be contract");
+        }
+        _;
+    }
+
 
     /*
      * @dev Checks to see if caller is the token owner.
@@ -748,7 +764,8 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      */
     function redeemFinish(uint256 _redeemerData)
         external override
-        onlyRole(REDEEMER_ROLE) {
+        onlyRole(REDEEMER_ROLE)
+        isContract(msg.sender) {
             uint256 _batchSize = uint256(uint8(_redeemerData>>RPOS_BATCHSIZE));
             uint256 _tokenOffset = RPOS_TOKEN1;
             for (uint256 i; i<_batchSize;) {
@@ -965,6 +982,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     function setTokenValidity(uint256 _tokenId, uint256 _vId)
         external
         onlyRole(VALIDITY_ROLE)
+        isContract(msg.sender)
         tokenExists(_tokenId) {
             if (_vId > 3) {
                 _errMsg("invalid external vId");
@@ -1005,6 +1023,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     function setTokenUpgraded(uint256 _tokenId, uint256 _val)
         external override
         onlyRole(UPGRADER_ROLE)
+        isContract(msg.sender)
         tokenExists(_tokenId) {
             if (_val == 0 || _val > 9) {
                 _errMsg("invalid upgrade val");
@@ -1084,9 +1103,9 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
                     'data:application/json;base64,',
                     Base64.encode(
                         abi.encodePacked(
-                            //IC9MetaData(contractMeta).metaNameDesc(_tokenData, _sTokenData[_tokenId][0]),
-                            image
-                            //IC9MetaData(contractMeta).metaAttributes(_tokenData)
+                            IC9MetaData(contractMeta).metaNameDesc(_tokenData, _sTokenData[_tokenId]),
+                            image,
+                            IC9MetaData(contractMeta).metaAttributes(_tokenData)
                         )
                     )
                 )
