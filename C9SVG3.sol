@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.10 <0.9.0;
-import "@openzeppelin/contracts/access/Ownable.sol";
 
 import "./C9Shared.sol";
 import "./C9Struct2.sol";
@@ -11,7 +10,7 @@ interface IC9SVG {
     function returnSVG(address _address, uint256 _uTokenData, string calldata _sTokenData) external view returns(string memory);
 }
 
-contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
+contract C9SVG is IC9SVG, C9Shared, C9Struct {
     /**
      * @dev Optimized SVG flags in storage.
      */

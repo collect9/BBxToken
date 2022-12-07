@@ -15,11 +15,11 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Struct {
      * @dev Moved because metaAttributes was getting a stack 
      * too deep error with this portion of the code included.
      */
-    function checkTushMarker(uint256 _markerTush, bytes memory b, uint256 _offset)
+    function _checkTushMarker(uint256 _markerTush, bytes memory b, uint256 _offset)
         internal view {
-            bytes4 _markertush = _vMarkers[_markerTush-1];
-            assembly {
-                if gt(_markerTush, 0) {
+            if (_markerTush > 0) {
+                bytes4 _markertush = _vMarkers[_markerTush-1];
+                assembly {
                     let dst := add(b, 316)
                     mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), _markertush))
                     dst := add(b, 367)
@@ -193,6 +193,6 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Struct {
                 dst := add(b, 739)
                 mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _redeemed))
             }
-            checkTushMarker(uint256(uint8(_uTokenData>>POS_MARKERTUSH)), b, _offset);
+            _checkTushMarker(uint256(uint8(_uTokenData>>POS_MARKERTUSH)), b, _offset);
         }
 }

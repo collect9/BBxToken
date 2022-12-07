@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.10 <0.9.0;
 import "./C9OwnerControl.sol";
-import "./C9Token2.sol";
+import "./C9Token3.sol";
 import "./utils/EthPricer.sol";
 
 
@@ -36,6 +36,12 @@ contract C9Upgrader is C9Struct, C9OwnerControl {
             revert(string(bytes.concat("C9Upgrader: ", message)));
     }
 
+    function getUpgradePrice(uint256 _upgradeLevel) 
+        public view
+        returns (uint256 _upgradePrice) {
+            _upgradePrice = baseUpgradePrice * _upgradeLevel;
+    }
+
     /**
      * @dev Allows the token holder to upgrade their token.
      */
@@ -43,10 +49,11 @@ contract C9Upgrader is C9Struct, C9OwnerControl {
         external payable
         isOwner(_tokenId)
         notFrozen() {
-            if (IC9Token(contractToken).tokenUpgraded(_tokenId)) {
+            uint256[18] memory _uTokenData = IC9Token(contractToken).getTokenParams(_tokenId);
+            if (_uTokenData[0] != 0) {
                 _errMsg("token already upgraded");
             }
-            uint256 _upgradePrice = baseUpgradePrice * _upgradeLevel;
+            uint256 _upgradePrice = getUpgradePrice(_upgradeLevel);
             uint256 upgradeWeiPrice = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_upgradePrice);
             if (msg.value != upgradeWeiPrice) {
                 _errMsg("incorrect payment amount");
@@ -56,19 +63,19 @@ contract C9Upgrader is C9Struct, C9OwnerControl {
                 _errMsg("payment failure");
             }
             IC9Token(contractToken).setTokenUpgraded(_tokenId, _upgradeLevel);
-            emit Upgraded(msg.sender, _tokenId, _upgradePrice);
+            emit Upgraded(_tokenId, msg.sender, _upgradePrice);
     }
 
     /**
      * @dev Allows upgradePrice to be tuned.
      */
-    function setBaseUpgradePrice(uint8 _price)
+    function setBaseUpgradePrice(uint16 _price)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (tokensUpgradePrice == _price) {
+            if (baseUpgradePrice == _price) {
                 _errMsg("price already set");
             }
-            tokensUpgradePrice = _price;
+            baseUpgradePrice = _price;
     }
 
     /**

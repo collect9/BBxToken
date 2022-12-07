@@ -13,6 +13,7 @@ import "./utils/Helpers.sol";
 
 interface IC9Token {
     function getTokenParams(uint256 _tokenId) external view returns(uint256[18] memory params);
+    function ownerOf(uint256 _tokenId) external view returns(address);
     function redeemAdd(uint256[] calldata _tokenId) external;
     function redeemCancel() external;
     function redeemFinish(uint256 _redeemerData) external;
@@ -43,6 +44,8 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     address public contractMeta;
     address public contractRedeemer;
     address public contractSVG;
+    address public contractUpgrader;
+    address public contractVH;
 
     /**
      * @dev Flag that may enable external artwork versions to be 
@@ -91,8 +94,8 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
      * the physical collectible cannot be modified once set.
      */
     mapping(uint256 => address) private _rTokenData;
-    mapping(uint256 => uint256) private _uTokenData;
     mapping(uint256 => string) private _sTokenData;
+    mapping(uint256 => uint256) private _uTokenData;
     
     /**
      * @dev Mapping that checks whether or not some combination of 
@@ -227,6 +230,16 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         inRedemption(tokenId, 0) {
             super._beforeTokenTransfer(from, to, tokenId, batchSize);
             _checkActivity(tokenId);
+    }
+
+    /**
+     * @dev To add to the interface.
+     */
+    function ownerOf(uint256 _tokenId)
+        public view
+        override(IERC721, ERC721, IC9Token)
+        returns (address) {
+            return super.ownerOf(_tokenId);
     }
 
     function supportsInterface(bytes4 interfaceId)
@@ -878,7 +891,7 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
     }
 
     /**
-     * @dev Updates the redemption data contract address.
+     * @dev Updates the redemption contract address.
      * Cost: ~72,000 gas
      */
     function setContractRedeemer(address _address)
@@ -887,6 +900,18 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         addressNotSame(contractRedeemer, _address) {
             contractRedeemer = _address;
             _grantRole(REDEEMER_ROLE, contractRedeemer);
+    }
+
+    /**
+     * @dev Updates the validity handler contract address.
+     * Cost: ~72,000 gas
+     */
+    function setContractVH(address _address)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        addressNotSame(contractVH, _address) {
+            contractVH = _address;
+            _grantRole(VALIDITY_ROLE, contractVH);
     }
 
     /**
@@ -902,6 +927,18 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         onlyRole(DEFAULT_ADMIN_ROLE)
         addressNotSame(contractSVG, _address) {
             contractSVG = _address;
+    }
+
+    /**
+     * @dev Updates the upgrader contract address.
+     * Cost: ~72,000 gas
+     */
+    function setContractUpgrader(address _address)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        addressNotSame(contractUpgrader, _address) {
+            contractUpgrader = _address;
+            _grantRole(UPGRADER_ROLE, contractUpgrader);
     }
 
     /**
@@ -1106,8 +1143,8 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
                     Base64.encode(
                         abi.encodePacked(
                             IC9MetaData(contractMeta).metaNameDesc(_tokenData, _sTokenData[_tokenId]),
-                            image
-                            //IC9MetaData(contractMeta).metaAttributes(_tokenData)
+                            image,
+                            IC9MetaData(contractMeta).metaAttributes(_tokenData)
                         )
                     )
                 )
