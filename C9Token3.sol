@@ -226,8 +226,8 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
         )
         internal
         override(ERC721Enumerable)
-        notFrozen()
-        inRedemption(tokenId, 0) {
+        inRedemption(tokenId, 0)
+        notFrozen() {
             super._beforeTokenTransfer(from, to, tokenId, batchSize);
             _checkActivity(tokenId);
     }
@@ -987,7 +987,6 @@ contract C9Token is IC9Token, C9Struct, ERC721Enumerable, C9OwnerControl {
             svgOnly = _flag;
     }
 
-    
     /**
      * @dev Allows holder to set back to SVG view after 
      * token has already been upgraded. Flag must be set 

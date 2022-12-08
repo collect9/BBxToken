@@ -82,21 +82,21 @@ abstract contract C9Struct {
      */
     function _getSliceIndices(string calldata _sTokenData)
         internal pure
-        returns (uint256 _splitIndex1, uint256 _splitIndex2) {
+        returns (uint256 _sliceIndex1, uint256 _sliceIndex2) {
             bytes memory _bData = bytes(_sTokenData);
-            for (_splitIndex1; _splitIndex1<32;) {
-                if (_bData[_splitIndex1] == 0x3d) {
+            for (_sliceIndex1; _sliceIndex1<32;) {
+                if (_bData[_sliceIndex1] == 0x3d) {
                     break;
                 }
-                unchecked {++_splitIndex1;}
+                unchecked {++_sliceIndex1;}
             }
             uint256 _bDataLen = _bData.length;
-            _splitIndex2 = _splitIndex1 + 50;
-            for (_splitIndex2; _splitIndex2<_bDataLen;) {
-                if (_bData[_splitIndex2] == 0x3d) {
+            _sliceIndex2 = _sliceIndex1 + 50;
+            for (_sliceIndex2; _sliceIndex2<_bDataLen;) {
+                if (_bData[_sliceIndex2] == 0x3d) {
                     break;
                 }
-                unchecked {++_splitIndex2;}
+                unchecked {++_sliceIndex2;}
             }
     }
 

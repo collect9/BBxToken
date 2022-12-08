@@ -307,21 +307,6 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         _afterTokenTransfer(address(0), to, tokenId, 1);
     }
 
-    function _mint(address to, uint256[] memory tokenIds) internal virtual {
-        uint256 _batchSize = tokenIds.length;
-        for (uint256 i; i<_batchSize;) {
-            uint256 _tokenId = tokenIds[i];
-            _beforeTokenTransfer(address(0), to, _tokenId, 1);
-            require(!_exists(_tokenId), "ERC721: token already minted");
-            _owners[_tokenId] = to;
-            emit Transfer(address(0), to, _tokenId);
-            unchecked {++i;}
-        }
-        unchecked {
-            _balances[to] += _batchSize;
-        }
-    }
-
     /**
      * @dev Destroys `tokenId`.
      * The approval is cleared when the token is burned.
