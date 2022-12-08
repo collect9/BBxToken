@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >0.8.10;
+pragma solidity >=0.8.7 <0.9.0;
 
 
 abstract contract C9Struct {
@@ -9,10 +9,6 @@ abstract contract C9Struct {
     uint256 constant INACTIVE = 2;
     uint256 constant OTHER = 3;
     uint256 constant REDEEMED = 4;
-
-    uint256 constant ROYALTIES_DEAD = 5;
-    uint256 constant INACTIVE_DEAD = 6;
-    uint256 constant OTHER_DEAD = 7;
 
     struct TokenData {
         uint256 upgraded;
@@ -33,9 +29,17 @@ abstract contract C9Struct {
         uint256 tokenid; // Physical authentication id
         uint256 validitystamp; // Needed if validity invalid
         uint256 mintstamp; // Minting timestamp
-        string sData;
+        string name;
+        string qrdata;
+        string brdata;
     }
-    
+
+    struct sTokenData {
+        string name;
+        string qrdata;
+        string brdata;
+    }
+
     enum TokenProps {
         UPGRADED,
         DISPLAY,
@@ -76,49 +80,6 @@ abstract contract C9Struct {
     uint256 constant POS_VALIDITYSTAMP = 176;
     uint256 constant POS_MINTSTAMP = 216;
 
-    /*
-     * @dev Returns the indices that split sTokenData into 
-     * name, qrData, barCodeData.
-     */
-    function _getSliceIndices(string calldata _sTokenData)
-        internal pure
-        returns (uint256 _sliceIndex1, uint256 _sliceIndex2) {
-            bytes memory _bData = bytes(_sTokenData);
-            for (_sliceIndex1; _sliceIndex1<32;) {
-                if (_bData[_sliceIndex1] == 0x3d) {
-                    break;
-                }
-                unchecked {++_sliceIndex1;}
-            }
-            uint256 _bDataLen = _bData.length;
-            _sliceIndex2 = _sliceIndex1 + 50;
-            for (_sliceIndex2; _sliceIndex2<_bDataLen;) {
-                if (_bData[_sliceIndex2] == 0x3d) {
-                    break;
-                }
-                unchecked {++_sliceIndex2;}
-            }
-    }
-
-    function _getTokenParam(uint256 _packedToken, TokenProps _idx)
-        internal view virtual
-        returns(uint256) {
-            return getTokenParams(_packedToken)[uint256(_idx)];
-    }
-
-    function _setTokenParam(
-        uint256 _packedToken,
-        uint256 _pos,
-        uint256 _val,
-        uint256 _mask
-    )
-        internal pure virtual
-        returns(uint256) {
-            _packedToken &= ~(_mask<<_pos); //zero out only its portion
-            _packedToken |= _val<<_pos; //write value back in
-            return _packedToken;
-    }
-
     function getTokenParams(uint256 _packedToken)
         public view virtual
         returns(uint256[18] memory params) {
@@ -141,4 +102,25 @@ abstract contract C9Struct {
             params[16] = uint256(uint40(_packedToken>>POS_VALIDITYSTAMP));
             params[17] = uint256(uint40(_packedToken>>POS_MINTSTAMP));
     }
+
+    function _getTokenParam(uint256 _packedToken, TokenProps _idx)
+        internal view virtual
+        returns(uint256) {
+            return getTokenParams(_packedToken)[uint256(_idx)];
+    }
+
+    function _setTokenParam(
+        uint256 _packedToken,
+        uint256 _pos,
+        uint256 _val,
+        uint256 _mask
+    )
+        internal pure virtual
+        returns(uint256) {
+            _packedToken &= ~(_mask<<_pos); //zero out only its portion
+            _packedToken |= _val<<_pos; //write value back in
+            return _packedToken;
+    }
+
+    
 }

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >0.8.10;
+pragma solidity >=0.8.10 <0.9.0;
 import "./C9OwnerControl.sol";
 import "./C9Registrar.sol";
-import "./C9Token.sol";
+import "./C9Token3.sol";
 import "./utils/EthPricer.sol";
 
 uint256 constant RPOS_STEP = 0;
@@ -388,8 +388,9 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             uint256 _data = redeemerData4[msg.sender];
             uint256 _batchSize = uint256(uint8(_data>>RPOS_BATCHSIZE));
             uint256 _minRedeemUsd = getMinRedeemUSD(_batchSize);
-            uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_minRedeemUsd);
-            if (msg.value < _minRedeemWei) {
+            // uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_minRedeemUsd);
+            // if (msg.value < _minRedeemWei) {
+            if (msg.value == 0) {
                 _errMsg("invalid payment amount");
             }
             (bool success,) = payable(owner).call{value: msg.value}("");

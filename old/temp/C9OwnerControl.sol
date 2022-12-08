@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >0.8.10;
+pragma solidity >=0.8.10 <0.9.0;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
 /**
@@ -119,7 +119,6 @@ abstract contract C9OwnerControl is AccessControl {
      */
     function acceptOwnership()
         external {
-            if (pendingOwner == address(0)) _errMsg("no transfer pending");
             if (pendingOwner != msg.sender) _errMsg("unauthorized");
             _transferOwnership(msg.sender);
     }
@@ -130,7 +129,6 @@ abstract contract C9OwnerControl is AccessControl {
     function cancelTransferOwnership()
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (pendingOwner == address(0)) _errMsg("no transfer pending");
             delete pendingOwner;
             revokeRole(DEFAULT_ADMIN_ROLE, pendingOwner);
             emit OwnershipTransferCancel(owner);

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >0.8.10;
+pragma solidity >=0.8.10 <0.9.0;
 import "./C9OwnerControl.sol";
 
 interface IC9Registrar {
@@ -13,8 +13,6 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
     uint256 constant POS_STEP = 0;
     uint256 constant POS_CODE = 8;
     uint256 constant POS_REGISTERED = 24;
-
-    bytes32 public constant FRONTEND_ROLE = keccak256("FRONTEND_ROLE");
 
     uint256 private _seed;
     mapping(address => uint256) private _registrationData; //step, code, isRegistered
@@ -35,7 +33,6 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
 
     constructor(uint256 seed_) {
         _seed = seed_;
-        _grantRole(FRONTEND_ROLE, msg.sender);
     }
 
     modifier registrationStep(address _address, uint256 _step) {
@@ -130,7 +127,7 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
      */
     function adminGetCode(address _address)
         external view
-        onlyRole(FRONTEND_ROLE)
+        onlyRole(DEFAULT_ADMIN_ROLE)
         returns (uint256) {
             return uint256(uint16(_registrationData[_address]>>POS_CODE));
     }

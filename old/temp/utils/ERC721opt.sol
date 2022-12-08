@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.8.0) (token/ERC721/ERC721.sol)
 
-pragma solidity >0.8.10;
+pragma solidity >=0.8.10 <0.9.0;
 
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
@@ -34,7 +34,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
      * on both minting and transfers as storage space is reduced to 1/3 the original 
      * by packing these./
      */
-    mapping(uint256 => uint256) private _owners; // _owner(address), _ownedTokensIndex (uint48), _allTokensIndex (uint48);
+    mapping(uint256 => uint256) private _owners; // _ownedTokensIndex, _allTokensIndex;
 
     // Mapping owner address to token count -> replaced by _ownedTokens.length
     //mapping(address => uint256) private _balances; 

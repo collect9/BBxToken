@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >0.8.10;
+pragma solidity >=0.8.7 <0.9.0;
 import "./C9OwnerControl.sol";
-import "./C9Token.sol";
+import "./C9Token2.sol";
 import "./utils/EthPricer.sol";
 
 
