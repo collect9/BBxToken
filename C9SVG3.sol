@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.10 <0.9.0;
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 import "./C9Shared.sol";
 import "./C9Struct2.sol";
-import "./C9Token3.sol";
+import "./C9Token4.sol";
 import "./utils/Helpers.sol";
 
 interface IC9SVG {
     function returnSVG(address _address, uint256 _uTokenData, string calldata _sTokenData) external view returns(string memory);
 }
 
-contract C9SVG is IC9SVG, C9Shared, C9Struct {
+contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
     /**
      * @dev Optimized SVG flags in storage.
      */
@@ -403,7 +404,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
      */
     function addTushMarker(uint256 _markertush, uint256 _gentag) internal view returns (bytes memory e) {
         if (_markertush > 0) {
-            e = "<g transform='translate(555 726)' style='opacity:0.8; font-family:\"Brush Script MT\", cursive; font-size:24; font-weight:700'>"
+            e = "<g transform='translate(555 726)' style='opacity:0.8; font-family:\"Brush Script MT\", cursive; font-size:24px; font-weight:700'>"
                 "<text text-anchor='middle' fill='#222'>    </text>"
                 "</g>";
             bytes4 x = _vMarkers[_markertush-1];
@@ -414,10 +415,10 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
                     x == bytes4("EMBS") ?
                         bytes4("embS") : x;
             assembly {
-                let dst := add(e, 196)
+                let dst := add(e, 198)
                 mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), y))
                 switch _gentag case 0 {
-                    dst := add(e, 191)
+                    dst := add(e, 193)
                     mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), "eee"))
                 }
             }
