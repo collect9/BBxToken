@@ -1,1 +1,8 @@
-redeeming is a one way trip - cannot burn it either
+1. redeeming is a one way trip - cannot burn it either
+2. eip-2981 doesn't seem to be working on rarible
+-> default royalty was not picking for address 0 or invalid token id
+-> do i need to specify type(IERC2981).interfaceId in supportsInterface?
+
+working:
+1. token redeemer, goes all the way through redeem and gets locked
+2. token upgrader, upgrades successfully
