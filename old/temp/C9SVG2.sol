@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >0.8.10;
+pragma solidity >=0.8.10 <0.9.0;
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 import "./C9Shared.sol";
-import "./C9Struct.sol";
-import "./C9Token.sol";
+import "./C9Struct2.sol";
+import "./C9Token3.sol";
 import "./utils/Helpers.sol";
 
 interface IC9SVG {
     function returnSVG(address _address, uint256 _uTokenData, string calldata _sTokenData) external view returns(string memory);
 }
 
-contract C9SVG is IC9SVG, C9Shared, C9Struct {
+contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
     /**
-     * @dev Optimized SVG flags. Storage of these would cost around ~2.2M gas.
+     * @dev Optimized SVG flags in storage.
      */
     bytes constant FLG_BLK = ""
         "<pattern id='ptrn' width='.1' height='.1'>"
@@ -103,95 +104,17 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
         "<use href='#c9usa' x='243.2'/>"
         "<use href='#c9uso' x='304'/>";
 
-    bytes constant svgOpener = ""
-        "<svg version='1.1' class='c9svg' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 630 880'>"
-        "<style type='text/css'>"
-        ".c9svg{font-family:'Courier New';} "
-        ".sXXXXXX{font-size:22px;} "
-        ".mXXXXXX{font-size:32px;} "
-        ".tXXXXXX{font-size:54px;font-weight:700;} "
-        ".nXXXXXX{font-size:34px;font-weight:700;}"
-        "</style>"
-        "<defs>"
-        "<radialGradient id='rgXXXXXX' cx='50%' cy='44%' r='50%' gradientUnits='userSpaceOnUse'>"
-        "<stop offset='25%' stop-color='#fff'/>"
-        "<stop offset='1' stop-color='#e66'/>"
-        "</radialGradient>"
-        "<filter id='noiser'>"
-        "<feTurbulence type='fractalNoise' baseFrequency='0.2' numOctaves='8'/>"
-        "<feComposite in2='SourceGraphic' operator='in'/>"
-        "<feColorMatrix values='1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0.2 0'/>"
-        "</filter>"
-        "<filter id='grayscale'>"
-        "<feColorMatrix type='saturate' values='1.0'/>"
-        "</filter>"
-        "</defs>"
-        "<g filter='url(#grayscale)'>"
-        "<rect rx='20' width='100%' height='100%' fill='url(#rgXXXXXX)'/>"
-        "<rect rx='20' width='100%' height='100%' filter='url(#noiser)'/>"
-        "<rect y='560' width='100%' height='22' fill='#ddf' fill-opacity='0.6'/>"
-        "<g style='fill:#ded;'>"
-        "<rect x='20' y='20' width='590' height='150' rx='10'/>"
-        "<rect x='20' y='740' width='590' height='120' rx='10'/>"
-        "</g>"
-        "<g transform='translate(470 6) scale(0.2)' fill-opacity='0.89'>"
-        "<a href='https://collect9.io' target='_blank'>"
-        "<svg version='1.1' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 276'>"
-        "<defs>"
-        "<radialGradient id='c9r1' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'>"
-        "<stop offset='25%' stop-color='#2fd'/>"
-        "<stop offset='1' stop-color='#0a6'/>"
-        "</radialGradient>"
-        "<radialGradient id='c9r2' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'>"
-        "<stop offset='25%' stop-color='#26f'/>"
-        "<stop offset='1' stop-color='#03a'/>"
-        "</radialGradient>"
-        "<radialGradient id='c9r3' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'>"
-        "<stop offset='25%' stop-color='#2ff'/>"
-        "<stop offset='1' stop-color='#0a9'/>"
-        "</radialGradient>"
-        "</defs>"
-        "<symbol id='c9p'>"
-        "<path d='M122.4,2,26,57.5a11,11,0,0,0,0,19.4h0a11,11,0,0,0,11,0l84-48.5V67L74.3,94.3a6,6,"
-        "0,0,0,0,10L125,134a6,6,0,0,0,6,0l98.7-57a11,11,0,0,0,0-19.4L133.6,2A11,11,0,0,0,122.4,"
-        "2Zm12,65V28.5l76,44-33.5,19.3Z'/>"
-        "</symbol>"
-        "<use href='#c9p' fill='url(#c9r2)'/>"
-        "<use href='#c9p' transform='translate(0 9.3) rotate(240 125 138)' fill='url(#c9r3)'/>"
-        "<use href='#c9p' transform='translate(9 4) rotate(120 125 138)' fill='url(#c9r1)'/>"
-        "</svg>"
-        "</a>"
-        "</g>"
-        "<g transform='translate(30 58)' class='mXXXXXX'>"
-        "<text>COLLECT9</text>"
-        "<text y='34'>RWA REDEEMABLE NFT</text>"
-        "<g class='sXXXXXX'>"
-        "<text y='74'>STATUS: <tspan font-weight='bold' fill='#080'>  VALID                    </tspan>"
-        "</text>"
-        "<text y='100'>EIP-2981: 3.50%</text>"
-        "</g>"
-        "</g>"
-        "<g transform='translate(30 768)' class='sXXXXXX'>"
-        "<text>CLASS: VINTAGE BEANIE BABY</text>"
-        "<text y='26'>RARITY TIER:                                 </text>"
-        "<text y='52'>ED NUM.MINT ID:   .    </text>"
-        "<text y='78'>NFT AGE:   YR   MO   D</text>"
-        "</g>"
-        "<text x='50%' y='576' fill='#999' text-anchor='middle'>                                        </text>"
-        "<g text-anchor='middle'>"
-        "<text x='50%' y='645' class='nXXXXXX'>        |        </text>"
-        "<text x='50%' y='698' class='tXXXXXX'>";
-
     bytes constant _defaultQrData = "d80dC0G0G1D394F4dD596F6B7d08d58C8F90AFA0CGCGD0EFEBF0Gg2:T:2:U:4:V:7:T:8:V:8:6c:B:U:C:U:G"; //c9.ws
-    address public immutable tokenContract;
     
+    address public immutable tokenContract;
+    mapping(bytes1 => string) letterMap;
+
     /* @dev 5.8M vs 5.1M gas deployment cost with letterMap.
      * This means it's probably not worth looking into 
      * functions that can determine mappings from bit shift
      * operations as relative to the cost of the entire 
      * contract it is not too significant and is also fast.
      */
-    mapping(bytes1 => string) letterMap;
     constructor (address _tokenContract) {
         letterMap[0x41] = "10"; // A
         letterMap[0x42] = "11"; // B
@@ -259,11 +182,11 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
      * @dev Adds validity flag info to SVG output memory `b`.
      */
     function addValidityInfo(uint256 _uTokenData, bytes memory b) internal view {
-        uint256 _validityIdx = uint256(uint8(_uTokenData>>POS_VALIDITY));
-        uint256 _tokenId = uint256(uint32(_uTokenData>>POS_TOKENID));
+        uint256 _validityIdx = _getTokenParam(_uTokenData, TokenProps.VALIDITY);
+        uint256 _tokenId = _getTokenParam(_uTokenData, TokenProps.TOKENID);
 
         bytes3 _clr;
-        bytes16 _validity = _vValidity[_validityIdx%5];
+        bytes16 _validity = _vValidity[_validityIdx];
         bool _lock = false;
         if (_validityIdx == 0) {
             bool _preRedeemable = IC9Token(tokenContract).preRedeemable(_tokenId);
@@ -273,7 +196,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
             }
             else {
                 // If validity 0 and locked == getting reedemed
-                _lock = uint256(uint8(_uTokenData>>POS_LOCKED)) == 1 ? true : false;
+                _lock = _getTokenParam(_uTokenData, TokenProps.LOCKED) == 1 ? true : false;
                 if (_lock) {
                     _clr = "b50"; // orange
                     _validity = "REDEEM PENDING  ";
@@ -323,29 +246,25 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
         )
         internal view {
             bytes7 _tagtxt = genTagsToAscii(
-                uint256(uint8(_uTokenData>>POS_GENTAG)),
-                uint256(uint8(_uTokenData>>POS_CNTRYTAG)));
+                _getTokenParam(_uTokenData, TokenProps.GENTAG),
+                _getTokenParam(_uTokenData, TokenProps.CNTRYTAG));
             bytes7 _tushtxt = genTagsToAscii(
-                uint256(uint8(_uTokenData>>POS_GENTUSH)),
-                uint256(uint8(_uTokenData>>POS_CNTRYTUSH)));
+                _getTokenParam(_uTokenData, TokenProps.GENTUSH),
+                _getTokenParam(_uTokenData, TokenProps.CNTRYTUSH));
             bytes6 _periods = getNFTAge(
-                uint256(uint40(_uTokenData>>POS_MINTSTAMP)));
+                _getTokenParam(_uTokenData, TokenProps.MINTSTAMP));
             bytes4 __mintid = Helpers.flip4Space(bytes4(Helpers.uintToBytes(
-                uint256(uint16(_uTokenData>>POS_MINTID)))));
+                _getTokenParam(_uTokenData, TokenProps.MINTID))));
             bytes4 _royalty = Helpers.bpsToPercent(
-                uint256(uint16(_uTokenData>>POS_ROYALTY)));
-            bytes2 _edition = Helpers.flip2Space(
-                Helpers.remove2Null(
-                    bytes2(Helpers.uintToBytes(
-                        uint256(uint8(_uTokenData>>POS_EDITION))
-                    )
-            )));
+                _getTokenParam(_uTokenData, TokenProps.ROYALTY));
+            bytes2 _edition = Helpers.flip2Space(Helpers.remove2Null(bytes2(Helpers.uintToBytes(
+                _getTokenParam(_uTokenData, TokenProps.EDITION)))));
             (uint256 _bgidx, bytes16 _classer) = _getRarityTier(
-                uint256(uint8(_uTokenData>>POS_GENTAG)),
-                uint256(uint8(_uTokenData>>POS_RARITYTIER)),
-                uint256(uint8(_uTokenData>>POS_SPECIAL))
+                _getTokenParam(_uTokenData, TokenProps.GENTAG),
+                _getTokenParam(_uTokenData, TokenProps.RARITYTIER),
+                _getTokenParam(_uTokenData, TokenProps.SPECIAL)
             );
-            bytes3 _rgc2 = uint256(uint8(_uTokenData>>POS_VALIDITY)) < 4 ? hex3[_bgidx] : bytes3("888");
+            bytes3 _rgc2 = hex3[_bgidx];
             bytes2 _namesize = getNameSize(uint256(bytes(_name).length));
         
             assembly {
@@ -403,7 +322,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
      */
     function addTushMarker(uint256 _markertush, uint256 _gentag) internal view returns (bytes memory e) {
         if (_markertush > 0) {
-            e = "<g transform='translate(555 726)' style='opacity:0.8; font-family:\"Brush Script MT\", cursive; font-size:24px; font-weight:700'>"
+            e = "<g transform='translate(555 726)' style='opacity:0.8; font-family:\"Brush Script MT\", cursive; font-size:24; font-weight:700'>"
                 "<text text-anchor='middle' fill='#222'>    </text>"
                 "</g>";
             bytes4 x = _vMarkers[_markertush-1];
@@ -414,10 +333,10 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
                     x == bytes4("EMBS") ?
                         bytes4("embS") : x;
             assembly {
-                let dst := add(e, 198)
+                let dst := add(e, 196)
                 mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), y))
                 switch _gentag case 0 {
-                    dst := add(e, 193)
+                    dst := add(e, 191)
                     mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), "eee"))
                 }
             }
@@ -445,9 +364,9 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
             vb = bytes.concat(
                 bytes(_sTokenData[0]),
                 "</text></g><g transform='translate(20 621) scale(0.17)'>",
-                getSVGFlag(uint256(uint8(_uTokenData>>POS_CNTRYTAG))),
+                getSVGFlag(_getTokenParam(_uTokenData, TokenProps.CNTRYTAG)),
                 "</g><g transform='translate(501 621) scale(0.17)'>",
-                getSVGFlag(uint256(uint8(_uTokenData>>POS_CNTRYTUSH))),
+                getSVGFlag(_getTokenParam(_uTokenData, TokenProps.CNTRYTUSH)),
                 "</g><g transform='translate(157.5 146) scale(0.5)'>",
                 href,
                 qrCodeSVGFull(bytes(_sTokenData[1])),
@@ -456,16 +375,17 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
                 barCodeSVG(bytes(_sTokenData[2]), _id),
                 "</a></g>"
             );
+            vb =  bytes.concat(vb, addUpgradeText(_getTokenParam(_uTokenData, TokenProps.UPGRADED)));
     }
 
     /**
      * @dev If token has been upgraded, add text that shows it has.
      */
     function addUpgradeText(uint256 _upgraded) internal pure returns(bytes memory upgradedText) {
-        if (_upgraded == 1) {
-            upgradedText = "<text x='190' y='58' style='font-family: \"Brush Script MT\", cursive;' font-size='22'>        </text>";
-            assembly {
-                let dst := add(upgradedText, 117)
+        upgradedText = "<text x='190' y='58' style='font-family: \"Brush Script MT\", cursive;' font-size='22'>        </text>";
+        assembly {
+            let dst := add(upgradedText, 117)
+            if eq(_upgraded, 1) {
                 mstore(dst, or(and(mload(dst), not(shl(192, 0xFFFFFFFFFFFFFFFF))), "upgraded"))
             }
         }
@@ -589,6 +509,34 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
             }
         }
         return bytes7(_tmpout);
+    }
+
+    /**
+     * @dev Returns styling and textual information based on token attributes input 
+     * params `_spec` and `_rtier`.
+     */
+    function getGradientColors(uint256 _uTokenData) internal view returns (bytes3, bytes16) {
+        uint256 _genTag = _getTokenParam(_uTokenData, TokenProps.GENTAG);
+        uint256 _rarityTier = _getTokenParam(_uTokenData, TokenProps.RARITYTIER);
+        uint256 _specialTier = _getTokenParam(_uTokenData, TokenProps.SPECIAL);
+
+        bytes16 _b16Tier = rarityTiers[_rarityTier];
+        bytes memory _bTier = "                ";
+        assembly {
+            let dst := add(_bTier, 32)
+            mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _b16Tier))
+        }
+        
+        bytes3 _bgColor;
+        if (_specialTier > 0) {
+            bytes16 _sTier = specialTiers[_specialTier];
+            _bTier[0] = _sTier[0];
+            _bgColor = hex3[_specialTier+5];
+        }
+        else {
+            _bgColor = hex3[_genTag];
+        }
+        return (_bgColor, bytes16(_bTier));
     }
 
     /**
@@ -767,6 +715,18 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
                     entry = "      ";
                     continue;
                 }
+                else if (e0 == 0x77) {
+                    tmp = "<rect style='width: px;' ";
+                    e0 = entry[1];
+                    assembly {
+                        let dst := add(tmp, 51)
+                        mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), e0))
+                    }
+                    output = bytes.concat(output, tmp);
+                    xflg = true;
+                    entry = "      ";
+                    continue;
+                }
                 else if (e0 == 0x64) {
                     output = bytes.concat(output, "<use href='#d' ");
                     if(!delims) {
@@ -821,7 +781,25 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
         );
     }
 
-
+    function getSplitterIndices(string calldata _sTokenData)
+        internal pure
+        returns (uint256 _splitIndex1, uint256 _splitIndex2) {
+            bytes memory _bData = bytes(_sTokenData);
+            for (_splitIndex1; _splitIndex1<32;) {
+                if (_bData[_splitIndex1] == 0x3d) {
+                    break;
+                }
+                unchecked {++_splitIndex1;}
+            }
+            uint256 _bDataLen = _bData.length;
+            _splitIndex2 = _splitIndex1 + 50;
+            for (_splitIndex2; _splitIndex2<_bDataLen;) {
+                if (_bData[_splitIndex2] == 0x3d) {
+                    break;
+                }
+                unchecked {++_splitIndex2;}
+            }
+    }
 
     /**
      * @dev External function to call and return the SVG string built from `_token`  
@@ -830,17 +808,93 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
     function returnSVG(address _address, uint256 _uTokenData, string calldata _sTokenData)
         external view override
         returns (string memory) {
+        bytes memory b = "<svg version='1.1' class='c9svg' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 630 880'>"
+            "<style type='text/css'>"
+            ".c9svg{font-family:'Courier New';} "
+            ".sXXXXXX{font-size:22px;} "
+            ".mXXXXXX{font-size:32px;} "
+            ".tXXXXXX{font-size:54px;font-weight:700;} "
+            ".nXXXXXX{font-size:34px;font-weight:700;}"
+            "</style>"
+            "<defs>"
+            "<radialGradient id='rgXXXXXX' cx='50%' cy='44%' r='50%' gradientUnits='userSpaceOnUse'>"
+            "<stop offset='25%' stop-color='#fff'/>"
+            "<stop offset='1' stop-color='#e66'/>"
+            "</radialGradient>"
+            "<filter id='noiser'>"
+            "<feTurbulence type='fractalNoise' baseFrequency='0.2' numOctaves='8'/>"
+            "<feComposite in2='SourceGraphic' operator='in'/>"
+            "<feColorMatrix values='1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0.2 0'/>"
+            "</filter>"
+            "<filter id='grayscale'>"
+            "<feColorMatrix type='saturate' values='1.0'/>"
+            "</filter>"
+            "</defs>"
+            "<g filter='url(#grayscale)'>"
+            "<rect rx='20' width='100%' height='100%' fill='url(#rgXXXXXX)'/>"
+            "<rect rx='20' width='100%' height='100%' filter='url(#noiser)'/>"
+            "<rect y='560' width='100%' height='22' fill='#ddf' fill-opacity='0.6'/>"
+            "<g style='fill:#ded;'>"
+            "<rect x='20' y='20' width='590' height='150' rx='10'/>"
+            "<rect x='20' y='740' width='590' height='120' rx='10'/>"
+            "</g>"
+            "<g transform='translate(470 6) scale(0.2)' fill-opacity='0.89'>"
+            "<a href='https://collect9.io' target='_blank'>"
+            "<svg version='1.1' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 276'>"
+            "<defs>"
+            "<radialGradient id='c9r1' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'>"
+            "<stop offset='25%' stop-color='#2fd'/>"
+            "<stop offset='1' stop-color='#0a6'/>"
+            "</radialGradient>"
+            "<radialGradient id='c9r2' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'>"
+            "<stop offset='25%' stop-color='#26f'/>"
+            "<stop offset='1' stop-color='#03a'/>"
+            "</radialGradient>"
+            "<radialGradient id='c9r3' cx='50%' cy='50%' r='50%' gradientUnits='userSpaceOnUse'>"
+            "<stop offset='25%' stop-color='#2ff'/>"
+            "<stop offset='1' stop-color='#0a9'/>"
+            "</radialGradient>"
+            "</defs>"
+            "<symbol id='c9p'>"
+            "<path d='M122.4,2,26,57.5a11,11,0,0,0,0,19.4h0a11,11,0,0,0,11,0l84-48.5V67L74.3,94.3a6,6,"
+            "0,0,0,0,10L125,134a6,6,0,0,0,6,0l98.7-57a11,11,0,0,0,0-19.4L133.6,2A11,11,0,0,0,122.4,"
+            "2Zm12,65V28.5l76,44-33.5,19.3Z'/>"
+            "</symbol>"
+            "<use href='#c9p' fill='url(#c9r2)'/>"
+            "<use href='#c9p' transform='translate(0 9.3) rotate(240 125 138)' fill='url(#c9r3)'/>"
+            "<use href='#c9p' transform='translate(9 4) rotate(120 125 138)' fill='url(#c9r1)'/>"
+            "</svg>"
+            "</a>"
+            "</g>"
+            "<g transform='translate(30 58)' class='mXXXXXX'>"
+            "<text>COLLECT9</text>"
+            "<text y='34'>RWA REDEEMABLE NFT</text>"
+            "<g class='sXXXXXX'>"
+            "<text y='74'>STATUS: <tspan font-weight='bold' fill='#080'>  VALID                    </tspan>"
+            "</text>"
+            "<text y='100'>EIP-2981: 3.50%</text>"
+            "</g>"
+            "</g>"
+            "<g transform='translate(30 768)' class='sXXXXXX'>"
+            "<text>CLASS: VINTAGE BEANIE BABY</text>"
+            "<text y='26'>RARITY TIER:                                 </text>"
+            "<text y='52'>ED NUM.MINT ID:   .    </text>"
+            "<text y='78'>NFT AGE:   YR   MO   D</text>"
+            "</g>"
+            "<text x='50%' y='576' fill='#999' text-anchor='middle'>                                        </text>"
+            "<g text-anchor='middle'>"
+            "<text x='50%' y='645' class='nXXXXXX'>        |        </text>"
+            "<text x='50%' y='698' class='tXXXXXX'>";
         
-        uint256 _tokenId = uint256(uint32(_uTokenData>>POS_TOKENID));
-        (uint256 _splitIndex1, uint256 _splitIndex2) = _getSliceIndices(_sTokenData);
+        uint256 _tokenId = _getTokenParam(_uTokenData, TokenProps.TOKENID);
+        (uint256 _splitIndex1, uint256 _splitIndex2) = getSplitterIndices(_sTokenData);
         bytes6 _id = Helpers.tokenIdToBytes(_tokenId);
 
-        bytes memory b = svgOpener;
         addIds(_id, b);
         addTokenInfo(_uTokenData, _sTokenData[:_splitIndex1], b);
         addValidityInfo(_uTokenData, b);
         addAddress(_address, b);
-        checkForSpecialBg(uint256(uint8(_uTokenData>>POS_SPECIAL)), b);
+        checkForSpecialBg(_getTokenParam(_uTokenData, TokenProps.SPECIAL), b);
 
         string[3] memory _sDataInput = [
             _sTokenData[:_splitIndex1],
@@ -852,10 +906,8 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
             bytes.concat(b,
                 addVariableBytes(_uTokenData, _sDataInput, _id),
                 addTushMarker(
-                    uint256(uint8(_uTokenData>>POS_MARKERTUSH)),
-                    uint256(uint8(_uTokenData>>POS_GENTAG))
-                ),
-                addUpgradeText(uint256(uint8(_uTokenData>>POS_UPGRADED))),
+                    _getTokenParam(_uTokenData, TokenProps.MARKERTUSH),
+                    _getTokenParam(_uTokenData, TokenProps.GENTAG)),
                 "</g></svg>"
             )
         );

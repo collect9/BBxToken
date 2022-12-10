@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >0.8.10;
-import "@openzeppelin/contracts/interfaces/IERC2981.sol";
-import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
+pragma solidity >=0.8.10 <0.9.0;
+// import "./utils/ERC721Enum32packed.sol";
 import "./utils/ERC721opt.sol";
 
 import "./C9MetaData.sol";
 import "./C9OwnerControl.sol";
 import "./C9Redeemer24.sol";
-import "./C9Struct.sol";
-import "./C9SVG.sol";
+import "./C9Struct2.sol";
+import "./C9SVG3.sol";
 
 import "./utils/Base64.sol";
 import "./utils/Helpers.sol";
@@ -25,7 +24,7 @@ interface IC9Token {
     function setTokenUpgraded(uint256 _tokenId, uint256 _val) external;
 }
 
-contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
+contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl {
     /**
      * @dev Contract access roles.
      */
@@ -60,7 +59,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * @dev Contract-level meta data for OpenSea.
      * OpenSea: https://docs.opensea.io/docs/contract-level-metadata
      */
-    string private _contractURI = "collect9.io/metadata/C9T";
+    string private _contractURI = "collect9.io/metadata/C9BBxToken";
 
     /**
      * @dev Redemption definitions and events. preRedeem period 
@@ -246,9 +245,9 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
 
     function supportsInterface(bytes4 interfaceId)
         public view
-        override(IERC165, ERC721, AccessControl)
+        override(ERC721, AccessControl)
         returns (bool) {
-            return interfaceId == type(IERC2981).interfaceId || super.supportsInterface(interfaceId);
+            return super.supportsInterface(interfaceId);
     }
 
     //>>>>>>> CUSTOM ERC2981 START
@@ -305,16 +304,13 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * otherwise specified for that tokenId.
      */
     function royaltyInfo(uint256 _tokenId, uint256 _salePrice)
-        public view override
+        public view
         returns (address, uint256) {
             address receiver = _rTokenData[_tokenId];
             if (receiver == address(0)) {
                 receiver = royaltyDefaultReceiver;
             }
-            uint256 _fraction = royaltyDefaultValue;
-            if (_exists(_tokenId)) {
-                _fraction = uint256(uint16(_uTokenData[_tokenId]>>POS_ROYALTY));
-            }
+            uint256 _fraction = uint256(uint16(_uTokenData[_tokenId]>>POS_ROYALTY));
             uint256 royaltyAmount = (_salePrice * _fraction) / 10000;
             return (receiver, royaltyAmount);
     }
@@ -480,7 +476,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     function _setTokenValidity(uint256 _tokenId, uint256 _vId)
         internal
         notRedeemed(_tokenId) {
-            if (_vId == 5 || _vId > 8) {
+            if (_vId > 4) {
                 _errMsg("invalid internal vId");
             }
             uint256 _tokenData = _uTokenData[_tokenId];
@@ -1053,6 +1049,9 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         onlyRole(VALIDITY_ROLE)
         isContract(msg.sender)
         tokenExists(_tokenId) {
+            if (_vId > 3) {
+                _errMsg("invalid external vId");
+            }
             _setTokenValidity(_tokenId, _vId);
     }
 
@@ -1060,22 +1059,22 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * @dev Potential token upgrade path params.
      * Cost: ~31,000 gas.
      */
-    function setTokenUpgraded(uint256 _tokenId, uint256 _level)
+    function setTokenUpgraded(uint256 _tokenId, uint256 _val)
         external override
         onlyRole(UPGRADER_ROLE)
         isContract(msg.sender)
         tokenExists(_tokenId) {
-            if (_level == 0 || _level > 9) {
+            if (_val == 0 || _val > 9) {
                 _errMsg("invalid upgrade val");
             }
             uint256 _tokenData = _uTokenData[_tokenId];
-            if (uint256(uint8(_tokenData>>POS_UPGRADED)) >= _level) {
-                _errMsg("token already upgraded");
+            if (uint256(uint8(_tokenData>>POS_UPGRADED)) == _val) {
+                _errMsg("token is already upgraded");
             }
             _uTokenData[_tokenId] = _setTokenParam(
                 _tokenData,
                 POS_UPGRADED,
-                _level,
+                _val,
                 255
             );
     }

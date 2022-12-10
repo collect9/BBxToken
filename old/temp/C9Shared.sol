@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >0.8.10;
+pragma solidity >=0.8.7 <0.9.0;
 
 abstract contract C9Shared {
     bytes3[11] hex3;
@@ -78,12 +78,12 @@ abstract contract C9Shared {
 
     /*
      * @dev Token validity flags.
-     */
+     */   
     bytes16[5] _vValidity = [
         bytes16("REDEEMABLE      "),
-        "ROYALTIES       ", //6 -> DEAD
-        "INACTIVE        ", //7 -> DEAD
-        "OTHER           ", //8 -> DEAD
+        "ROYALTIES       ",
+        "INACTIVE        ",
+        "OTHER           ",
         "REDEEMED        "
     ];
 

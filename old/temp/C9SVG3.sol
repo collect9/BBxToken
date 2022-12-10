@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >0.8.10;
+pragma solidity >=0.8.10 <0.9.0;
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 import "./C9Shared.sol";
-import "./C9Struct.sol";
-import "./C9Token.sol";
+import "./C9Struct2.sol";
+import "./C9Token4.sol";
 import "./utils/Helpers.sol";
 
 interface IC9SVG {
     function returnSVG(address _address, uint256 _uTokenData, string calldata _sTokenData) external view returns(string memory);
 }
 
-contract C9SVG is IC9SVG, C9Shared, C9Struct {
+contract C9SVG is IC9SVG, C9Shared, C9Struct, Ownable {
     /**
-     * @dev Optimized SVG flags. Storage of these would cost around ~2.2M gas.
+     * @dev Optimized SVG flags in storage.
      */
     bytes constant FLG_BLK = ""
         "<pattern id='ptrn' width='.1' height='.1'>"
@@ -345,7 +346,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
                 uint256(uint8(_uTokenData>>POS_RARITYTIER)),
                 uint256(uint8(_uTokenData>>POS_SPECIAL))
             );
-            bytes3 _rgc2 = uint256(uint8(_uTokenData>>POS_VALIDITY)) < 4 ? hex3[_bgidx] : bytes3("888");
+            bytes3 _rgc2 = uint256(uint8(_uTokenData>>POS_VALIDITY)) < 3 ? hex3[_bgidx] : bytes3("888");
             bytes2 _namesize = getNameSize(uint256(bytes(_name).length));
         
             assembly {
