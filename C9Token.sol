@@ -2,7 +2,7 @@
 pragma solidity >0.8.10;
 import "@openzeppelin/contracts/interfaces/IERC2981.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
-import "./utils/ERC721opt2.sol";
+import "./utils/ERC721opt3.sol";
 
 import "./C9MetaData.sol";
 import "./C9OwnerControl.sol";
@@ -36,18 +36,18 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     /**
      * @dev Default royalty. These should be packed into one slot.
      */
-    address public royaltyDefaultReceiver;
-    uint96 public royaltyDefaultValue;
+    address private royaltyDefaultReceiver;
+    uint96 private royaltyDefaultValue;
 
     /**
      * @dev The meta and SVG contracts that this token contract
      * interact with.
      */
-    address public contractMeta;
-    address public contractRedeemer;
-    address public contractSVG;
-    address public contractUpgrader;
-    address public contractVH;
+    address private contractMeta;
+    address private contractRedeemer;
+    address private contractSVG;
+    address private contractUpgrader;
+    address private contractVH;
 
     /**
      * @dev Flag that may enable external artwork versions to be 
@@ -521,7 +521,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             }
 
             // Get the edition mint id
-            uint256 __mintId = _mintId[_edition]+1;
+            uint256 __mintId;
+            unchecked {__mintId = _mintId[_edition]+1;}
             if (_input.mintid != 0) {
                 __mintId == _input.mintid;
             }
@@ -695,6 +696,22 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             return string(abi.encodePacked(
                 "https://", _contractURI, ".json"
             ));
+    }
+
+    function getContracts()
+        external view
+        returns(
+            address meta, 
+            address redeemer, 
+            address svg, 
+            address upgrader,
+            address vH
+        ) {
+            meta = contractMeta;
+            redeemer = contractRedeemer;
+            svg = contractSVG;
+            upgrader = contractUpgrader;
+            vH = contractVH;
     }
 
     /**
