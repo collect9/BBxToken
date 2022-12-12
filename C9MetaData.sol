@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.10 <0.9.0;
+pragma solidity >0.8.10;
 import "./utils/Helpers.sol";
 import "./C9Shared.sol";
-import "./C9Struct2.sol";
+import "./C9Struct.sol";
 
 
 interface IC9MetaData {

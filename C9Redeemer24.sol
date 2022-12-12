@@ -385,14 +385,14 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             uint256 _data = redeemerData4[msg.sender];
             uint256 _batchSize = uint256(uint8(_data>>RPOS_BATCHSIZE));
             uint256 _minRedeemUsd = getMinRedeemUSD(_batchSize);
-            // uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_minRedeemUsd);
-            // if (msg.value < _minRedeemWei) {
-            //     _errMsg("invalid payment amount");
-            // }
-            // (bool success,) = payable(owner).call{value: msg.value}("");
-            // if (!success) {
-            //     _errMsg("payment failure");
-            // }
+            uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_minRedeemUsd);
+            if (msg.value < _minRedeemWei) {
+                _errMsg("invalid payment amount");
+            }
+            (bool success,) = payable(owner).call{value: msg.value}("");
+            if (!success) {
+                _errMsg("payment failure");
+            }
             _data = _setTokenParam(_data, 0, 5, type(uint8).max);
             redeemerData4[msg.sender] = _data;
             emit RedeemerUserFinalize(msg.sender, msg.value);

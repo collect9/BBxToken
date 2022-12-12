@@ -106,18 +106,18 @@ abstract contract C9Struct {
             return getTokenParams(_packedToken)[uint256(_idx)];
     }
 
-    function _setTokenParam(
-        uint256 _packedToken,
-        uint256 _pos,
-        uint256 _val,
-        uint256 _mask
-    )
-        internal pure virtual
-        returns(uint256) {
-            _packedToken &= ~(_mask<<_pos); //zero out only its portion
-            _packedToken |= _val<<_pos; //write value back in
-            return _packedToken;
-    }
+    // function _setTokenParam(
+    //     uint256 _packedToken,
+    //     uint256 _pos,
+    //     uint256 _val,
+    //     uint256 _mask
+    // )
+    //     internal pure virtual
+    //     returns(uint256) {
+    //         _packedToken &= ~(_mask<<_pos); //zero out only its portion
+    //         _packedToken |= _val<<_pos; //write value back in
+    //         return _packedToken;
+    // }
 
     function getTokenParams(uint256 _packedToken)
         public view virtual

@@ -36,25 +36,19 @@ contract C9Upgrader is C9Struct, C9OwnerControl {
             revert(string(bytes.concat("C9Upgrader: ", message)));
     }
 
-    function getUpgradePrice(uint256 _upgradeLevel) 
-        public view
-        returns (uint256 _upgradePrice) {
-            _upgradePrice = baseUpgradePrice * _upgradeLevel;
-    }
-
     /**
      * @dev Allows the token holder to upgrade their token.
      */
-    function upgradeToken(uint256 _tokenId, uint256 _upgradeLevel)
+    function upgradeToken(uint256 _tokenId)
         external payable
         isOwner(_tokenId)
         notFrozen() {
             uint256[18] memory _uTokenData = IC9Token(contractToken).getTokenParams(_tokenId);
-            if (_uTokenData[0] != 0) {
+            uint256 _tokenUpgraded = _uTokenData[0];
+            if (_tokenUpgraded == 1) {
                 _errMsg("token already upgraded");
             }
-            uint256 _upgradePrice = getUpgradePrice(_upgradeLevel);
-            uint256 upgradeWeiPrice = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_upgradePrice);
+            uint256 upgradeWeiPrice = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(baseUpgradePrice);
             if (msg.value != upgradeWeiPrice) {
                 _errMsg("incorrect payment amount");
             }
@@ -62,8 +56,8 @@ contract C9Upgrader is C9Struct, C9OwnerControl {
             if(!success) {
                 _errMsg("payment failure");
             }
-            IC9Token(contractToken).setTokenUpgraded(_tokenId, _upgradeLevel);
-            emit Upgraded(_tokenId, msg.sender, _upgradePrice);
+            IC9Token(contractToken).setTokenUpgraded(_tokenId);
+            emit Upgraded(_tokenId, msg.sender, baseUpgradePrice);
     }
 
     /**

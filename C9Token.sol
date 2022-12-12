@@ -2,7 +2,7 @@
 pragma solidity >0.8.10;
 import "@openzeppelin/contracts/interfaces/IERC2981.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
-import "./utils/ERC721opt3.sol";
+import "./utils/ERC721opt.sol";
 
 import "./C9MetaData.sol";
 import "./C9OwnerControl.sol";
@@ -135,18 +135,6 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     modifier addressNotSame(address _old, address _new) {
         if (_old == _new) {
             _errMsg("address same");
-        }
-        _;
-    }
-
-    /*
-     * @dev Checks to see whether or not the token is in the 
-     * redemption process.
-     */ 
-    modifier tokenLocked(uint256 _tokenId, uint256 status) {
-        uint256 _tokenData = _uTokenData[_tokenId];
-        if (uint256(uint8(_tokenData>>POS_LOCKED)) != status) {
-            _errMsg("redemption status disallows");
         }
         _;
     }
@@ -292,7 +280,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                     _uTokenData[_tokenId],
                     POS_ROYALTY,
                     _royalty,
-                    65535
+                    type(uint16).max
                 );
             }
     }
@@ -354,7 +342,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                 _tokenData,
                 POS_ROYALTIESDUE,
                 _amount,
-                65535
+                type(uint16).max
             );
     }
 
@@ -453,25 +441,6 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                     _input.special,
                     _input.sData[0:_splitIndex]
                 )
-            );
-    }
-
-    /**
-     * @dev The function that start the redeemer (either single token
-     * or batch) both call this to lock the token. Since both call this 
-     * right away, the modifiers are here.
-     *
-     * Requirements:
-     * 1. Caller must be token owner
-     * 2. Token must not already be in redemption process or redeemed
-     */
-    function _lockToken(uint256 _tokenId)
-        private {
-            _uTokenData[_tokenId] = _setTokenParam(
-                _uTokenData[_tokenId],
-                POS_LOCKED,
-                1,
-                255
             );
     }
 
@@ -584,17 +553,22 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                 _tokenData,
                 POS_VALIDITY,
                 _vId,
-                255
+                type(uint8).max
             );
             _tokenData = _setTokenParam(
                 _tokenData,
                 POS_VALIDITYSTAMP,
                 block.timestamp,
-                1099511627775
+                type(uint40).max
             );
             // Lock if changing to a dead status
             if (_vId >= REDEEMED) {
-                _lockToken(_tokenId);
+                _tokenData = _setTokenParam(
+                    _tokenData,
+                    POS_LOCKED,
+                    1,
+                    type(uint8).max
+                );
             }
             _uTokenData[_tokenId] = _tokenData;
     }
@@ -603,18 +577,23 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * @dev Redeem cancel functions (either single token or 
      * batch) both call this to unlock the token.
      * Modifiers are placed here since _unlockToken is 
-     * only called by RedeemCancel and RedeemFinish.
+     * only called by RedeemCancel and RedeemFinish and 
+     * its easier to enforce the modifier.
      */
     function _unlockToken(uint256 _tokenId)
         private
-        isOwner(_tokenId)
-        tokenLocked(_tokenId, 1) {
-            _uTokenData[_tokenId] = _setTokenParam(
-                _uTokenData[_tokenId],
+        isOwner(_tokenId) {
+            uint256 _tokenData = _uTokenData[_tokenId];
+            if (uint256(uint8(_tokenData>>POS_LOCKED)) != 1) {
+                _errMsg("token not locked");
+            }
+            _tokenData = _setTokenParam(
+                _tokenData,
                 POS_LOCKED,
                 0,
-                255
+                type(uint8).max
             );
+            _uTokenData[_tokenId] = _tokenData;
     }
 
     /**
@@ -760,22 +739,43 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                 if (msg.sender != _tokenOwner) {
                     _errMsg("unauthorized");
                 }
+
                 _tokenData = _uTokenData[_tokenId];
                 if (_preRedeemable(_tokenData)) {
                     _errMsg("token still pre-redeemable");
                 }
-                if (uint256(uint8(_tokenData>>POS_VALIDITY)) == INACTIVE) {
-                    _setTokenValidity(_tokenId, VALID);
-                    _tokenData = _uTokenData[_tokenId];
-                }
+                
                 if (uint256(uint8(_tokenData>>POS_VALIDITY)) != VALID) {
-                    _errMsg("token status not valid");
+                    if (uint256(uint8(_tokenData>>POS_VALIDITY)) == INACTIVE) {
+                        /* Inactive tokens can still be redeemed and 
+                        will be changed to valid as user activity 
+                        will automatically fix this status. */
+                        _tokenData = _setTokenParam(
+                            _tokenData,
+                            POS_VALIDITY,
+                            VALID,
+                            type(uint8).max
+                        );
+                    }
+                    else {
+                        _errMsg("token status not valid");
+                    }
                 }
+
                 if (uint256(uint8(_tokenData>>POS_LOCKED)) != 0) {
                     _errMsg("token already in redeemer");
                 }
                 
-                _lockToken(_tokenId);
+                // Lock the token
+                _tokenData = _setTokenParam(
+                   _tokenData,
+                    POS_LOCKED,
+                    1,
+                    type(uint8).max
+                );
+
+                // Save token data back to storage
+                _uTokenData[_tokenId] = _tokenData;
                 unchecked {++i;}
             }
     }
@@ -1060,7 +1060,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                 _tokenData,
                 POS_DISPLAY,
                 _flag ? 1 : 0,
-                255
+                type(uint8).max
             );
     }
 
@@ -1085,8 +1085,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      */
     function setTokenValidity(uint256 _tokenId, uint256 _vId)
         external
-        //onlyRole(VALIDITY_ROLE)
-        //isContract()
+        onlyRole(VALIDITY_ROLE)
+        isContract()
         tokenExists(_tokenId) {
             if (_vId == 4 || _vId == 5 || _vId > 8) {
                 _errMsg("invalid external vId");
@@ -1108,8 +1108,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      */
     function setTokenUpgraded(uint256 _tokenId)
         external override
-        //onlyRole(UPGRADER_ROLE)
-        //isContract()
+        onlyRole(UPGRADER_ROLE)
+        isContract()
         tokenExists(_tokenId)
         notDead(_tokenId) {
             uint256 _tokenData = _uTokenData[_tokenId];
@@ -1120,7 +1120,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                 _tokenData,
                 POS_UPGRADED,
                 1,
-                255
+                type(uint8).max
             );
     }
 
@@ -1178,7 +1178,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                 image = abi.encodePacked(
                     ',"image":"',
                     _baseURI[_viewIdx],
-                    _tokenId,
+                    Helpers.tokenIdToBytes(_tokenId),
                     '.png'
                 );
             }
@@ -1194,6 +1194,15 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                     )
                 )
             );
+    }
+
+    function transferFromBatch(address from, address to, uint256[] calldata _tokenId)
+        external {
+            uint256 _batchSize = _tokenId.length;
+            for (uint256 i; i<_batchSize;) {
+                transferFrom(from, to, _tokenId[i]);
+                unchecked {++i;}
+            }
     }
 
     /**

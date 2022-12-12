@@ -305,7 +305,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
             mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), ">>"))
             dst := add(b, 2535)
             mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _validity))
-            if eq(_validityIdx, REDEEMED) {
+            if gt(_validityIdx, 3) {
                 dst := add(b, 783)
                 mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "0")) // grayscale
             }

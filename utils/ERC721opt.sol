@@ -62,10 +62,10 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
         _symbol = symbol_;
     }
 
-    function _setTokenParam(uint256 _packedToken, uint256 _pos, uint256 _val)
-        internal pure
+    function _setTokenParam(uint256 _packedToken, uint256 _pos, uint256 _val, uint256 _mask)
+        internal pure virtual
         returns(uint256) {
-            _packedToken &= ~(uint256(281474976710655)<<_pos); //zero out only its portion
+            _packedToken &= ~(_mask<<_pos); //zero out only its portion
             _packedToken |= _val<<_pos; //write value back in
             return _packedToken;
     }
@@ -75,6 +75,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
      */
     function supportsInterface(bytes4 interfaceId) public view virtual override(ERC165, IERC165) returns (bool) {
         return
+            interfaceId == type(IERC721Enumerable).interfaceId ||
             interfaceId == type(IERC721).interfaceId ||
             interfaceId == type(IERC721Metadata).interfaceId ||
             super.supportsInterface(interfaceId);
@@ -83,9 +84,8 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
     /**
      * @dev See {IERC721-balanceOf}.
      */
-    function balanceOf(address owner) public view virtual override returns (uint256) {
+    function balanceOf(address owner) external view virtual override returns (uint256) {
         require(owner != address(0), "ERC721:address0 not valid owner");
-        //return _balances[owner];
         return _ownedTokens[owner].length;
     }
 
@@ -117,7 +117,6 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
      * @dev Collect9: copied from ERC721Enumerable
      */
     function tokenOfOwnerByIndex(address owner, uint256 index) public view virtual override returns (uint256) {
-        //require(index < ERC721.balanceOf(owner), "ERC721Enum: owner index oob");
         require(index < _ownedTokens[owner].length, "ERC721Enum:owner index oob");
         return uint256(_ownedTokens[owner][index]);
     }
@@ -140,74 +139,44 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
     }
 
     /**
-     * @dev Private function to add a token to this extension's ownership-tracking data structures.
-     * @param to address representing the new owner of the given token ID
-     * @param tokenId uint256 ID of the token to be added to the tokens list of the given address
-     */
-    function _addTokenToOwnerEnumeration(address to, uint256 tokenId) private {
-        uint256 length = _ownedTokens[to].length; //ERC721.balanceOf(to);
-        _ownedTokens[to].push(uint32(tokenId));
-        _owners[tokenId] = _setTokenParam(
-            _owners[tokenId],
-            160,
-            length
-        );
-    }
-
-    /**
-     * @dev Private function to add a token to this extension's token tracking data structures.
-     * @param tokenId uint256 ID of the token to be added to the tokens list
-     */
-    function _addTokenToAllTokensEnumeration(uint256 tokenId) private {
-        uint256 length = _allTokens.length;
-        _allTokens.push(uint32(tokenId));
-        _owners[tokenId] = _setTokenParam(
-            _owners[tokenId],
-            208,
-            length
-        );
-    }
-
-    /**
      * @dev Private function to remove a token from this extension's ownership-tracking data structures. Note that
      * while the token is not assigned a new owner, the `_ownedTokensIndex` mapping is _not_ updated: this allows for
      * gas optimizations e.g. when performing a transfer operation (avoiding double writes).
      * This has O(1) time complexity, but alters the order of the _ownedTokens array.
      * @param from address representing the previous owner of the given token ID
-     * @param tokenId uint256 ID of the token to be removed from the tokens list of the given address
+     * @param tokenIndex uint256 ID index the token to be removed from the tokens list of the given address
      */
-    function _removeTokenFromOwnerEnumeration(address from, uint256 tokenId) private {
+    function _removeTokenFromOwnerEnumeration(address from, uint256 tokenIndex) private {
         // To prevent a gap in from's tokens array, we store the last token in the index of the token to delete, and
         // then delete the last slot (swap and pop).
-
-        uint256 lastTokenIndex = _ownedTokens[from].length - 1; //ERC721.balanceOf(from) - 1;
-        uint256 tokenIndex = uint256(uint48(_owners[tokenId]>>160));
+        uint256 lastTokenIndex =  _ownedTokens[from].length - 1;
 
         // When the token to delete is the last token, the swap operation is unnecessary
-        uint256 lastTokenId = _ownedTokens[from][lastTokenIndex];
+        if (tokenIndex != lastTokenIndex) {
+            uint256 lastTokenId = _ownedTokens[from][lastTokenIndex];
 
-        _ownedTokens[from][tokenIndex] = uint32(lastTokenId); // Move the last token to the slot of the to-delete token
-        _owners[lastTokenId] = _setTokenParam(
-            _owners[lastTokenId],
-            160,
-            tokenIndex
-        );
+            _ownedTokens[from][tokenIndex] = uint32(lastTokenId); // Move the last token to the slot of the to-delete token
+            _owners[lastTokenId] = _setTokenParam(
+                _owners[lastTokenId],
+                160,
+                tokenIndex,
+                type(uint48).max
+            );
+        }
 
-        // This also deletes the contents at the last position of the array
+        // Deletes the contents at the last position of the array
         _ownedTokens[from].pop();
     }
 
     /**
      * @dev Private function to remove a token from this extension's token tracking data structures.
      * This has O(1) time complexity, but alters the order of the _allTokens array.
-     * @param tokenId uint256 ID of the token to be removed from the tokens list
+     * @param tokenIndex index of token to remove
      */
-    function _removeTokenFromAllTokensEnumeration(uint256 tokenId) private {
+    function _removeTokenFromAllTokensEnumeration(uint256 tokenIndex) private {
         // To prevent a gap in the tokens array, we store the last token in the index of the token to delete, and
         // then delete the last slot (swap and pop).
-
         uint256 lastTokenIndex = _allTokens.length - 1;
-        uint256 tokenIndex = uint256(uint48(_owners[tokenId]>>208));
 
         // When the token to delete is the last token, the swap operation is unnecessary. However, since this occurs so
         // rarely (when the last minted token is burnt) that we still do the swap here to avoid the gas cost of adding
@@ -220,7 +189,8 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
         _owners[lastTokenId] = _setTokenParam(
             _owners[lastTokenId],
             208,
-            tokenIndex
+            tokenIndex,
+            type(uint48).max
         );
 
         // This also deletes the contents at the last position of the array
@@ -251,7 +221,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
      * @dev See {IERC721-approve}.
      */
     function approve(address to, uint256 tokenId) public virtual override {
-        address owner = ERC721.ownerOf(tokenId);
+        address owner = ownerOf(tokenId);
         require(to != owner, "ERC721:owner already approved");
 
         require(
@@ -267,7 +237,6 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
      */
     function getApproved(uint256 tokenId) public view virtual override returns (address) {
         _requireMinted(tokenId);
-
         return _tokenApprovals[tokenId];
     }
 
@@ -378,7 +347,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
      * - `tokenId` must exist.
      */
     function _isApprovedOrOwner(address spender, uint256 tokenId) internal view virtual returns (bool) {
-        address owner = ERC721.ownerOf(tokenId);
+        address owner = ownerOf(tokenId);
         return (spender == owner || isApprovedForAll(owner, spender) || getApproved(tokenId) == spender);
     }
 
@@ -425,19 +394,10 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
      * Emits a {Transfer} event.
      */
     function _mint(address to, uint256 tokenId) internal virtual {
-
-        _beforeTokenTransfer(address(0), to, tokenId, 1);
-
-        // Not really needed before if you are the only minter
         require(!_exists(tokenId), "ERC721:token already minted");
-
-        // Unchecked statement removed, no longer needed
-
-        _owners[tokenId] = uint160(to);
-
+        // Transfer
+        _xfer(address(0), to, tokenId);
         emit Transfer(address(0), to, tokenId);
-
-        _afterTokenTransfer(address(0), to, tokenId, 1);
     }
 
     /**
@@ -452,23 +412,27 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
      * Emits a {Transfer} event.
      */
     function _burn(uint256 tokenId) internal virtual {
-        address owner = ERC721.ownerOf(tokenId);
+        address owner = ownerOf(tokenId);
+        uint256 _tokenData = _owners[tokenId];
 
-        _beforeTokenTransfer(owner, address(0), tokenId, 1);
-
-        // Update ownership in case tokenId was transferred by `_beforeTokenTransfer` hook
-        owner = ERC721.ownerOf(tokenId);
+        // Remove from enumerations
+        _removeTokenFromOwnerEnumeration(
+            owner,
+            uint256(uint48(_tokenData>>160))
+        );
+        _removeTokenFromAllTokensEnumeration(
+            uint256(uint48(_tokenData>>208))
+        );
 
         // Clear approvals
-        delete _tokenApprovals[tokenId];
+        // Tiny gas savings when most users won't have a single token set
+        if (_tokenApprovals[tokenId] != address(0)) {
+            delete _tokenApprovals[tokenId];
+        }
 
-        // Unchecked statement removed, no longer needed
-
+        // Clear tokenID data
         delete _owners[tokenId];
-
         emit Transfer(owner, address(0), tokenId);
-
-        _afterTokenTransfer(owner, address(0), tokenId, 1);
     }
 
     /**
@@ -482,29 +446,73 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
      *
      * Emits a {Transfer} event.
      */
+
+    function _xfer(address from, address to, uint256 tokenId)
+        private {
+
+        uint256 _tokenData = _owners[tokenId];
+
+        uint256 length;
+        // If coming from minter
+        if (from == address(0)) {
+            length = _allTokens.length;
+            _allTokens.push(uint32(tokenId));
+            _tokenData = _setTokenParam(
+                _tokenData,
+                208,
+                length,
+                type(uint48).max
+            );
+        } else {
+            // Else coming from prior owner
+            uint256 _tokenIndex = uint256(uint48(_tokenData>>160));
+            _removeTokenFromOwnerEnumeration(
+                from,
+                _tokenIndex
+            );
+        }
+
+        length = _ownedTokens[to].length; //ERC721.balanceOf(to);
+        _ownedTokens[to].push(uint32(tokenId));
+        _tokenData = _setTokenParam(
+            _tokenData,
+            160,
+            length,
+            type(uint48).max
+        );
+
+        // Set new owner
+        _tokenData = _setTokenParam(
+            _tokenData,
+            0,
+            uint256(uint160(to)),
+            type(uint160).max
+        );
+
+        // Write back to storage
+        _owners[tokenId] = _tokenData;
+    }
+
     function _transfer(
         address from,
         address to,
         uint256 tokenId
     ) internal virtual {
-        require(ERC721.ownerOf(tokenId) == from, "ERC721:xfer from incorrect owner");
-        require(to != address(0), "ERC721:xfer to the zero address");
-
+        require(ownerOf(tokenId) == from, "ERC721:xfer from incorrect owner");
+        require(to != address(0), "ERC721:xfer to the 0 address");
+        require(to != from, "ERC721:xfer from & to are same");
+        
         _beforeTokenTransfer(from, to, tokenId, 1);
 
-        // Check that tokenId was not transferred by `_beforeTokenTransfer` hook
-        require(ERC721.ownerOf(tokenId) == from, "ERC721:xfer from incorrect owner");
-
         // Clear approvals from the previous owner
-        delete _tokenApprovals[tokenId];
+        // Tiny gas savings with if statement when most owners won't have an approval set
+        if (_tokenApprovals[tokenId] != address(0)) {
+            delete _tokenApprovals[tokenId];
+        }
 
-        // Unchecked statement removed, no longer needed
-
-        _owners[tokenId] = uint160(to);
-
+        // Transfer
+        _xfer(from, to, tokenId);
         emit Transfer(from, to, tokenId);
-
-        _afterTokenTransfer(from, to, tokenId, 1);
     }
 
     /**
@@ -514,7 +522,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
      */
     function _approve(address to, uint256 tokenId) internal virtual {
         _tokenApprovals[tokenId] = to;
-        emit Approval(ERC721.ownerOf(tokenId), to, tokenId);
+        emit Approval(ownerOf(tokenId), to, tokenId);
     }
 
     /**
@@ -592,22 +600,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
         address to,
         uint256 tokenId,
         uint256 batchSize
-    ) internal virtual {
-        if (batchSize > 1) {
-            revert("ERC721Enum:batch xfer not allow");
-        }
-
-        if (from == address(0)) {
-            _addTokenToAllTokensEnumeration(tokenId);
-        } else if (from != to) {
-            _removeTokenFromOwnerEnumeration(from, tokenId);
-        }
-        if (to == address(0)) {
-            _removeTokenFromAllTokensEnumeration(tokenId);
-        } else if (to != from) {
-            _addTokenToOwnerEnumeration(to, tokenId);
-        }
-    }
+    ) internal virtual {}
 
     /**
      * @dev Hook that is called after any token transfer. This includes minting and burning. If {ERC721Consecutive} is
