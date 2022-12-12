@@ -16,7 +16,6 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
 
     bytes32 public constant FRONTEND_ROLE = keccak256("FRONTEND_ROLE");
 
-    uint256 private _seed;
     mapping(address => uint256) private _registrationData; //step, code, isRegistered
     
     event RegistrarAdminApprove(
@@ -33,8 +32,7 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
         address indexed tokenOwner
     );
 
-    constructor(uint256 seed_) {
-        _seed = seed_;
+    constructor() {
         _grantRole(FRONTEND_ROLE, msg.sender);
     }
 
@@ -110,12 +108,10 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
                             block.timestamp,
                             block.difficulty,
                             block.number,
-                            msg.sender,
-                            _seed
+                            msg.sender
                         )
                     )
                 ) % 65535;
-                _seed += _code;
             }
             uint256 _newRegistrationData;
             _newRegistrationData |= 2<<POS_STEP;

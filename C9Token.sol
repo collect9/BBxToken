@@ -176,7 +176,6 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         if (msg.sender != _tokenOwner) {
             _errMsg("unauthorized");
         }
-        _checkActivity(_tokenId);
         _;
     }
 
@@ -231,11 +230,11 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         internal
         override(ERC721)
         notFrozen() {
-            uint256 uTokenData = _uTokenData[tokenId];
-            if (uint256(uint8(uTokenData>>POS_LOCKED)) == 1) {
+            uint256 _tokenData = _uTokenData[tokenId];
+            if (uint256(uint8(_tokenData>>POS_LOCKED)) == 1) {
                 _errMsg("cannot xfer locked token");
             }
-            if (uint256(uint8(uTokenData>>POS_VALIDITY)) == INACTIVE) {
+            if (uint256(uint8(_tokenData>>POS_VALIDITY)) == INACTIVE) {
                 _setTokenValidity(tokenId, VALID);
             }
             super._beforeTokenTransfer(from, to, tokenId, batchSize);
@@ -416,20 +415,6 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     }
 
     //>>>>>>> CUSTOM ERC2981 END
-
-    /**
-     * @dev This function is meant to automatically fix an inactive 
-     * validity status when the owner interacts with the contract.
-     * It is placed _beforeTokenTransfer and in the isOwner modifier.
-     * Thus, if a token goes inactive it will cost slighty more gas 
-     * to interact, however will automatically fix the status.
-     */
-    function _checkActivity(uint256 _tokenId)
-        private {
-            if (uint256(uint8(_uTokenData[_tokenId]>>POS_VALIDITY)) == INACTIVE) {
-                _setTokenValidity(_tokenId, VALID);
-            }
-    }
 
     /**
      * @dev Reduces revert error messages fee slightly. This will 
@@ -676,8 +661,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * gas in a single transaction.
      */
     function burnBatch(uint256[] calldata _tokenId)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE) {
+        external {
             uint256 _batchSize = _tokenId.length;
             if (_batchSize == 0) {
                 _errMsg("no tokens to burn");
@@ -777,18 +761,20 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                     _errMsg("unauthorized");
                 }
                 _tokenData = _uTokenData[_tokenId];
+                if (_preRedeemable(_tokenData)) {
+                    _errMsg("token still pre-redeemable");
+                }
                 if (uint256(uint8(_tokenData>>POS_VALIDITY)) == INACTIVE) {
                     _setTokenValidity(_tokenId, VALID);
+                    _tokenData = _uTokenData[_tokenId];
                 }
                 if (uint256(uint8(_tokenData>>POS_VALIDITY)) != VALID) {
                     _errMsg("token status not valid");
                 }
                 if (uint256(uint8(_tokenData>>POS_LOCKED)) != 0) {
-                    _errMsg("token is locked");
+                    _errMsg("token already in redeemer");
                 }
-                if (_preRedeemable(_tokenData)) {
-                    _errMsg("token still pre-redeemable");
-                }
+                
                 _lockToken(_tokenId);
                 unchecked {++i;}
             }

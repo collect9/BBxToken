@@ -26,11 +26,10 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     bytes32 public constant NFTCONTRACT_ROLE = keccak256("NFTCONTRACT_ROLE");
     uint96 public redeemMinPrice = 20;
     address public contractPricer;
-    uint256 private _seed;
 
     // Consider adding status in case admin final approval needs to disapprove
     // Status can represent some kind of error code
-    mapping(address => uint256) redeemerData4; //code, step, batchsize, tokenId[]
+    mapping(address => uint256) redeemerData4; //step, code, batchsize, tokenId[]
     
     event RedeemerAdd(
         address indexed tokensOwner,
@@ -67,9 +66,8 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     address public contractRegistrar;
     address public immutable contractToken;
     
-    constructor(uint256 seed_, address contractToken_) {
+    constructor(address contractToken_) {
         contractToken = contractToken_;
-        _seed = seed_;
         _grantRole(FRONTEND_ROLE, msg.sender);
         _grantRole(NFTCONTRACT_ROLE, contractToken_);
     }
@@ -297,12 +295,10 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
                                 block.timestamp,
                                 block.difficulty,
                                 block.number,
-                                msg.sender,
-                                _seed
+                                msg.sender
                             )
                         )
                     ) % 65535;
-                    _seed += _code;
                 }
             }
 
