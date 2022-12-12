@@ -2,7 +2,7 @@
 pragma solidity >0.8.10;
 import "@openzeppelin/contracts/interfaces/IERC2981.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
-import "./utils/ERC721opt.sol";
+import "./utils/ERC721opt2.sol";
 
 import "./C9MetaData.sol";
 import "./C9OwnerControl.sol";
@@ -22,7 +22,7 @@ interface IC9Token {
     function redeemRemove(uint256[] calldata _tokenId) external;
     function redeemStart(uint256[] calldata _tokenId) external;
     function preRedeemable(uint256 _tokenId) external view returns(bool);
-    function setTokenUpgraded(uint256 _tokenId, uint256 _val) external;
+    function setTokenUpgraded(uint256 _tokenId) external;
 }
 
 contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
@@ -54,7 +54,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * displayed in the future.
      */
     bool public svgOnly = true;
-    string[2] private __baseURI;
+    string[2] public _baseURI;
 
     /**
      * @dev Contract-level meta data for OpenSea.
@@ -196,9 +196,16 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * updating royalties should not depend on the token being 
      * outside of the redemption process.
      */ 
-    modifier notRedeemed(uint256 _tokenId) {
-        if (uint256(uint8(_uTokenData[_tokenId]>>POS_VALIDITY)) == REDEEMED) {
-            _errMsg("token is redeemed");
+    modifier notDead(uint256 _tokenId) {
+        if (uint256(uint8(_uTokenData[_tokenId]>>POS_VALIDITY)) >= REDEEMED) {
+            _errMsg("token is redeemed / dead");
+        }
+        _;
+    }
+
+    modifier notLocked(uint256 _tokenId) {
+        if (uint256(uint8(_uTokenData[_tokenId]>>POS_LOCKED)) == 1) {
+            _errMsg("cannot xfer locked token");
         }
         _;
     }
@@ -216,10 +223,6 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     /**
      * @dev Required overrides from imported contracts.
      */
-    function _baseURI() internal view override returns(string memory) {
-        return __baseURI[0];
-    }
-
     function _beforeTokenTransfer(
         address from,
         address to,
@@ -228,8 +231,10 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         )
         internal
         override(ERC721)
-        inRedemption(tokenId, 0)
         notFrozen() {
+            if (uint256(uint8(_uTokenData[tokenId]>>POS_LOCKED)) == 1) {
+                _errMsg("cannot xfer locked token");
+            }
             super._beforeTokenTransfer(from, to, tokenId, batchSize);
             _checkActivity(tokenId);
     }
@@ -260,7 +265,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * and updates uTokenData saves a good chunk of gas.
      */
     function _setTokenRoyalty(uint256 _tokenId, address _receiver, uint256 _royalty)
-        internal {
+        private {
             (address _royaltyAddress, uint256 _royaltyAmt) = royaltyInfo(_tokenId, 10000);
             bool _newReceiver = _receiver != _royaltyAddress;
             bool _newRoyalty = _royalty != _royaltyAmt;
@@ -296,6 +301,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      */
     function resetTokenRoyalty(uint256 _tokenId)
         onlyRole(DEFAULT_ADMIN_ROLE)
+        tokenExists(_tokenId)
+        notDead(_tokenId)
         external {
             _setTokenRoyalty(_tokenId, royaltyDefaultReceiver, royaltyDefaultValue);
     }
@@ -376,6 +383,32 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             royaltyDefaultValue = uint96(_royaltyDefaultValue);
     }
 
+    /**
+     * @dev Allows the contract owner to set royalties 
+     * on a per token basis, within limits.
+     * Note: set customRoyalty address to the null address 
+     * to ignore it and use the already default set royalty address.
+     * Cost:
+     * Only royalty: ~37,000 gas
+     * Only receiver: ~56,000 if rToken == address(0) else 39,000 subsequent 
+     * Both at once: ~59,000 gas gas first time, 42,000 subsequent
+     *
+     * Note: Updating the receiver the first time is nearly as
+     * expensive as updating both together the first time.
+     */
+    function setTokenRoyalty(
+        uint256 _tokenId,
+        uint256 _newRoyalty,
+        address _receiver
+        )
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        tokenExists(_tokenId)
+        notDead(_tokenId)
+        limitRoyalty(_newRoyalty) {
+            _setTokenRoyalty(_tokenId, _receiver, _newRoyalty);
+    }
+
     //>>>>>>> CUSTOM ERC2981 END
 
     /**
@@ -384,7 +417,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * It is placed _beforeTokenTransfer and in the isOwner modifier.
      */
     function _checkActivity(uint256 _tokenId)
-        internal {
+        private {
             if (uint256(uint8(_uTokenData[_tokenId]>>POS_VALIDITY)) == INACTIVE) {
                 _setTokenValidity(_tokenId, VALID);
             }
@@ -407,7 +440,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * instead will keep incrementing.
      */
     function _getPhysicalHash(TokenData calldata _input, uint256 _edition)
-        internal pure
+        private pure
         returns (bytes32) {
             bytes memory _bData = bytes(_input.sData);
             uint256 _splitIndex;
@@ -441,7 +474,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * 2. Token must not already be in redemption process or redeemed
      */
     function _lockToken(uint256 _tokenId)
-        internal
+        private
         isOwner(_tokenId)
         inRedemption(_tokenId, 0) {
             if (uint256(uint8(_uTokenData[_tokenId]>>POS_VALIDITY)) != VALID) {
@@ -459,160 +492,6 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     }
 
     /**
-     * @dev Once the token validity is set to 4, it is 
-     * not possible to change it back. Only the redemption 
-     * finisher functions call this.
-     */
-    function _setTokenRedeemed(uint256 _tokenId)
-        internal
-        tokenExists(_tokenId)
-        inRedemption(_tokenId, 1) {
-            _setTokenValidity(_tokenId, REDEEMED);
-    }
-
-    /**
-     * @dev
-     * Updates the token validity status.
-     * Validity will not prevent or pause transfers. It is 
-     * only a display flag to let users know of the token's 
-     * status.
-     */
-    function _setTokenValidity(uint256 _tokenId, uint256 _vId)
-        internal
-        notRedeemed(_tokenId) {
-            if (_vId == 5 || _vId > 8) {
-                _errMsg("invalid internal vId");
-            }
-            uint256 _tokenData = _uTokenData[_tokenId];
-            uint256 _tokenValidity = uint256(uint8(_tokenData>>POS_VALIDITY));
-            if (_tokenValidity == _vId) {
-                _errMsg("vId already set");
-            }
-            _tokenData = _setTokenParam(
-                _tokenData,
-                POS_VALIDITY,
-                _vId,
-                255
-            );
-            _tokenData = _setTokenParam(
-                _tokenData,
-                POS_VALIDITYSTAMP,
-                block.timestamp,
-                1099511627775
-            );
-            _uTokenData[_tokenId] = _tokenData;
-    }
-
-    /**
-     * @dev Redeem cancel functions (either single token or 
-     * batch) both call this to unlock the token.
-     *
-     * Requirements:
-     * 1. Caller must be owner
-     * 2. Token must be in the redemption process (not redeemed)
-     */
-    function _unlockToken(uint256 _tokenId)
-        internal
-        isOwner(_tokenId)
-        inRedemption(_tokenId, 1) {
-            _uTokenData[_tokenId] = _setTokenParam(
-                _uTokenData[_tokenId],
-                POS_LOCKED,
-                0,
-                255
-            );
-    }
-
-    /**
-     * @dev The token burning required for the redemption process.
-     * Require statement is the same as in ERC721Burnable.
-     * Note the `tokenComboExists` of the token is not removed, thus 
-     * once the `edition` of any burned token cannot be replaced, but 
-     * instead will keep incrementing.
-     * 
-     * Requirements:
-     *
-     * - `tokenId` must exist.
-     * - token burner must be token owner.
-     */
-    function burn(uint256 _tokenId)
-        public
-        isOwner(_tokenId) {
-            _burn(_tokenId);
-            delete _uTokenData[_tokenId];
-            delete _sTokenData[_tokenId];
-            if (_rTokenData[_tokenId] != address(0)) {
-                delete _rTokenData[_tokenId];
-            }
-    }
-
-    /**
-     * @dev Bulk burn function for convenience.
-     */
-    function burnAll()
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE) {
-            uint256 totalSupply = totalSupply();
-            for (uint256 i; i<totalSupply;) {
-                burn(tokenByIndex(0));
-                unchecked {++i;}
-            }
-    }
-
-    /**
-     * @dev Returns the base64 representation of the SVG string. 
-     * This is desired when including the string in json data which 
-     * does not allow special characters found in html/xml code.
-    */
-    function b64SVGImage(uint256 _tokenId)
-        internal view
-        returns (string memory) {
-            return Base64.encode(bytes(svgImage(_tokenId)));
-    }
-
-    /**
-     * @dev Contract-level meta data for OpenSea.
-     * OpenSea: https://docs.opensea.io/docs/contract-level-metadata
-     */
-    function contractURI()
-        external view
-        returns (string memory) {
-            return string(abi.encodePacked(
-                "https://", _contractURI, ".json"
-            ));
-    }
-
-    /**
-     * @dev uTokenData is packed into a single uint256. This function
-     * returns an unpacked array. It overrides the C9Struct defintion 
-     * so only the _tokenId needs to be passed in.
-     */
-    function getTokenParams(uint256 _tokenId)
-        public view
-        override(C9Struct, IC9Token)
-        returns(uint256[18] memory params) {
-            uint256 _packedToken = _uTokenData[_tokenId];
-            params[0] = uint256(uint8(_packedToken>>POS_UPGRADED));
-            params[1] = uint256(uint8(_packedToken>>POS_DISPLAY));
-            params[2] = uint256(uint8(_packedToken>>POS_LOCKED));
-            params[3] = uint256(uint8(_packedToken>>POS_VALIDITY));
-            params[4] = uint256(uint8(_packedToken>>POS_EDITION));
-            params[5] = uint256(uint8(_packedToken>>POS_CNTRYTAG));
-            params[6] = uint256(uint8(_packedToken>>POS_CNTRYTUSH));
-            params[7] = uint256(uint8(_packedToken>>POS_GENTAG));
-            params[8] = uint256(uint8(_packedToken>>POS_GENTUSH));
-            params[9] = uint256(uint8(_packedToken>>POS_MARKERTUSH));
-            params[10] = uint256(uint8(_packedToken>>POS_SPECIAL));
-            params[11] = uint256(uint8(_packedToken>>POS_RARITYTIER));
-            params[12] = uint256(uint16(_packedToken>>POS_MINTID));
-            params[13] = uint256(uint16(_packedToken>>POS_ROYALTY));
-            params[14] = uint256(uint16(_packedToken>>POS_ROYALTIESDUE));
-            params[15] = uint256(uint32(_packedToken>>POS_TOKENID));
-            params[16] = uint256(uint40(_packedToken>>POS_VALIDITYSTAMP));
-            params[17] = uint256(uint40(_packedToken>>POS_MINTSTAMP));
-    }
-
-    /**
      * @dev Minting function. This checks and sets the `_edition` based on 
      * the `TokenData` input attributes, sets the `__mintId` based on 
      * the `_edition`, sets the royalty, and then stores all of the 
@@ -623,8 +502,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      *
      * - `_input` royalty is <= 9.99%.
     */
-    function mint1(TokenData calldata _input)
-        internal
+    function _mint1(TokenData calldata _input)
+        private
         limitRoyalty(_input.royalty) {
             // Get physical edition id
             uint256 _edition = _input.edition;
@@ -699,6 +578,158 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     }
 
     /**
+     * @dev
+     * Updates the token validity status.
+     * Validity will not prevent or pause transfers. It is 
+     * only a display flag to let users know of the token's 
+     * status.
+     */
+    function _setTokenValidity(uint256 _tokenId, uint256 _vId)
+        private
+        notDead(_tokenId) {
+            uint256 _tokenData = _uTokenData[_tokenId];
+            if (_vId == uint256(uint8(_tokenData>>POS_VALIDITY))) {
+                _errMsg("validity already set");
+            }
+            if (_vId == 5 || _vId > 8) {
+                _errMsg("invalid internal vId");
+            }
+            _tokenData = _setTokenParam(
+                _tokenData,
+                POS_VALIDITY,
+                _vId,
+                255
+            );
+            _tokenData = _setTokenParam(
+                _tokenData,
+                POS_VALIDITYSTAMP,
+                block.timestamp,
+                1099511627775
+            );
+            _uTokenData[_tokenId] = _tokenData;
+    }
+
+    /**
+     * @dev Redeem cancel functions (either single token or 
+     * batch) both call this to unlock the token.
+     *
+     * Requirements:
+     * 1. Caller must be owner
+     * 2. Token must be in the redemption process (not redeemed)
+     */
+    function _unlockToken(uint256 _tokenId)
+        private
+        isOwner(_tokenId)
+        inRedemption(_tokenId, 1) {
+            _uTokenData[_tokenId] = _setTokenParam(
+                _uTokenData[_tokenId],
+                POS_LOCKED,
+                0,
+                255
+            );
+    }
+
+    /**
+     * @dev The token burning required for the redemption process.
+     * Require statement is the same as in ERC721Burnable.
+     * Note the `tokenComboExists` of the token is not removed, thus 
+     * once the `edition` of any burned token cannot be replaced, but 
+     * instead will keep incrementing.
+     * 
+     * Requirements:
+     *
+     * - `tokenId` must exist.
+     * - token burner must be token owner.
+     */
+    function burn(uint256 _tokenId)
+        public
+        isOwner(_tokenId) {
+            _burn(_tokenId);
+            delete _uTokenData[_tokenId];
+            delete _sTokenData[_tokenId];
+            if (_rTokenData[_tokenId] != address(0)) {
+                delete _rTokenData[_tokenId];
+            }
+    }
+
+    /**
+     * @dev Bulk burn function for convenience.
+     */
+    function burnAll()
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            uint256 totalSupply = totalSupply();
+            if (totalSupply == 0) {
+                _errMsg("no tokens to burn");
+            }
+            for (uint256 i; i<totalSupply;) {
+                burn(tokenByIndex(0));
+                unchecked {++i;}
+            }
+    }
+
+    /**
+     * @dev For if/when burnAll uses too much 
+     * gas in a single transaction.
+     */
+    function burnBatch(uint256[] calldata _tokenId)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            uint256 _batchSize = _tokenId.length;
+            if (_batchSize == 0) {
+                _errMsg("no tokens to burn");
+            }
+            for (uint256 i; i<_batchSize;) {
+                burn(_tokenId[i]);
+                unchecked {++i;}
+            }
+    }
+
+    /**
+     * @dev Contract-level meta data for OpenSea.
+     * OpenSea: https://docs.opensea.io/docs/contract-level-metadata
+     */
+    function contractURI()
+        external view
+        returns (string memory) {
+            return string(abi.encodePacked(
+                "https://", _contractURI, ".json"
+            ));
+    }
+
+    /**
+     * @dev uTokenData is packed into a single uint256. This function
+     * returns an unpacked array. It overrides the C9Struct defintion 
+     * so only the _tokenId needs to be passed in.
+     */
+    function getTokenParams(uint256 _tokenId)
+        public view
+        override(C9Struct, IC9Token)
+        returns(uint256[18] memory params) {
+            uint256 _packedToken = _uTokenData[_tokenId];
+            params[0] = uint256(uint8(_packedToken>>POS_UPGRADED));
+            params[1] = uint256(uint8(_packedToken>>POS_DISPLAY));
+            params[2] = uint256(uint8(_packedToken>>POS_LOCKED));
+            params[3] = uint256(uint8(_packedToken>>POS_VALIDITY));
+            params[4] = uint256(uint8(_packedToken>>POS_EDITION));
+            params[5] = uint256(uint8(_packedToken>>POS_CNTRYTAG));
+            params[6] = uint256(uint8(_packedToken>>POS_CNTRYTUSH));
+            params[7] = uint256(uint8(_packedToken>>POS_GENTAG));
+            params[8] = uint256(uint8(_packedToken>>POS_GENTUSH));
+            params[9] = uint256(uint8(_packedToken>>POS_MARKERTUSH));
+            params[10] = uint256(uint8(_packedToken>>POS_SPECIAL));
+            params[11] = uint256(uint8(_packedToken>>POS_RARITYTIER));
+            params[12] = uint256(uint16(_packedToken>>POS_MINTID));
+            params[13] = uint256(uint16(_packedToken>>POS_ROYALTY));
+            params[14] = uint256(uint16(_packedToken>>POS_ROYALTIESDUE));
+            params[15] = uint256(uint32(_packedToken>>POS_TOKENID));
+            params[16] = uint256(uint40(_packedToken>>POS_VALIDITYSTAMP));
+            params[17] = uint256(uint40(_packedToken>>POS_MINTSTAMP));
+    }
+
+
+
+    /**
      * @dev Helps makes the overall minting process faster and cheaper 
      * on average per mint.
     */
@@ -707,10 +738,12 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         onlyRole(DEFAULT_ADMIN_ROLE) {
             uint256 _batchSize = _input.length;
             for (uint256 i; i<_batchSize;) {
-                mint1(_input[i]);
+                _mint1(_input[i]);
                 unchecked {++i;}
             }
     }
+
+    //>>>>>>> REDEEMER FUNCTIONS START
 
     /**
      * @dev Returns whether or not the token pre-release period 
@@ -723,8 +756,6 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             uint256 _ds = block.timestamp-uint256(uint40(_uTokenData[_tokenId]>>POS_MINTSTAMP));
             return _ds < preRedeemablePeriod;
     }
-
-    //>>>>>>> REDEEMER FUNCTIONS START
 
     /**
      * @dev Add tokens to an existing redemption process.
@@ -786,8 +817,10 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         isContract(msg.sender) {
             uint256 _batchSize = uint256(uint8(_redeemerData>>RPOS_BATCHSIZE));
             uint256 _tokenOffset = RPOS_TOKEN1;
+            uint256 _tokenId;
             for (uint256 i; i<_batchSize;) {
-                _setTokenRedeemed(uint256(uint24(_redeemerData>>_tokenOffset)));
+                _tokenId = uint256(uint24(_redeemerData>>_tokenOffset));
+                _setTokenValidity(_tokenId, REDEEMED);
                 unchecked {
                     _tokenOffset += UINT_SIZE;
                     ++i;
@@ -842,8 +875,24 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                 _lockToken(_tokenId[i]);
                 unchecked {++i;}
             }
-            
             emit RedemptionStart(msg.sender, _batchSize);
+    }
+
+    /**
+     * @dev Gets or sets the global token redeemable period.
+     * This may be reduced in the future.
+     * Cost: ~29,000 gas
+     */
+    function setPreRedeemPeriod(uint256 _period)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            if (preRedeemablePeriod == _period) {
+                _errMsg("period already set");
+            }
+            if (_period > 63113852) { // 2 years max
+                _errMsg("period too long");
+            }
+            preRedeemablePeriod = _period;
     }
 
     //>>>>>>> REDEEMER FUNCTIONS END
@@ -858,7 +907,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     function setBaseUri(string calldata _newBaseURI, uint256 _idx)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (Helpers.stringEqual(__baseURI[_idx], _newBaseURI)) {
+            if (Helpers.stringEqual(_baseURI[_idx], _newBaseURI)) {
                 _errMsg("uri already set");
             }
             bytes calldata _bBaseURI = bytes(_newBaseURI);
@@ -866,7 +915,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             if (bytes1(_bBaseURI[len-1]) != 0x2f) {
                 _errMsg("uri missing end slash");
             }
-            __baseURI[_idx] = _newBaseURI;
+            _baseURI[_idx] = _newBaseURI;
     }
 
      /**
@@ -908,18 +957,6 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     }
 
     /**
-     * @dev Updates the validity handler contract address.
-     * Cost: ~72,000 gas
-     */
-    function setContractVH(address _address)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-        addressNotSame(contractVH, _address) {
-            contractVH = _address;
-            _grantRole(VALIDITY_ROLE, contractVH);
-    }
-
-    /**
      * @dev Updates the SVG display contract address.
      * This function will allow future SVG image display 
      * upgrades.
@@ -947,34 +984,15 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     }
 
     /**
-     * @dev Gets or sets the global token redeemable period.
-     * This may be reduced in the future.
-     * Cost: ~29,000 gas
+     * @dev Updates the validity handler contract address.
+     * Cost: ~72,000 gas
      */
-    function setPreRedeemPeriod(uint256 _period)
+    function setContractVH(address _address)
         external
-        onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (preRedeemablePeriod == _period) {
-                _errMsg("period already set");
-            }
-            if (_period > 63113852) { // 2 years max
-                _errMsg("period too long");
-            }
-            preRedeemablePeriod = _period;
-    }
-
-    /**
-     * @dev Allows the compressed data that is used to display the 
-     * micro QR code on the SVG to be updated. Each update costs 
-     * around ~75,000 to ~100,000 gas based on the original 
-     * minting data length.
-     */
-    function setTokenSData(uint256 _tokenId, string memory _sData)
-        public 
         onlyRole(DEFAULT_ADMIN_ROLE)
-        tokenExists(_tokenId)
-        notRedeemed(_tokenId) {
-            _sTokenData[_tokenId] = _sData;
+        addressNotSame(contractVH, _address) {
+            contractVH = _address;
+            _grantRole(VALIDITY_ROLE, contractVH);
     }
 
     /**
@@ -1019,33 +1037,22 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     }
 
     /**
-     * @dev Allows the contract owner to set royalties 
-     * on a per token basis, within limits.
-     * Note: set customRoyalty address to the null address 
-     * to ignore it and use the already default set royalty address.
-     * Cost:
-     * Only royalty: ~37,000 gas
-     * Only receiver: ~56,000 if rToken == address(0) else 39,000 subsequent 
-     * Both at once: ~59,000 gas gas first time, 42,000 subsequent
-     *
-     * Note: Updating the receiver the first time is nearly as
-     * expensive as updating both together the first time.
+     * @dev Allows the compressed data that is used to display the 
+     * micro QR code on the SVG to be updated. Each update costs 
+     * around ~75,000 to ~100,000 gas based on the original 
+     * minting data length.
      */
-    function setTokenRoyalty(
-        uint256 _tokenId,
-        uint256 _newRoyalty,
-        address _receiver
-        )
-        external
+    function setTokenSData(uint256 _tokenId, string memory _sData)
+        public 
         onlyRole(DEFAULT_ADMIN_ROLE)
-        limitRoyalty(_newRoyalty)
         tokenExists(_tokenId)
-        notRedeemed(_tokenId) {
-            _setTokenRoyalty(_tokenId, _receiver, _newRoyalty);
+        notDead(_tokenId) {
+            _sTokenData[_tokenId] = _sData;
     }
 
     /*
      * @dev Sets the token validity.
+     * Not allowed to set redeemed externally.
      * Cost: ~33,500 gas.
      */
     function setTokenValidity(uint256 _tokenId, uint256 _vId)
@@ -1053,6 +1060,9 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         onlyRole(VALIDITY_ROLE)
         isContract(msg.sender)
         tokenExists(_tokenId) {
+            if (_vId == 4) {
+                _errMsg("invalid external vId");
+            }
             _setTokenValidity(_tokenId, _vId);
     }
 
@@ -1060,22 +1070,20 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * @dev Potential token upgrade path params.
      * Cost: ~31,000 gas.
      */
-    function setTokenUpgraded(uint256 _tokenId, uint256 _level)
+    function setTokenUpgraded(uint256 _tokenId)
         external override
         onlyRole(UPGRADER_ROLE)
         isContract(msg.sender)
-        tokenExists(_tokenId) {
-            if (_level == 0 || _level > 9) {
-                _errMsg("invalid upgrade val");
-            }
+        tokenExists(_tokenId)
+        notDead(_tokenId) {
             uint256 _tokenData = _uTokenData[_tokenId];
-            if (uint256(uint8(_tokenData>>POS_UPGRADED)) >= _level) {
+            if (uint256(uint8(_tokenData>>POS_UPGRADED)) == 1) {
                 _errMsg("token already upgraded");
             }
             _uTokenData[_tokenId] = _setTokenParam(
                 _tokenData,
                 POS_UPGRADED,
-                _level,
+                1,
                 255
             );
     }
@@ -1125,7 +1133,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                 // Onchain SVG
                 image = abi.encodePacked(
                     ',"image":"data:image/svg+xml;base64,',
-                    b64SVGImage(_tokenId)
+                    Base64.encode(bytes(svgImage(_tokenId)))
                 );
             }
             else {
@@ -1133,7 +1141,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                 uint256 _viewIdx = uint256(uint8(_tokenData>>POS_VALIDITY)) == REDEEMED ? 1 : 0;
                 image = abi.encodePacked(
                     ',"image":"',
-                    __baseURI[_viewIdx],
+                    _baseURI[_viewIdx],
                     _tokenId,
                     '.png'
                 );
