@@ -35,13 +35,13 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
 
     /**
      * @dev Default royalty. These should be packed into one slot.
+     * These are part of the custom EIP-2981.
      */
     address private royaltyDefaultReceiver;
     uint96 private royaltyDefaultValue;
 
     /**
-     * @dev The meta and SVG contracts that this token contract
-     * interact with.
+     * @dev Contracts this token contract interacts with.
      */
     address private contractMeta;
     address private contractRedeemer;
@@ -50,8 +50,10 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     address private contractVH;
 
     /**
-     * @dev Flag that may enable external artwork versions to be 
-     * displayed in the future.
+     * @dev Flag that may enable external (IPFS) artwork 
+     * versions to be displayed in the future. The _baseURI
+     * is a string[2]: index 0 is active and index 1 is 
+     * for inactive.
      */
     bool public svgOnly = true;
     string[2] public _baseURI;
@@ -63,11 +65,11 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     string private _contractURI = "collect9.io/metadata/C9T";
 
     /**
-     * @dev Redemption definitions and events. preRedeem period 
+     * @dev Redemption definitions and events. preRedeemablePeriod 
      * defines how long a token must exist before it can be 
      * redeemed.
      */
-    uint256 public preRedeemablePeriod = 31556926; //seconds
+    uint256 private preRedeemablePeriod = 31556926; //seconds
     event RedemptionAdd(
         address indexed tokenOwner,
         uint256 indexed batchSize
@@ -90,10 +92,10 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     );
     
     /**
-     * @dev Structure that holds all of the token info required to 
+     * @dev Mappings that hold all of the token info required to 
      * construct the 100% on chain SVG.
-     * The properties within _uTokenData that define 
-     * the physical collectible cannot be modified once set.
+     * Many properties within _uTokenData that define 
+     * the physical collectible are immutable by design.
      */
     mapping(uint256 => address) private _rTokenData;
     mapping(uint256 => string) private _sTokenData;
@@ -107,8 +109,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     mapping(bytes32 => bool) private _tokenComboExists;
 
     /**
-     * @dev _mintId stores the minting ID number for up to 99 editions.
-     * This means that 96 of some physical collectible, differentiated 
+     * @dev _mintId stores the edition minting for up to 99 editions.
+     * This means that 99 of some physical collectible, differentiated 
      * only by authentication certificate id can be minted. The limit 
      * is 99 due to the SVG only being able to display 2 digits.
      */
@@ -141,11 +143,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * @dev Checks to see whether or not the token is in the 
      * redemption process.
      */ 
-    modifier inRedemption(uint256 _tokenId, uint256 status) {
+    modifier tokenLocked(uint256 _tokenId, uint256 status) {
         uint256 _tokenData = _uTokenData[_tokenId];
-        if (uint256(uint8(_tokenData>>POS_VALIDITY)) == REDEEMED) {
-            _errMsg("token is redeemed");
-        }
         if (uint256(uint8(_tokenData>>POS_LOCKED)) != status) {
             _errMsg("redemption status disallows");
         }
@@ -153,13 +152,14 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     }
 
     /*
-     * @dev Checks if address is a smart contract (except from 
+     * @dev Checks if caller is a smart contract (except from 
      * a constructor).
      */ 
-    modifier isContract(address _address) {
+    modifier isContract() {
         uint256 size;
+        address sender = msg.sender;
         assembly {
-            size := extcodesize(_address)
+            size := extcodesize(sender)
         }
         if (size == 0) {
             _errMsg("caller must be contract");
@@ -181,7 +181,9 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     }
 
     /*
-     * @dev Limits royalty inputs to 10%.
+     * @dev Limits royalty inputs and updates to 10%.
+     * Realistically there probably isn't a business model 
+     * beyond 10%.
      */ 
     modifier limitRoyalty(uint256 _royalty) {
         if (_royalty > 999) {
@@ -191,11 +193,10 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     }
 
     /*
-     * @dev Checks to see the token is not yet redeemed. This is a 
-     * bit redundant to inRedemption, however some things like 
-     * updating royalties should not depend on the token being 
-     * outside of the redemption process.
-     */ 
+     * @dev Checks to see the token is not dead. Any status redeemed 
+     * or greater is a dead status, meaning the token is forever 
+     * locked.
+     */
     modifier notDead(uint256 _tokenId) {
         if (uint256(uint8(_uTokenData[_tokenId]>>POS_VALIDITY)) >= REDEEMED) {
             _errMsg("token is redeemed / dead");
@@ -203,15 +204,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         _;
     }
 
-    modifier notLocked(uint256 _tokenId) {
-        if (uint256(uint8(_uTokenData[_tokenId]>>POS_LOCKED)) == 1) {
-            _errMsg("cannot xfer locked token");
-        }
-        _;
-    }
-
     /*
-     * @dev Checks to see the token exists.
+     * @dev Checks to see if the tokenId exists.
      */
     modifier tokenExists(uint256 _tokenId) {
         if (!_exists(_tokenId)) {
@@ -222,6 +216,11 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
 
     /**
      * @dev Required overrides from imported contracts.
+     * This one checks to make sure the token is not locked 
+     * either in the redemption process, or locked due to a 
+     * dead status. Frozen is a long-term fail-safe migration 
+     * mechanism in case Ethereum becomes too expensive to 
+     * continue transacting on.
      */
     function _beforeTokenTransfer(
         address from,
@@ -232,11 +231,14 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         internal
         override(ERC721)
         notFrozen() {
-            if (uint256(uint8(_uTokenData[tokenId]>>POS_LOCKED)) == 1) {
+            uint256 uTokenData = _uTokenData[tokenId];
+            if (uint256(uint8(uTokenData>>POS_LOCKED)) == 1) {
                 _errMsg("cannot xfer locked token");
             }
+            if (uint256(uint8(uTokenData>>POS_VALIDITY)) == INACTIVE) {
+                _setTokenValidity(tokenId, VALID);
+            }
             super._beforeTokenTransfer(from, to, tokenId, batchSize);
-            _checkActivity(tokenId);
     }
 
     /**
@@ -249,6 +251,9 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             return super.ownerOf(_tokenId);
     }
 
+    /**
+     * @dev Add IERC2981 for marketplaces to see EIP-2981.
+     */
     function supportsInterface(bytes4 interfaceId)
         public view
         override(IERC165, ERC721, AccessControl)
@@ -260,9 +265,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
 
     /*
      * @dev Since royalty info is already stored in the uTokenData,
-     * we don't need a new slots for per token royalties as is defined 
-     * in the ERC2981 standard. This custom implementation that reads 
-     * and updates uTokenData saves a good chunk of gas.
+     * we don't need a new slots for per token royalties, and can 
+     * use the already existing uTokenData instead.
      */
     function _setTokenRoyalty(uint256 _tokenId, address _receiver, uint256 _royalty)
         private {
@@ -296,7 +300,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
 
     /**
      * @dev Resets royalty information for the token id back to the 
-     * global default.
+     * global defaults.
      * Cost: ~37,000 gas
      */
     function resetTokenRoyalty(uint256 _tokenId)
@@ -309,7 +313,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
 
     /**
      * @dev Receiver is royaltyDefaultReceiver(default is owner) unless 
-     * otherwise specified for that tokenId.
+     * otherwise specified in _rTokenData.
      */
     function royaltyInfo(uint256 _tokenId, uint256 _salePrice)
         public view override
@@ -328,7 +332,9 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
 
     /**
      * @dev Sets royalties due if token validity status 
-     * is royalties.
+     * is royalties. This is admin role instead of VALIDITY_ROLE 
+     * to reduce gas costs. VALIDITY_ROLE will need to set 
+     * validity status ROYALTIES before this can be set.
      * Cost: ~32,000 gas
      */
     function setRoyaltiesDue(uint256 _tokenId, uint256 _amount)
@@ -355,7 +361,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
 
     /**
      * @dev Allows contract to have a separate royalties receiver 
-     * address. The default receiver is owner.
+     * address from owner. The default receiver is owner.
      * Cost: ~31,000 gas
      */
     function setRoyaltyDefaultReceiver(address _address)
@@ -369,8 +375,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     }
 
     /**
-     * @dev Allows the contract owner to update the global royalties 
-     * recever address and amount.
+     * @dev Allows the contract owner to update the default royalties 
+     * amount.
      * Cost: ~29,000 gas
      */
     function setRoyaltyDefaultValue(uint256 _royaltyDefaultValue)
@@ -415,6 +421,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * @dev This function is meant to automatically fix an inactive 
      * validity status when the owner interacts with the contract.
      * It is placed _beforeTokenTransfer and in the isOwner modifier.
+     * Thus, if a token goes inactive it will cost slighty more gas 
+     * to interact, however will automatically fix the status.
      */
     function _checkActivity(uint256 _tokenId)
         private {
@@ -425,8 +433,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
 
     /**
      * @dev Reduces revert error messages fee slightly. This will 
-     * eventually be replaced by customError when Ganache 
-     * supports them.
+     * eventually be replaced by customErrors.
      */
     function _errMsg(bytes memory message) 
         internal pure override {
@@ -474,15 +481,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * 2. Token must not already be in redemption process or redeemed
      */
     function _lockToken(uint256 _tokenId)
-        private
-        isOwner(_tokenId)
-        inRedemption(_tokenId, 0) {
-            if (uint256(uint8(_uTokenData[_tokenId]>>POS_VALIDITY)) != VALID) {
-                _errMsg("token status not valid");
-            }
-            if (preRedeemable(_tokenId)) {
-                _errMsg("token still pre-redeemable");
-            }
+        private {
             _uTokenData[_tokenId] = _setTokenParam(
                 _uTokenData[_tokenId],
                 POS_LOCKED,
@@ -578,6 +577,13 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             _mint(msg.sender, _tokenId);
     }
 
+    function _preRedeemable(uint256 _tokenData)
+        private view
+        returns (bool) {
+            uint256 _ds = block.timestamp-uint256(uint40(_tokenData>>POS_MINTSTAMP));
+            return _ds < preRedeemablePeriod;
+    }
+
     /**
      * @dev
      * Updates the token validity status.
@@ -589,12 +595,6 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         private
         notDead(_tokenId) {
             uint256 _tokenData = _uTokenData[_tokenId];
-            if (_vId == uint256(uint8(_tokenData>>POS_VALIDITY))) {
-                _errMsg("validity already set");
-            }
-            if (_vId == 5 || _vId > 8) {
-                _errMsg("invalid internal vId");
-            }
             _tokenData = _setTokenParam(
                 _tokenData,
                 POS_VALIDITY,
@@ -607,21 +607,23 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                 block.timestamp,
                 1099511627775
             );
+            // Lock if changing to a dead status
+            if (_vId >= REDEEMED) {
+                _lockToken(_tokenId);
+            }
             _uTokenData[_tokenId] = _tokenData;
     }
 
     /**
      * @dev Redeem cancel functions (either single token or 
      * batch) both call this to unlock the token.
-     *
-     * Requirements:
-     * 1. Caller must be owner
-     * 2. Token must be in the redemption process (not redeemed)
+     * Modifiers are placed here since _unlockToken is 
+     * only called by RedeemCancel and RedeemFinish.
      */
     function _unlockToken(uint256 _tokenId)
         private
         isOwner(_tokenId)
-        inRedemption(_tokenId, 1) {
+        tokenLocked(_tokenId, 1) {
             _uTokenData[_tokenId] = _setTokenParam(
                 _uTokenData[_tokenId],
                 POS_LOCKED,
@@ -762,6 +764,36 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
 
     //>>>>>>> REDEEMER FUNCTIONS START
 
+    function _redeemLockTokens(uint256[] calldata _tokenIds)
+        private {
+            uint256 _batchSize = _tokenIds.length;
+            address _tokenOwner;
+            uint256 _tokenId;
+            uint256 _tokenData;
+            for (uint256 i; i<_batchSize;) {
+                _tokenId = _tokenIds[i];
+                _tokenOwner = ownerOf(_tokenId);
+                if (msg.sender != _tokenOwner) {
+                    _errMsg("unauthorized");
+                }
+                _tokenData = _uTokenData[_tokenId];
+                if (uint256(uint8(_tokenData>>POS_VALIDITY)) == INACTIVE) {
+                    _setTokenValidity(_tokenId, VALID);
+                }
+                if (uint256(uint8(_tokenData>>POS_VALIDITY)) != VALID) {
+                    _errMsg("token status not valid");
+                }
+                if (uint256(uint8(_tokenData>>POS_LOCKED)) != 0) {
+                    _errMsg("token is locked");
+                }
+                if (_preRedeemable(_tokenData)) {
+                    _errMsg("token still pre-redeemable");
+                }
+                _lockToken(_tokenId);
+                unchecked {++i;}
+            }
+    }
+
     /**
      * @dev Returns whether or not the token pre-release period 
      * has ended.
@@ -770,8 +802,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         public view override
         tokenExists(_tokenId)
         returns (bool) {
-            uint256 _ds = block.timestamp-uint256(uint40(_uTokenData[_tokenId]>>POS_MINTSTAMP));
-            return _ds < preRedeemablePeriod;
+            return _preRedeemable(_uTokenData[_tokenId]);
     }
 
     /**
@@ -790,13 +821,9 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      */
     function redeemAdd(uint256[] calldata _tokenId)
         external override {
+            _redeemLockTokens(_tokenId);
             IC9Redeemer(contractRedeemer).add(msg.sender, _tokenId);
-            uint256 _batchSize = _tokenId.length;
-            for (uint256 i; i<_batchSize;) {
-                _lockToken(_tokenId[i]);
-                unchecked {++i;} //checked in IC9Redeemer
-            }
-            emit RedemptionAdd(msg.sender, _batchSize);
+            emit RedemptionAdd(msg.sender, _tokenId.length);
     }
 
     /**
@@ -814,8 +841,10 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             uint256 _redeemerData = IC9Redeemer(contractRedeemer).cancel(msg.sender);
             uint256 _batchSize = uint256(uint8(_redeemerData>>RPOS_BATCHSIZE));
             uint256 _tokenOffset = RPOS_TOKEN1;
+            uint256 _tokenId;
             for (uint256 i; i<_batchSize;) {
-                _unlockToken(uint256(uint24(_redeemerData>>_tokenOffset)));
+                _tokenId = uint256(uint24(_redeemerData>>_tokenOffset));
+                _unlockToken(_tokenId);
                 unchecked {
                     _tokenOffset += UINT_SIZE;
                     ++i;
@@ -831,7 +860,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     function redeemFinish(uint256 _redeemerData)
         external override
         onlyRole(REDEEMER_ROLE)
-        isContract(msg.sender) {
+        isContract() {
             uint256 _batchSize = uint256(uint8(_redeemerData>>RPOS_BATCHSIZE));
             uint256 _tokenOffset = RPOS_TOKEN1;
             uint256 _tokenId;
@@ -886,13 +915,9 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      */
     function redeemStart(uint256[] calldata _tokenId)
         external override {
+            _redeemLockTokens(_tokenId);
             IC9Redeemer(contractRedeemer).start(msg.sender, _tokenId);
-            uint256 _batchSize = _tokenId.length;
-            for (uint256 i; i<_batchSize;) {
-                _lockToken(_tokenId[i]);
-                unchecked {++i;}
-            }
-            emit RedemptionStart(msg.sender, _batchSize);
+            emit RedemptionStart(msg.sender, _tokenId.length);
     }
 
     /**
@@ -1070,15 +1095,23 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     /*
      * @dev Sets the token validity.
      * Not allowed to set redeemed externally.
-     * Cost: ~33,500 gas.
+     * Cost: ~30,400 gas.
      */
     function setTokenValidity(uint256 _tokenId, uint256 _vId)
         external
-        onlyRole(VALIDITY_ROLE)
-        isContract(msg.sender)
+        //onlyRole(VALIDITY_ROLE)
+        //isContract()
         tokenExists(_tokenId) {
-            if (_vId == 4) {
+            if (_vId == 4 || _vId == 5 || _vId > 8) {
                 _errMsg("invalid external vId");
+            }
+            uint256 _tokenData = _uTokenData[_tokenId];
+            uint256 _currentVId = uint256(uint8(_tokenData>>POS_VALIDITY));
+            if (_vId == _currentVId) {
+                _errMsg("validity already set");
+            }
+            if (_currentVId >= REDEEMED) {
+                _errMsg("cannot change vId of dead token");
             }
             _setTokenValidity(_tokenId, _vId);
     }
@@ -1089,8 +1122,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      */
     function setTokenUpgraded(uint256 _tokenId)
         external override
-        onlyRole(UPGRADER_ROLE)
-        isContract(msg.sender)
+        //onlyRole(UPGRADER_ROLE)
+        //isContract()
         tokenExists(_tokenId)
         notDead(_tokenId) {
             uint256 _tokenData = _uTokenData[_tokenId];

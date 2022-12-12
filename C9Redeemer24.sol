@@ -133,14 +133,14 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             if (_newBatchSize > MAX_BATCH_SIZE) {
                 _errMsg("max batch size is 9");
             }
-            _data = _setTokenParam(_data, 24, _newBatchSize, 255);
+            _data = _setTokenParam(_data, 24, _newBatchSize, type(uint8).max);
             uint256 _offset = RPOS_TOKEN1 + UINT_SIZE*_batchSize;
             for (uint256 i; i<_addBatchSize;) {
                 _data = _setTokenParam(
                     _data,
                     _offset,
                     _tokenId[i],
-                    4294967295
+                    type(uint24).max
                 );
                 unchecked {
                     _offset += UINT_SIZE;
@@ -208,7 +208,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
                             _data,
                             _tokenOffset,
                             _lastTokenId,
-                            4294967295
+                            type(uint24).max
                         );
                         // subtract 1 from current batch size
                         --_currentBatchSize;
@@ -219,12 +219,13 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
                         ++j;
                     }
                 }
+                _tokenOffset = RPOS_TOKEN1;
                 unchecked {++i;}
             }
 
             // Update new length in packed _data
             uint256 _newBatchSize = _originalBatchSize-_removedBatchSize;
-            _data = _setTokenParam(_data, 24, _newBatchSize, 255);
+            _data = _setTokenParam(_data, 24, _newBatchSize, type(uint8).max);
 
             redeemerData4[_tokenOwner] = _data;
             emit RedeemerRemove(
@@ -347,7 +348,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             if (_code != uint256(uint16(_data>>RPOS_CODE))) {
                 _errMsg("code mismatch");
             }
-            _data = _setTokenParam(_data, 0, 3, 255);
+            _data = _setTokenParam(_data, 0, 3, type(uint8).max);
             redeemerData4[_tokenOwner] = _data;
             emit RedeemerAdminApprove(_tokenOwner, false);
     }
@@ -365,7 +366,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             if (_code != uint256(uint16(_data>>RPOS_CODE))) {
                 _errMsg("code mismatch");
             }
-            _data = _setTokenParam(_data, 0, 4, 255);
+            _data = _setTokenParam(_data, 0, 4, type(uint8).max);
             redeemerData4[msg.sender] = _data;
             emit RedeemerUserVerify(msg.sender);
     }
@@ -388,15 +389,15 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             uint256 _data = redeemerData4[msg.sender];
             uint256 _batchSize = uint256(uint8(_data>>RPOS_BATCHSIZE));
             uint256 _minRedeemUsd = getMinRedeemUSD(_batchSize);
-            uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_minRedeemUsd);
-            if (msg.value < _minRedeemWei) {
-                _errMsg("invalid payment amount");
-            }
-            (bool success,) = payable(owner).call{value: msg.value}("");
-            if (!success) {
-                _errMsg("payment failure");
-            }
-            _data = _setTokenParam(_data, 0, 5, 255);
+            // uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_minRedeemUsd);
+            // if (msg.value < _minRedeemWei) {
+            //     _errMsg("invalid payment amount");
+            // }
+            // (bool success,) = payable(owner).call{value: msg.value}("");
+            // if (!success) {
+            //     _errMsg("payment failure");
+            // }
+            _data = _setTokenParam(_data, 0, 5, type(uint8).max);
             redeemerData4[msg.sender] = _data;
             emit RedeemerUserFinalize(msg.sender, msg.value);
     }
@@ -453,4 +454,15 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             }
             redeemMinPrice = uint96(_price);
     }
+
+    /**
+     * @dev Disables self-destruct functionality,
+     * in case tokens end up in this contract.
+     */
+    function __destroy(address _receiver, bool confirm)
+        public override
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            confirm = false;
+            super.__destroy(_receiver, confirm);
+        }
 }
