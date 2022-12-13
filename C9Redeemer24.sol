@@ -12,6 +12,10 @@ uint256 constant RPOS_TOKEN1 = 32;
 uint256 constant UINT_SIZE = 24;
 uint256 constant MAX_BATCH_SIZE = 9;
 
+error AddressToFarInProcess(uint256 minStep, uint256 received);
+error CancelRemainder(uint256 remainingBatch);
+error SizeMismatch(uint256 maxSize, uint256 received);
+
 interface IC9Redeemer {
     function add(address _tokenOwner, uint256[] calldata _tokenId) external;
     function cancel(address _tokenOwner) external returns(uint256 _data);
@@ -47,7 +51,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     );
     event RedeemerInit(
         address indexed tokensOwner,
-        bool indexed registered,
+        uint256 indexed nextStep,
         uint256 indexed batchSize
     );
     event RedeemerRemove(
@@ -74,8 +78,10 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
 
     modifier redemptionStep(address _tokenOwner, uint256 _step) {
         uint256 _data = redeemerData4[_tokenOwner];
-        if (_step != uint256(uint8(_data>>RPOS_STEP))) {
-            _errMsg("wrong redemption step");
+        uint256 _expectedStep = uint256(uint8(_data>>RPOS_STEP));
+        if (_step != _expectedStep) {
+            // _errMsg("wrong redemption step");
+            revert WrongProcessStep(_expectedStep, _step);
         }
         _;
     }
@@ -83,14 +89,15 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     function _checkBatchSize(uint256 _batchSize)
         internal pure {
             if (_batchSize == 0) {
-                _errMsg("no batch in process");
+                // _errMsg("no batch in process");
+                revert AddressNotInProcess();
             }
     }
 
-    function _errMsg(bytes memory message) 
-        internal pure override {
-            revert(string(bytes.concat("C9Redeemer: ", message)));
-    }
+    // function _errMsg(bytes memory message) 
+    //     internal pure override {
+    //         revert(string(bytes.concat("C9Redeemer: ", message)));
+    // }
 
     function _removeRedemptionData(address _tokenOwner)
         internal {
@@ -123,13 +130,16 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             uint256 _data = redeemerData4[_tokenOwner];
             uint256 _batchSize = uint256(uint8(_data>>RPOS_BATCHSIZE));
             _checkBatchSize(_batchSize);
-            if (uint256(uint8(_data>>RPOS_STEP)) > 4) {
-                _errMsg("current batch too far in process");
+            uint256 _currentStep = uint256(uint8(_data>>RPOS_STEP));
+            if (_currentStep > 4) {
+                // _errMsg("current batch too far in process");
+                revert AddressToFarInProcess(4, _currentStep);
             }
             uint256 _addBatchSize = _tokenId.length;
             uint256 _newBatchSize = _addBatchSize+_batchSize;
             if (_newBatchSize > MAX_BATCH_SIZE) {
-                _errMsg("max batch size is 9");
+                // _errMsg("max batch size is 9");
+                revert BatchSizeTooLarge(MAX_BATCH_SIZE, _newBatchSize);
             }
             _data = _setTokenParam(_data, 24, _newBatchSize, type(uint8).max);
             uint256 _offset = RPOS_TOKEN1 + UINT_SIZE*_batchSize;
@@ -182,10 +192,12 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             _checkBatchSize(_originalBatchSize);
             uint256 _removedBatchSize = _tokenId.length;
             if (_removedBatchSize == _originalBatchSize) {
-                _errMsg("cancel to remove remaining batch");
+                // _errMsg("cancel to remove remaining batch");
+                revert CancelRemainder(_removedBatchSize);
             }
             if (_removedBatchSize > _originalBatchSize) {
-                _errMsg("some or all tokens not in batch");
+                // _errMsg("some or all tokens not in batch");
+                revert SizeMismatch(_originalBatchSize, _removedBatchSize);
             }
             /*
             Swap and pop in memory instead of storage. This keeps 
@@ -282,10 +294,10 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         notFrozen() {
             uint256 _batchSize = _tokenId.length;
             if (_batchSize > MAX_BATCH_SIZE) {
-                _errMsg("max batch size is 9");
+                // _errMsg("max batch size is 9");
+                revert BatchSizeTooLarge(MAX_BATCH_SIZE, _batchSize);
             }
-            bool _registerOwner = IC9Registrar(contractRegistrar).isRegistered(_tokenOwner);
-            uint256 _step = _registerOwner ? 4 : 2;
+            uint256 _step = IC9Registrar(contractRegistrar).isRegistered(_tokenOwner) ? 4 : 2;
             uint256 _code;
             if (_step == 2) {
                 unchecked {
@@ -315,7 +327,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
                 }
             }
             redeemerData4[_tokenOwner] = _newRedeemerData;
-            emit RedeemerInit(_tokenOwner, _registerOwner, _batchSize);     
+            emit RedeemerInit(_tokenOwner, _step, _batchSize);     
     }
 
      /**
@@ -342,7 +354,8 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         redemptionStep(_tokenOwner, 2) {
             uint256 _data = redeemerData4[_tokenOwner];
             if (_code != uint256(uint16(_data>>RPOS_CODE))) {
-                _errMsg("code mismatch");
+                // _errMsg("code mismatch");
+                revert CodeMismatch();
             }
             _data = _setTokenParam(_data, 0, 3, type(uint8).max);
             redeemerData4[_tokenOwner] = _data;
@@ -360,7 +373,8 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         redemptionStep(msg.sender, 3) {
             uint256 _data = redeemerData4[msg.sender];
             if (_code != uint256(uint16(_data>>RPOS_CODE))) {
-                _errMsg("code mismatch");
+                // _errMsg("code mismatch");
+                revert CodeMismatch();
             }
             _data = _setTokenParam(_data, 0, 4, type(uint8).max);
             redeemerData4[msg.sender] = _data;
@@ -387,11 +401,13 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             uint256 _minRedeemUsd = getMinRedeemUSD(_batchSize);
             uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_minRedeemUsd);
             if (msg.value < _minRedeemWei) {
-                _errMsg("invalid payment amount");
+                // _errMsg("invalid payment amount");
+                revert InvalidPaymentAmount(_minRedeemWei, msg.value);
             }
             (bool success,) = payable(owner).call{value: msg.value}("");
             if (!success) {
-                _errMsg("payment failure");
+                // _errMsg("payment failure");
+                revert PaymentFailure();
             }
             _data = _setTokenParam(_data, 0, 5, type(uint8).max);
             redeemerData4[msg.sender] = _data;
@@ -422,7 +438,8 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
             if (contractPricer == _address) {
-                _errMsg("contract already set");
+                // _errMsg("contract already set");
+                revert AddressAlreadySet();
             }
             contractPricer = _address;
     }
@@ -434,7 +451,8 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
             if (contractRegistrar == _address) {
-                _errMsg("contract already set");
+                // _errMsg("contract already set");
+                revert AddressAlreadySet();
             }
             contractRegistrar = _address;
     }
@@ -446,7 +464,8 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
             if (redeemMinPrice == _price) {
-                _errMsg("price already set");
+                // _errMsg("price already set");
+                revert ValueAlreadySet();
             }
             redeemMinPrice = uint96(_price);
     }

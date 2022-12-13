@@ -13,6 +13,31 @@ import "./C9SVG.sol";
 import "./utils/Base64.sol";
 import "./utils/Helpers.sol";
 
+error AddressAlreadySet();
+error BatchSizeTooLarge(uint256 maxSize, uint256 received);
+error CallerNotContract();
+error EditionOverflow(uint256 received);
+error IncorrectTokenValidity(uint256 expected, uint256 received);
+error InvalidVId(uint256 received);
+error NoOwnerSupply(address sender);
+error PeriodTooLong(uint256 maxPeriod, uint256 received);
+error RoyaltiesAlreadySet();
+error RoyaltyTooHigh();
+error ValueAlreadySet();
+error URIAlreadySet();
+error URIMissingEndSlash();
+error TokenAlreadyUpgraded(uint256 tokenId);
+error TokenIsDead(uint256 tokenId);
+error TokenIsLocked(uint256 tokenId);
+error TokenNotLocked(uint256 tokenId);
+error TokenNotUpgraded(uint256 tokenId);
+error TokenPreRedeemable(uint256 tokenId);
+error ZeroEdition();
+error ZeroMintId();
+error ZeroValue();
+error ZeroTokenId();
+
+
 interface IC9Token {
     function getTokenParams(uint256 _tokenId) external view returns(uint256[18] memory params);
     function ownerOf(uint256 _tokenId) external view returns(address);
@@ -135,7 +160,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      */ 
     modifier addressNotSame(address _old, address _new) {
         if (_old == _new) {
-            _errMsg("address same");
+            // _errMsg("address same");
+            revert AddressAlreadySet();
         }
         _;
     }
@@ -151,7 +177,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             size := extcodesize(sender)
         }
         if (size == 0) {
-            _errMsg("caller must be contract");
+            // _errMsg("caller must be contract");
+            revert CallerNotContract();
         }
         _;
     }
@@ -163,7 +190,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     modifier isOwner(uint256 _tokenId) {
         address _tokenOwner = ownerOf(_tokenId);
         if (msg.sender != _tokenOwner) {
-            _errMsg("unauthorized");
+            // _errMsg("unauthorized");
+            revert Unauthorized();
         }
         _;
     }
@@ -175,7 +203,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      */ 
     modifier limitRoyalty(uint256 _royalty) {
         if (_royalty > 999) {
-            _errMsg("royalty too high");
+            // _errMsg("royalty too high");
+            revert RoyaltyTooHigh();
         }
         _;
     }
@@ -187,7 +216,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      */
     modifier notDead(uint256 _tokenId) {
         if (uint256(uint8(_uTokenData[_tokenId]>>POS_VALIDITY)) >= REDEEMED) {
-            _errMsg("token is redeemed / dead");
+            // _errMsg("token is redeemed / dead");
+            revert TokenIsDead(_tokenId);
         }
         _;
     }
@@ -197,7 +227,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      */
     modifier tokenExists(uint256 _tokenId) {
         if (!_exists(_tokenId)) {
-            _errMsg("non-existent token id");
+            // _errMsg("non-existent token id");
+            revert TokenDoesNotExist(_tokenId);
         }
         _;
     }
@@ -221,7 +252,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         notFrozen() {
             uint256 _tokenData = _uTokenData[tokenId];
             if (uint256(uint8(_tokenData>>POS_LOCKED)) == LOCKED) {
-                _errMsg("cannot xfer locked token");
+                // _errMsg("cannot xfer locked token");
+                revert TokenIsLocked(tokenId);
             }
             // This will not happen often so _setTokenValidity is not being inlined
             if (uint256(uint8(_tokenData>>POS_VALIDITY)) == INACTIVE) {
@@ -253,7 +285,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             bool _newReceiver = _receiver != _royaltyAddress;
             bool _newRoyalty = _royalty != _royaltyAmt;
             if (!_newReceiver && !_newRoyalty) {
-                _errMsg("royalty vals already set");
+                // _errMsg("royalty vals already set");
+                revert RoyaltiesAlreadySet();
             }
 
             if (_newReceiver && _receiver != address(0)) {
@@ -321,14 +354,18 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         onlyRole(DEFAULT_ADMIN_ROLE)
         tokenExists(_tokenId) {
             if (_amount == 0) {
-                _errMsg("amount must be > 0");
+                // _errMsg("amount must be > 0");
+                revert ZeroValue();
             }
             uint256 _tokenData = _uTokenData[_tokenId];
-            if (uint256(uint8(_tokenData>>POS_VALIDITY)) != ROYALTIES) {
-                _errMsg("token status not royalties due");
+            uint256 _tokenValidity = uint256(uint8(_tokenData>>POS_VALIDITY));
+            if (_tokenValidity != ROYALTIES) {
+                // _errMsg("token status not royalties due");
+                revert IncorrectTokenValidity(ROYALTIES, _tokenValidity);
             }
             if (uint256(uint16(_tokenData>>POS_ROYALTIESDUE)) == _amount) {
-                _errMsg("due amount already set");
+                // _errMsg("due amount already set");
+                revert RoyaltiesAlreadySet();
             }
             _uTokenData[_tokenId] = _setTokenParam(
                 _tokenData,
@@ -348,7 +385,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         onlyRole(DEFAULT_ADMIN_ROLE)
         addressNotSame(royaltyDefaultReceiver, _address) {
             if (_address == address(0)) {
-                _errMsg("invalid address");
+                // _errMsg("invalid address");
+                revert ZeroAddressInvalid();
             }
             royaltyDefaultReceiver = _address;
     }
@@ -363,7 +401,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         onlyRole(DEFAULT_ADMIN_ROLE)
         limitRoyalty(_royaltyDefaultValue) {
             if (_royaltyDefaultValue == royaltyDefaultValue) {
-                _errMsg("royalty val already set");
+                // _errMsg("royalty val already set");
+                revert ValueAlreadySet();
             }
             royaltyDefaultValue = uint96(_royaltyDefaultValue);
     }
@@ -400,10 +439,10 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * @dev Reduces revert error messages fee slightly. This will 
      * eventually be replaced by customErrors.
      */
-    function _errMsg(bytes memory message) 
-        internal pure override {
-            revert(string(bytes.concat("C9Token: ", message)));
-    }
+    // function _errMsg(bytes memory message) 
+    //     internal pure override {
+    //         revert(string(bytes.concat("C9Token: ", message)));
+    // }
 
     /**
      * @dev Returns a unique hash depending on certain token `_input` attributes. 
@@ -478,16 +517,20 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             // Checks
             uint256 _tokenId = _input.tokenid;
             if (_tokenId == 0) {
-                _errMsg("token id cannot be 0");
+                // _errMsg("token id cannot be 0");
+                revert ZeroTokenId();
             }
             if (_edition == 0) {
-                _errMsg("edition cannot be 0");
+                // _errMsg("edition cannot be 0");
+                revert ZeroEdition();
             }
             if (_edition >= 99) {
-                _errMsg("edition overflow");
+                // _errMsg("edition overflow");
+                revert EditionOverflow(_edition);
             }
             if (__mintId == 0) {
-                _errMsg("mint id cannot be 0");
+                // _errMsg("mint id cannot be 0");
+                revert ZeroMintId();
             }
 
             // Store token uint data
@@ -576,7 +619,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         isOwner(_tokenId) {
             uint256 _tokenData = _uTokenData[_tokenId];
             if (uint256(uint8(_tokenData>>POS_LOCKED)) == UNLOCKED) {
-                _errMsg("token not locked");
+                // _errMsg("token not locked");
+                revert TokenNotLocked(_tokenId);
             }
             // Unlock the token.
             _tokenData = _setTokenParam(
@@ -616,10 +660,12 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      */
     function burnAll(bool confirm)
         external {
-            if (!confirm) _errMsg("burnAll not confirmed");
+            // if (!confirm) _errMsg("burnAll not confirmed");
+            if (!confirm) revert ActionNotConfirmed();
             uint256 ownerSupply = balanceOf(msg.sender);
             if (ownerSupply == 0) {
-                _errMsg("no tokens to burn");
+                // _errMsg("no tokens to burn");
+                revert NoOwnerSupply(msg.sender);
             }
             for (uint256 i; i<ownerSupply;) {
                 burn(tokenOfOwnerByIndex(msg.sender, 0));
@@ -633,10 +679,12 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      */
     function burnBatch(bool confirm, uint256[] calldata _tokenId)
         external {
-            if (!confirm) _errMsg("burnBatch not confirmed");
+            // if (!confirm) _errMsg("burnBatch not confirmed");
+            if (!confirm) revert ActionNotConfirmed();
             uint256 _batchSize = _tokenId.length;
             if (_batchSize == 0) {
-                _errMsg("no tokens to burn");
+                // _errMsg("no tokens to burn");
+                revert NoOwnerSupply(msg.sender);
             }
             for (uint256 i; i<_batchSize;) {
                 burn(_tokenId[i]);
@@ -745,16 +793,19 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                 _tokenId = _tokenIds[i];
                 _tokenOwner = ownerOf(_tokenId);
                 if (msg.sender != _tokenOwner) {
-                    _errMsg("unauthorized");
+                    // _errMsg("unauthorized");
+                    revert Unauthorized();
                 }
 
                 _tokenData = _uTokenData[_tokenId];
                 if (_preRedeemable(_tokenData)) {
-                    _errMsg("token still pre-redeemable");
+                    // _errMsg("token still pre-redeemable");
+                    revert TokenPreRedeemable(_tokenId);
                 }
                 
-                if (uint256(uint8(_tokenData>>POS_VALIDITY)) != VALID) {
-                    if (uint256(uint8(_tokenData>>POS_VALIDITY)) == INACTIVE) {
+                uint256 _validity = uint256(uint8(_tokenData>>POS_VALIDITY));
+                if (_validity != VALID) {
+                    if (_validity == INACTIVE) {
                         /* Inactive tokens can still be redeemed and 
                         will be changed to valid as user activity 
                         will automatically fix this status. */
@@ -772,13 +823,15 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                         );
                     }
                     else {
-                        _errMsg("token status not valid");
+                        // _errMsg("token status not valid");
+                        revert IncorrectTokenValidity(VALID, _validity);
                     }
                 }
 
                 // If valid and locked, can only be in redeemer.
                 if (uint256(uint8(_tokenData>>POS_LOCKED)) == LOCKED) {
-                    _errMsg("token already in redeemer");
+                    // _errMsg("token already in redeemer");
+                    revert TokenIsLocked(_tokenId);
                 }
                 
                 // Lock the token.
@@ -907,10 +960,12 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
             if (preRedeemablePeriod == _period) {
-                _errMsg("period already set");
+                // _errMsg("period already set");
+                revert ValueAlreadySet();
             }
             if (_period > 63113852) { // 2 years max
-                _errMsg("period too long");
+                // _errMsg("period too long");
+                revert PeriodTooLong(63113852, _period);
             }
             preRedeemablePeriod = _period;
     }
@@ -930,12 +985,15 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
             if (Helpers.stringEqual(_baseURI[_idx], _newBaseURI)) {
-                _errMsg("uri already set");
+                // _errMsg("uri already set");
+                revert URIAlreadySet();
+                
             }
             bytes calldata _bBaseURI = bytes(_newBaseURI);
             uint256 len = _bBaseURI.length;
             if (bytes1(_bBaseURI[len-1]) != 0x2f) {
-                _errMsg("uri missing end slash");
+                // _errMsg("uri missing end slash");
+                revert URIMissingEndSlash();
             }
             _baseURI[_idx] = _newBaseURI;
     }
@@ -1000,7 +1058,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
             if (Helpers.stringEqual(_contractURI, _newContractURI)) {
-                _errMsg("uri already set");
+                // _errMsg("uri already set");
+                revert URIAlreadySet();
             }
             _contractURI = _newContractURI;
     }
@@ -1027,7 +1086,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
             if (svgOnly == _flag) {
-                _errMsg("bool already set");
+                // _errMsg("bool already set");
+                revert BoolAlreadySet();
             }
             svgOnly = _flag;
     }
@@ -1044,11 +1104,13 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             uint256 _tokenData = _uTokenData[_tokenId];
             uint256 _val = uint256(uint8(_tokenData>>POS_UPGRADED));
             if (_val != 1) {
-                _errMsg("token is not upgraded");
+                // _errMsg("token is not upgraded");
+                revert TokenNotUpgraded(_tokenId);
             }
             _val = uint256(uint8(_tokenData>>POS_DISPLAY));
             if (Helpers.uintToBool(_val) == _flag) {
-                _errMsg("view already set");
+                // _errMsg("view already set");
+                revert BoolAlreadySet();
             }
             uint256 _display = _flag ? 1 : 0;
             _uTokenData[_tokenId] = _setTokenParam(
@@ -1085,11 +1147,13 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         tokenExists(_tokenId)
         notDead(_tokenId) {
             if (_vId == 4 || _vId == 5 || _vId > 8) {
-                _errMsg("invalid vId");
+                // _errMsg("invalid vId");
+                revert InvalidVId(_vId);
             }
             uint256 _currentVId = uint256(uint8(_uTokenData[_tokenId]>>POS_VALIDITY));
             if (_vId == _currentVId) {
-                _errMsg("vId already set");
+                // _errMsg("vId already set");
+                revert ValueAlreadySet();
             }
             _setTokenValidity(_tokenId, _vId);
     }
@@ -1106,7 +1170,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         notDead(_tokenId) {
             uint256 _tokenData = _uTokenData[_tokenId];
             if (uint256(uint8(_tokenData>>POS_UPGRADED)) == 1) {
-                _errMsg("token already upgraded");
+                // _errMsg("token already upgraded");
+                revert TokenAlreadyUpgraded(_tokenId);
             }
             _uTokenData[_tokenId] = _setTokenParam(
                 _tokenData,
@@ -1196,7 +1261,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         external {
             uint256 _batchSize = _tokenId.length;
             if (_batchSize > 32) {
-                _errMsg("batchSize over 32");
+                // _errMsg("batchSize over 32");
+                revert BatchSizeTooLarge(32, _batchSize);
             }
             for (uint256 i; i<_batchSize;) {
                 transferFrom(from, to, _tokenId[i]);

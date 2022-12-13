@@ -3,6 +3,10 @@ pragma solidity >0.8.10;
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+error InvalidPaymentAmount(uint256 expected, uint256 received);
+error PaymentFailure();
+error PriceFeedDated(uint256 maxDelay, uint received);
+
 interface IC9EthPriceFeed {
     function getLatestETHUSDPrice() external view returns (uint256);
     function getTokenWeiPrice(uint256 _tokenUSDPrice) external view returns (uint256 tokenETHPrice);
@@ -31,7 +35,8 @@ contract C9EthPriceFeed is IC9EthPriceFeed, Ownable {
         returns (uint256) {
             (,int256 price,,uint256 timeStamp,) = priceFeed.latestRoundData();
             uint256 _ds = block.timestamp - timeStamp;
-            if (_ds > 3600) revert("C9EthPriceFeed: price outdated");//C9Errors.DatedPrice(_ds);
+            // if (_ds > 3600) revert("C9EthPriceFeed: price outdated");//C9Errors.DatedPrice(_ds);
+            if (_ds > 3600) revert PriceFeedDated(3600, _ds);
             return uint256(price);
     }
 

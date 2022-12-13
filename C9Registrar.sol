@@ -2,6 +2,12 @@
 pragma solidity >0.8.10;
 import "./C9OwnerControl.sol";
 
+error AddressAlreadyRegistered();
+error AddressNotInProcess();
+error CodeMismatch();
+error WrongProcessStep(uint256 expected, uint256 received);
+
+
 interface IC9Registrar {
     function cancel() external;
     function getStep(address _address) external view returns(uint256);
@@ -38,16 +44,18 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
 
     modifier registrationStep(address _address, uint256 _step) {
         uint256 _data = _registrationData[_address];
-        if (_step != uint256(uint8(_data>>POS_STEP))) {
-            _errMsg("wrong process step");
+        uint256 _expectedStep = uint256(uint8(_data>>POS_STEP));
+        if (_step != _expectedStep) {
+            // _errMsg("wrong process step");
+            revert WrongProcessStep(_expectedStep, _step);
         }
         _;
     }
 
-    function _errMsg(bytes memory message) 
-        internal pure override {
-            revert(string(bytes.concat("C9Registrar: ", message)));
-    }
+    // function _errMsg(bytes memory message) 
+    //     internal pure override {
+    //         revert(string(bytes.concat("C9Registrar: ", message)));
+    // }
 
     function _removeRegistrationData(address _address)
         internal {
@@ -71,7 +79,8 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
             uint256 _data = _registrationData[msg.sender];
             uint256 lastStep = uint256(uint8(_data>>POS_STEP));
             if (lastStep == 0) {
-                _errMsg("address not in process");
+                // _errMsg("address not in process");
+                revert AddressNotInProcess();
             }
             _removeRegistrationData(msg.sender);
             emit RegistrarCancel(msg.sender, lastStep);
@@ -98,7 +107,8 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
         registrationStep(msg.sender, 0)
         notFrozen() {
             if (isRegistered(msg.sender)) {
-                _errMsg("address already registered");
+                // _errMsg("address already registered");
+                revert AddressAlreadyRegistered();
             }
             uint256 _code;
             unchecked {
@@ -145,7 +155,8 @@ contract C9Registrar is IC9Registrar, C9OwnerControl {
         notFrozen() {
             uint256 _data = _registrationData[msg.sender];
             if (_code != uint256(uint16(_data>>POS_CODE))) {
-                _errMsg("code mismatch");
+                // _errMsg("code mismatch");
+                revert CodeMismatch();
             }
             _data |= 1<<POS_REGISTERED;
             _registrationData[msg.sender] = _data;
