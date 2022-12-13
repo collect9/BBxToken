@@ -219,7 +219,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         override(ERC721)
         notFrozen() {
             uint256 _tokenData = _uTokenData[tokenId];
-            if (uint256(uint8(_tokenData>>POS_LOCKED)) == 1) {
+            if (uint256(uint8(_tokenData>>POS_LOCKED)) == LOCKED) {
                 _errMsg("cannot xfer locked token");
             }
             // This will not happen often so _setTokenValidity is not being inlined
@@ -227,16 +227,6 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                 _setTokenValidity(tokenId, VALID);
             }
             super._beforeTokenTransfer(from, to, tokenId, batchSize);
-    }
-
-    /**
-     * @dev To add to the interface.
-     */
-    function ownerOf(uint256 _tokenId)
-        public view
-        override(ERC721, IC9Token)
-        returns (address) {
-            return super.ownerOf(_tokenId);
     }
 
     /**
@@ -547,8 +537,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * status.
      */
     function _setTokenValidity(uint256 _tokenId, uint256 _vId)
-        private
-        notDead(_tokenId) {
+        private {
             uint256 _tokenData = _uTokenData[_tokenId];
             _tokenData = _setTokenParam(
                 _tokenData,
@@ -562,12 +551,12 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                 block.timestamp,
                 type(uint40).max
             );
-            // Lock if changing to a dead status
+            // Lock if changing to a dead status (forever lock)
             if (_vId >= REDEEMED) {
                 _tokenData = _setTokenParam(
                     _tokenData,
                     POS_LOCKED,
-                    1,
+                    LOCKED,
                     type(uint8).max
                 );
             }
@@ -585,13 +574,14 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         private
         isOwner(_tokenId) {
             uint256 _tokenData = _uTokenData[_tokenId];
-            if (uint256(uint8(_tokenData>>POS_LOCKED)) != 1) {
+            if (uint256(uint8(_tokenData>>POS_LOCKED)) == UNLOCKED) {
                 _errMsg("token not locked");
             }
+            // Unlock the token.
             _tokenData = _setTokenParam(
                 _tokenData,
                 POS_LOCKED,
-                0,
+                UNLOCKED,
                 type(uint8).max
             );
             _uTokenData[_tokenId] = _tokenData;
@@ -668,6 +658,9 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             ));
     }
 
+    /**
+     * @dev Returns list of contract this contract is linked to.
+     */
     function getContracts()
         external view
         returns(
@@ -690,7 +683,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * so only the _tokenId needs to be passed in.
      */
     function getTokenParams(uint256 _tokenId)
-        public view
+        external view
         override(C9Struct, IC9Token)
         returns(uint256[18] memory params) {
             uint256 _packedToken = _uTokenData[_tokenId];
@@ -726,6 +719,16 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                 _mint1(_input[i]);
                 unchecked {++i;}
             }
+    }
+
+    /**
+     * @dev To add to the interface.
+     */
+    function ownerOf(uint256 _tokenId)
+        public view
+        override(ERC721, IC9Token)
+        returns (address) {
+            return super.ownerOf(_tokenId);
     }
 
     //>>>>>>> REDEEMER FUNCTIONS START
@@ -776,7 +779,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                 }
 
                 // If valid and locked, can only be in redeemer.
-                if (uint256(uint8(_tokenData>>POS_LOCKED)) != 0) {
+                if (uint256(uint8(_tokenData>>POS_LOCKED)) == LOCKED) {
                     _errMsg("token already in redeemer");
                 }
                 
@@ -784,7 +787,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                 _tokenData = _setTokenParam(
                    _tokenData,
                     POS_LOCKED,
-                    1,
+                    LOCKED,
                     type(uint8).max
                 );
 
@@ -927,6 +930,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
 
     //>>>>>>> REDEEMER FUNCTIONS END
 
+    //>>>>>>> SETTER FUNCTIONS START
+
     /**
      * @dev Updates the baseURI.
      * By default this contract will load SVGs from another contract, 
@@ -946,19 +951,6 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                 _errMsg("uri missing end slash");
             }
             _baseURI[_idx] = _newBaseURI;
-    }
-
-     /**
-     * @dev Updates the contractURI.
-     * Cost: ~35,000 gas for ~32 length word
-     */
-    function setContractUri(string calldata _newContractURI)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (Helpers.stringEqual(_contractURI, _newContractURI)) {
-                _errMsg("uri already set");
-            }
-            _contractURI = _newContractURI;
     }
 
     /**
@@ -1014,6 +1006,19 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     }
 
     /**
+     * @dev Updates the contractURI.
+     * Cost: ~35,000 gas for ~32 length word
+     */
+    function setContractURI(string calldata _newContractURI)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            if (Helpers.stringEqual(_contractURI, _newContractURI)) {
+                _errMsg("uri already set");
+            }
+            _contractURI = _newContractURI;
+    }
+
+    /**
      * @dev Updates the validity handler contract address.
      * Cost: ~72,000 gas
      */
@@ -1058,10 +1063,11 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             if (Helpers.uintToBool(_val) == _flag) {
                 _errMsg("view already set");
             }
+            uint256 _display = _flag ? 1 : 0;
             _uTokenData[_tokenId] = _setTokenParam(
                 _tokenData,
                 POS_DISPLAY,
-                _flag ? 1 : 0,
+                _display,
                 type(uint8).max
             );
     }
@@ -1089,14 +1095,14 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         external
         onlyRole(VALIDITY_ROLE)
         isContract()
-        tokenExists(_tokenId) {
+        tokenExists(_tokenId)
+        notDead(_tokenId) {
             if (_vId == 4 || _vId == 5 || _vId > 8) {
-                _errMsg("invalid external vId");
+                _errMsg("invalid vId");
             }
-            uint256 _tokenData = _uTokenData[_tokenId];
-            uint256 _currentVId = uint256(uint8(_tokenData>>POS_VALIDITY));
+            uint256 _currentVId = uint256(uint8(_uTokenData[_tokenId]>>POS_VALIDITY));
             if (_vId == _currentVId) {
-                _errMsg("validity already set");
+                _errMsg("vId already set");
             }
             _setTokenValidity(_tokenId, _vId);
     }
@@ -1118,7 +1124,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             _uTokenData[_tokenId] = _setTokenParam(
                 _tokenData,
                 POS_UPGRADED,
-                1,
+                UPGRADED,
                 type(uint8).max
             );
     }

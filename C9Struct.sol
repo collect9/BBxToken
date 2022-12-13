@@ -10,9 +10,10 @@ abstract contract C9Struct {
     uint256 constant OTHER = 3;
     uint256 constant REDEEMED = 4;
 
-    uint256 constant ROYALTIES_DEAD = 5;
-    uint256 constant INACTIVE_DEAD = 6;
-    uint256 constant OTHER_DEAD = 7;
+    uint256 constant UPGRADED = 1;
+
+    uint256 constant UNLOCKED = 0;
+    uint256 constant LOCKED = 1;
 
     struct TokenData {
         uint256 upgraded;
@@ -100,12 +101,6 @@ abstract contract C9Struct {
             }
     }
 
-    function _getTokenParam(uint256 _packedToken, TokenProps _idx)
-        internal view virtual
-        returns(uint256) {
-            return getTokenParams(_packedToken)[uint256(_idx)];
-    }
-
     // function _setTokenParam(
     //     uint256 _packedToken,
     //     uint256 _pos,
@@ -120,7 +115,7 @@ abstract contract C9Struct {
     // }
 
     function getTokenParams(uint256 _packedToken)
-        public view virtual
+        external view virtual
         returns(uint256[18] memory params) {
             params[0] = uint256(uint8(_packedToken>>POS_UPGRADED));
             params[1] = uint256(uint8(_packedToken>>POS_DISPLAY));

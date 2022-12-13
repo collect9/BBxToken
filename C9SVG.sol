@@ -757,13 +757,14 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
                 if (e0 == 0x67) {
                     delims = true;
                     l = 2;
-                    tmp = "</g><g transform='scale(X 1)'>";
                     e0 = _data[i+1];
-                    assembly {
-                        let dst := add(tmp, 56)
-                        mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), e0))
+                    output = bytes.concat(output, "</g><g transform='scale(");
+                    if (bytes1(bytes(letterMap[e0])) != 0x00) {
+                        output = bytes.concat(output, bytes(letterMap[e0]), " 1)'>");
                     }
-                    output = bytes.concat(output, tmp);
+                    else {
+                        output = bytes.concat(output, e0, " 1)'>");
+                    }
                     entry = "      ";
                     continue;
                 }
