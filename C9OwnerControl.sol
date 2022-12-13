@@ -70,6 +70,7 @@ abstract contract C9OwnerControl is AccessControl {
     function renounceRole(bytes32 role, address account)
         public override {
             if (account != msg.sender) _errMsg("unauthorized");
+            if (!hasRole(role, account)) _errMsg("account does not have role");
             _revokeRole(role, account);
     }
 

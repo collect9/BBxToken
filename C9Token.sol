@@ -23,6 +23,7 @@ interface IC9Token {
     function redeemStart(uint256[] calldata _tokenId) external;
     function preRedeemable(uint256 _tokenId) external view returns(bool);
     function setTokenUpgraded(uint256 _tokenId) external;
+    function setTokenValidity(uint256 _tokenId, uint256 _vId) external;
 }
 
 contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
@@ -615,18 +616,14 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      */
     function burnAll(bool confirm)
         external {
-            if (confirm) {
-                uint256 ownerSupply = balanceOf(msg.sender);
-                if (ownerSupply == 0) {
-                    _errMsg("no tokens to burn");
-                }
-                for (uint256 i; i<ownerSupply;) {
-                    burn(tokenOfOwnerByIndex(msg.sender, 0));
-                    unchecked {++i;}
-                }
+            if (!confirm) _errMsg("burnAll not confirmed");
+            uint256 ownerSupply = balanceOf(msg.sender);
+            if (ownerSupply == 0) {
+                _errMsg("no tokens to burn");
             }
-            else {
-                _errMsg("burnAll not confirmed");
+            for (uint256 i; i<ownerSupply;) {
+                burn(tokenOfOwnerByIndex(msg.sender, 0));
+                unchecked {++i;}
             }
     }
 
@@ -634,8 +631,9 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * @dev When a single burn is too expensive but you
      * don't want to burn all.
      */
-    function burnBatch(uint256[] calldata _tokenId)
+    function burnBatch(bool confirm, uint256[] calldata _tokenId)
         external {
+            if (!confirm) _errMsg("burnBatch not confirmed");
             uint256 _batchSize = _tokenId.length;
             if (_batchSize == 0) {
                 _errMsg("no tokens to burn");
@@ -876,11 +874,6 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * canceling. Thus if a user plans to remove a 
      * majority of tokens then it may be cheaper to just 
      * cancel and restart.
-     * Cost:
-     * 1x token = 50,200 gas
-     * 5x token = 86,500 gas
-     * 6x token = 96,000 gas
-     * 9x token = 116,800 gas
      */
     function redeemRemove(uint256[] calldata _tokenId)
         external override {
@@ -897,12 +890,6 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * @dev Starts the redemption process. Only the token holder can start.
      * Once started, the token is locked from further exchange. The user 
      * can still cancel the process before finishing.
-     * Cost:
-     * 1x token = 83,100 gas
-     * 2x token = 92,500 gas
-     * 6x token = 130,300 gas
-     * 7x token = 139,700 gas
-     * 9x token = 158,600 gas
      */
     function redeemStart(uint256[] calldata _tokenId)
         external override {
@@ -1092,7 +1079,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * Cost: ~30,400 gas.
      */
     function setTokenValidity(uint256 _tokenId, uint256 _vId)
-        external
+        external override
         onlyRole(VALIDITY_ROLE)
         isContract()
         tokenExists(_tokenId)
@@ -1201,9 +1188,16 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             );
     }
 
+    /**
+     * @dev Allows batch transfer to make is cheaper to move multiple NFTs 
+     * between two addresses. Batch size is limited to 32.
+    */
     function transferFromBatch(address from, address to, uint256[] calldata _tokenId)
         external {
             uint256 _batchSize = _tokenId.length;
+            if (_batchSize > 32) {
+                _errMsg("batchSize over 32");
+            }
             for (uint256 i; i<_batchSize;) {
                 transferFrom(from, to, _tokenId[i]);
                 unchecked {++i;}
@@ -1215,6 +1209,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * Other contracts like the registrar and redeemer 
      * that are upgradable also inherit but do not 
      * override this.
+     * Note: even if admin gets through the confirm 
+     * is hardcoded to false.
      */
     function __destroy(address _receiver, bool confirm)
         public override
