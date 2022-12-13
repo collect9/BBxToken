@@ -221,7 +221,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
         letterMap[0x61] = ".25"; // a
         letterMap[0x62] = ".33"; // b
         letterMap[0x63] = ".5"; // c
-        letterMap[0x64] = ".67"; // d
+        letterMap[0x68] = ".67"; // h
         letterMap[0x66] = "1."; // f
         tokenContract = _tokenContract;
     }

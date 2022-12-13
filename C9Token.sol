@@ -222,6 +222,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             if (uint256(uint8(_tokenData>>POS_LOCKED)) == 1) {
                 _errMsg("cannot xfer locked token");
             }
+            // This will not happen often so _setTokenValidity is not being inlined
             if (uint256(uint8(_tokenData>>POS_VALIDITY)) == INACTIVE) {
                 _setTokenValidity(tokenId, VALID);
             }
@@ -622,22 +623,26 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     /**
      * @dev Bulk burn function for convenience.
      */
-    function burnAll()
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE) {
-            uint256 totalSupply = totalSupply();
-            if (totalSupply == 0) {
-                _errMsg("no tokens to burn");
+    function burnAll(bool confirm)
+        external {
+            if (confirm) {
+                uint256 ownerSupply = balanceOf(msg.sender);
+                if (ownerSupply == 0) {
+                    _errMsg("no tokens to burn");
+                }
+                for (uint256 i; i<ownerSupply;) {
+                    burn(tokenOfOwnerByIndex(msg.sender, 0));
+                    unchecked {++i;}
+                }
             }
-            for (uint256 i; i<totalSupply;) {
-                burn(tokenByIndex(0));
-                unchecked {++i;}
+            else {
+                _errMsg("burnAll not confirmed");
             }
     }
 
     /**
-     * @dev For if/when burnAll uses too much 
-     * gas in a single transaction.
+     * @dev When a single burn is too expensive but you
+     * don't want to burn all.
      */
     function burnBatch(uint256[] calldata _tokenId)
         external {
@@ -709,8 +714,6 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             params[17] = uint256(uint40(_packedToken>>POS_MINTSTAMP));
     }
 
-
-
     /**
      * @dev Helps makes the overall minting process faster and cheaper 
      * on average per mint.
@@ -727,6 +730,10 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
 
     //>>>>>>> REDEEMER FUNCTIONS START
 
+    /*
+     * @dev A lot of code has been repeated (inlined) here to minimize 
+     * storage reads to reduce gas cost.
+     */
     function _redeemLockTokens(uint256[] calldata _tokenIds)
         private {
             uint256 _batchSize = _tokenIds.length;
@@ -756,17 +763,24 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                             VALID,
                             type(uint8).max
                         );
+                        _tokenData = _setTokenParam(
+                            _tokenData,
+                            POS_VALIDITYSTAMP,
+                            block.timestamp,
+                            type(uint40).max
+                        );
                     }
                     else {
                         _errMsg("token status not valid");
                     }
                 }
 
+                // If valid and locked, can only be in redeemer.
                 if (uint256(uint8(_tokenData>>POS_LOCKED)) != 0) {
                     _errMsg("token already in redeemer");
                 }
                 
-                // Lock the token
+                // Lock the token.
                 _tokenData = _setTokenParam(
                    _tokenData,
                     POS_LOCKED,
@@ -774,7 +788,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                     type(uint8).max
                 );
 
-                // Save token data back to storage
+                // Save token data back to storage.
                 _uTokenData[_tokenId] = _tokenData;
                 unchecked {++i;}
             }
@@ -798,12 +812,6 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * Note: While costs appear lower per token than the 
      * start process, the reported costs below ignore the 
      * initial start cost.
-     * Cost:
-     * 1x token = 54,800 gas
-     * 2x token = 64,500 gas
-     * 5x token = 93,330 gas
-     * 6x token = 102,700 gas
-     * 8x token = 122,200 gas 
      */
     function redeemAdd(uint256[] calldata _tokenId)
         external override {
@@ -815,12 +823,6 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     /**
      * @dev Allows user to cancel redemption process and resume 
      * token movement exchange capabilities.
-     * Cost:
-     * 1x token = 42,200 gas
-     * 2x token = 50,400 gas
-     * 6x token = 83,200 gas
-     * 7x token = 91,400 gas
-     * 9x token = 107,800 gas
      */
     function redeemCancel()
         external override {
@@ -1095,9 +1097,6 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             uint256 _currentVId = uint256(uint8(_tokenData>>POS_VALIDITY));
             if (_vId == _currentVId) {
                 _errMsg("validity already set");
-            }
-            if (_currentVId >= REDEEMED) {
-                _errMsg("cannot change vId of dead token");
             }
             _setTokenValidity(_tokenId, _vId);
     }

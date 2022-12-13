@@ -1,3 +1,2 @@
 # BBxToken
-Solidity NFT Contract Code for the 100% on-chain SVG displayed Collect9 BBxToken NFTs. Minting cost is around ~247K gas per (batch of 32), mainly due to the compressed and mapped micro QR and bar code data that needs to be uploaded.
-
+Solidity NFT Contract Code for the 100% on-chain SVG displayed Collect9 BBxToken NFTs. Minting cost is around ~245K gas per batch of 32, ~243K gas per batch of 96, mainly due to the compressed and mapped micro QR and bar code data that needs to be uploaded. Storage alone takes up around 210K-215K gas per token.
