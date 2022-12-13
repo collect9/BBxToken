@@ -77,11 +77,13 @@ abstract contract C9OwnerControl is AccessControl {
     /**
      * @dev Override that makes it impossible for other admins 
      * to revoke the admin rights of the original contract deployer.
+     * As a result admin also cannot revoke itself. It can only renounce.
      */
     function revokeRole(bytes32 role, address account)
         public override
         onlyRole(DEFAULT_ADMIN_ROLE) {
             if (account == owner) _errMsg("unauthorized");
+            if (!hasRole(role, account)) _errMsg("account does not have role");
             _revokeRole(role, account);
     }
 
@@ -93,10 +95,11 @@ abstract contract C9OwnerControl is AccessControl {
     function _transferOwnership(address _newOwner)
         internal {
             delete pendingOwner;
-            address oldOwner = owner;
+            address _oldOwner = owner;
             owner = _newOwner;
-            revokeRole(DEFAULT_ADMIN_ROLE, oldOwner);
-            emit OwnershipTransferComplete(oldOwner, _newOwner);
+            _grantRole(DEFAULT_ADMIN_ROLE, _newOwner);
+            _revokeRole(DEFAULT_ADMIN_ROLE, _oldOwner);
+            emit OwnershipTransferComplete(_oldOwner, _newOwner);
     }
 
     /**
@@ -107,9 +110,8 @@ abstract contract C9OwnerControl is AccessControl {
     function transferOwnership(address _newOwner)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (_newOwner == address(0)) _errMsg("invalid address");
+            if (_newOwner == address(0)) _errMsg("cannot transfer to 0 address");
             pendingOwner = _newOwner;
-            grantRole(DEFAULT_ADMIN_ROLE, _newOwner);
             emit OwnershipTransferInit(owner, _newOwner);
     }
 
