@@ -12,17 +12,17 @@ import "@openzeppelin/contracts/utils/Context.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
 
-error ApproveToCaller();
-error CallerNotOwnerOrApproved();
-error NonERC721Receiver();
-error OwnerAlreadyApproved();
-error OwnerIndexOOB();
-error TokenAlreadyMinted(uint256 tokenId);
-error TokenDoesNotExist(uint256 tokenId);
-error TokenEnumIndexOOB();
-error TransferFromToSame();
-error Unauthorized();
-error ZeroAddressInvalid();
+error ApproveToCaller(); //0xb06307db
+error CallerNotOwnerOrApproved(); //0x8c11f105
+error InvalidToken(uint256 tokenId); //0x925d6b18
+error NonERC721Receiver(); //0x80526d0c
+error OwnerAlreadyApproved(); //0x08fb3828
+error OwnerIndexOOB(uint256 maxIndex, uint256 received); //0xc643a750
+error TokenAlreadyMinted(uint256 tokenId); //0x8b474e54
+error TokenEnumIndexOOB(uint256 maxIndex, uint256 received); //0x25601f6d
+error TransferFromToSame(); //0x2f2bdfd9
+error Unauthorized(); //0x82b42900
+error ZeroAddressInvalid(); //0x14c880ca
 
 /**
  * @dev Implementation of https://eips.ethereum.org/EIPS/eip-721[ERC721] Non-Fungible Token Standard, including
@@ -108,7 +108,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
     function ownerOf(uint256 tokenId) public view virtual override returns (address) {
         address owner = _ownerOf(tokenId);
         // require(owner != address(0), "ERC721:invalid token ID");
-        if (owner == address(0)) revert ZeroAddressInvalid();
+        if (owner == address(0)) revert InvalidToken(0);
         return owner;
     }
 
@@ -132,7 +132,8 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
      */
     function tokenOfOwnerByIndex(address owner, uint256 index) public view virtual override returns (uint256) {
         // require(index < _ownedTokens[owner].length, "ERC721Enum:owner index oob");
-        if (index >= _ownedTokens[owner].length) revert OwnerIndexOOB();
+        uint256 _length = _ownedTokens[owner].length;
+        if (index >= _length) revert OwnerIndexOOB(_length, index);
         return uint256(_ownedTokens[owner][index]);
     }
 
@@ -150,7 +151,8 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
      */
     function tokenByIndex(uint256 index) public view virtual override returns (uint256) {
         // require(index < totalSupply(), "ERC721Enum:index oob");
-        if (index >= totalSupply()) revert TokenEnumIndexOOB();
+        uint256 _totalSupply = totalSupply();
+        if (index >= _totalSupply) revert TokenEnumIndexOOB(_totalSupply, index);
         return uint256(_allTokens[index]);
     }
 
@@ -245,8 +247,10 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
         //     _msgSender() == owner || isApprovedForAll(owner, _msgSender()),
         //     "ERC721:caller!owner or approved"
         // );
-        if (_msgSender() != owner || !isApprovedForAll(owner, _msgSender())) {
-            revert CallerNotOwnerOrApproved();
+        if (_msgSender() != owner) {
+            if (!isApprovedForAll(owner, _msgSender())) {
+                revert CallerNotOwnerOrApproved();
+            }
         }
 
         _approve(to, tokenId);
@@ -258,6 +262,17 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
     function getApproved(uint256 tokenId) public view virtual override returns (address) {
         _requireMinted(tokenId);
         return _tokenApprovals[tokenId];
+    }
+
+    /**
+     * @dev Should be possible to clear this without having to transfer.
+     */
+    function clearApproved(uint256 tokenId) public {
+        address owner = ownerOf(tokenId);
+        if (_msgSender() != owner) {
+            revert Unauthorized();
+        }
+        delete _tokenApprovals[tokenId];
     }
 
     /**
@@ -564,7 +579,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
         bool approved
     ) internal virtual {
         // require(owner != operator, "ERC721:approve to caller");
-        if (owner == operator) revert ApproveToCaller();
+        if (operator == owner) revert ApproveToCaller();
         _operatorApprovals[owner][operator] = approved;
         emit ApprovalForAll(owner, operator, approved);
     }
@@ -574,7 +589,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
      */
     function _requireMinted(uint256 tokenId) internal view virtual {
         // require(_exists(tokenId), "ERC721:invalid token ID");
-        if (!_exists(tokenId)) revert TokenDoesNotExist(tokenId);
+        if (!_exists(tokenId)) revert InvalidToken(tokenId);
     }
 
     /**

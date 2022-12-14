@@ -3,9 +3,9 @@ pragma solidity >0.8.10;
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-error InvalidPaymentAmount(uint256 expected, uint256 received);
-error PaymentFailure();
-error PriceFeedDated(uint256 maxDelay, uint received);
+error InvalidPaymentAmount(uint256 expected, uint256 received); //0x05dbe7d3
+error PaymentFailure(); //0x29292fa2
+error PriceFeedDated(uint256 maxDelay, uint256 received); //0xb8875fad
 
 interface IC9EthPriceFeed {
     function getLatestETHUSDPrice() external view returns (uint256);

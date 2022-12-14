@@ -23,13 +23,13 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 * they cannot revoke owner. Only owner can renounce itself.
 */
 
-error ActionNotConfirmed();
-error BoolAlreadySet();
-error ContractFrozen();
-error NoRoleOnAccount();
-error NoTransferPending();
-error C9Unauthorized();
-error C9ZeroAddressInvalid();
+error ActionNotConfirmed(); //0xacdb9fab
+error BoolAlreadySet(); //0xf04e4fd9
+error ContractFrozen(); //0x4051e961
+error NoRoleOnAccount(); //0xb1a60829
+error NoTransferPending(); //0x9c6b0866
+error C9Unauthorized(); //0xa020ddad
+error C9ZeroAddressInvalid(); //0x7c7fa4fb
 
 abstract contract C9OwnerControl is AccessControl {
     address public owner;

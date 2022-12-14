@@ -273,7 +273,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
             }
             else {
                 // If validity 0 and locked == getting reedemed
-                _lock = uint256(uint8(_uTokenData>>POS_LOCKED)) == 1 ? true : false;
+                _lock = uint256(uint8(_uTokenData>>POS_LOCKED)) == LOCKED ? true : false;
                 if (_lock) {
                     _clr = "b50"; // orange
                     _validity = "REDEEM PENDING  ";

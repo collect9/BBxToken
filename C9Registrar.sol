@@ -2,10 +2,10 @@
 pragma solidity >0.8.10;
 import "./C9OwnerControl.sol";
 
-error AddressAlreadyRegistered();
-error AddressNotInProcess();
-error CodeMismatch();
-error WrongProcessStep(uint256 expected, uint256 received);
+error AddressAlreadyRegistered(); //0x2d42c772
+error AddressNotInProcess(); //0x286d0071
+error CodeMismatch(); //0x179708c0
+error WrongProcessStep(uint256 expected, uint256 received); //0x58f6fd94
 
 
 interface IC9Registrar {
