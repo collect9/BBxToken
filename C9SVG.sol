@@ -552,7 +552,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
         bytes32[3] memory mods = [bytes32("1 1 0 0 0 1 0 0 0 0 0 1 0 0 0 0 "),
             "0 0 0 0 1 1 0 0 0 0 0 1 0 0 0 0 ",
             "0 0 0 0 0 1 0 0 0 0 0 1 1 1 0 0 "];
-        if (_rtier == 8) {
+        if (_rtier == 5) {
             assembly {
                 let dst := add(b, 574)
                 mstore(dst, _filter_mod)
