@@ -21,7 +21,7 @@ error OwnerIndexOOB(uint256 maxIndex, uint256 received); //0xc643a750
 error TokenAlreadyMinted(uint256 tokenId); //0x8b474e54
 error TokenEnumIndexOOB(uint256 maxIndex, uint256 received); //0x25601f6d
 error TransferFromToSame(); //0x2f2bdfd9
-error Unauthorized(); //0x82b42900
+error TransferFromIncorrectOwner(address expected, address received); //0xc0eeaa61
 error ZeroAddressInvalid(); //0x14c880ca
 
 /**
@@ -108,7 +108,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
     function ownerOf(uint256 tokenId) public view virtual override returns (address) {
         address owner = _ownerOf(tokenId);
         // require(owner != address(0), "ERC721:invalid token ID");
-        if (owner == address(0)) revert InvalidToken(0);
+        if (owner == address(0)) revert InvalidToken(tokenId);
         return owner;
     }
 
@@ -270,7 +270,9 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
     function clearApproved(uint256 tokenId) public {
         address owner = ownerOf(tokenId);
         if (_msgSender() != owner) {
-            revert Unauthorized();
+            if (!isApprovedForAll(owner, _msgSender())) {
+                revert CallerNotOwnerOrApproved();
+            }
         }
         delete _tokenApprovals[tokenId];
     }
@@ -539,7 +541,8 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
         uint256 tokenId
     ) internal virtual {
         // require(ownerOf(tokenId) == from, "ERC721:xfer from incorrect owner");
-        if (ownerOf(tokenId) != from) revert Unauthorized();
+        address _owner = ownerOf(tokenId);
+        if (_owner != from) revert TransferFromIncorrectOwner(_owner, from);
         // require(to != address(0), "ERC721:xfer to the 0 address");
         if (to == address(0)) revert ZeroAddressInvalid();
         // require(to != from, "ERC721:xfer from & to are same");
@@ -548,7 +551,6 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
         _beforeTokenTransfer(from, to, tokenId, 1);
 
         // Clear approvals from the previous owner
-        // Tiny gas savings with if statement when most owners won't have an approval set
         if (_tokenApprovals[tokenId] != address(0)) {
             delete _tokenApprovals[tokenId];
         }
