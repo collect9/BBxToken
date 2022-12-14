@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >0.8.10;
+pragma solidity >=0.8.17;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
 /**
@@ -55,19 +55,10 @@ abstract contract C9OwnerControl is AccessControl {
 
     modifier notFrozen() { 
         if (_frozen) {
-            // _errMsg("contract frozen");
             revert ContractFrozen();
         }
         _;
     }
-
-    /**
-     * @dev Temp functions.
-     */
-    // function _errMsg(bytes memory message) 
-    //     internal pure virtual {
-    //         revert(string(bytes.concat("C9OwnerControl: ", message)));
-    // }
 
     /**
      * @dev It will not be possible to call `onlyRole(DEFAULT_ADMIN_ROLE)` 
@@ -78,8 +69,6 @@ abstract contract C9OwnerControl is AccessControl {
      */
     function renounceRole(bytes32 role, address account)
         public override {
-            // if (account != msg.sender) _errMsg("unauthorized");
-            // if (!hasRole(role, account)) _errMsg("account does not have role");
             if (account != msg.sender) revert C9Unauthorized();
             if (!hasRole(role, account)) revert NoRoleOnAccount();
             _revokeRole(role, account);
@@ -88,25 +77,24 @@ abstract contract C9OwnerControl is AccessControl {
     /**
      * @dev Override that makes it impossible for other admins 
      * to revoke the admin rights of the original contract deployer.
-     * As a result admin also cannot revoke itself. It can only renounce.
+     * As a result admin also cannot revoke itself either.
+     * But it can still renounce.
      */
     function revokeRole(bytes32 role, address account)
         public override
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            // if (!hasRole(role, account)) _errMsg("account does not have role");
-            // if (account == owner) _errMsg("unauthorized");
-            if (!hasRole(role, account)) revert NoRoleOnAccount();
             if (account == owner) revert C9Unauthorized();
+            if (!hasRole(role, account)) revert NoRoleOnAccount();
             _revokeRole(role, account);
     }
 
     /**
      * @dev Transfers ownership of the contract to a new account (`newOwner`).
      * Internal function without access restriction. This is meant to make AccessControl 
-     * functionally equivalent to Ownable.
+     * functionally equivalent to 2-step Ownable.
      */
     function _transferOwnership(address _newOwner)
-        internal {
+        private {
             delete pendingOwner;
             address _oldOwner = owner;
             owner = _newOwner;
@@ -122,8 +110,8 @@ abstract contract C9OwnerControl is AccessControl {
      */
     function transferOwnership(address _newOwner)
         external
-        onlyRole(DEFAULT_ADMIN_ROLE) {
-            // if (_newOwner == address(0)) _errMsg("cannot transfer to 0 address");
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        notFrozen() {
             if (_newOwner == address(0)) revert C9ZeroAddressInvalid();
             pendingOwner = _newOwner;
             emit OwnershipTransferInit(owner, _newOwner);
@@ -135,23 +123,22 @@ abstract contract C9OwnerControl is AccessControl {
      * this process, unless original owner wishes to remain in that role.
      */
     function acceptOwnership()
-        external {
-            // if (pendingOwner == address(0)) _errMsg("no transfer pending");
-            // if (pendingOwner != msg.sender) _errMsg("unauthorized");
+        external
+        notFrozen() {
             if (pendingOwner != msg.sender) revert C9Unauthorized();
             if (pendingOwner == address(0)) revert NoTransferPending();
             _transferOwnership(msg.sender);
     }
 
     /**
-     * @dev Cancels a transfer initiated.
+     * @dev Cancels a transfer initiated. Although it may make sense to let
+     * pending owner do this as well, we're keeping it ADMIN only.
      */
     function cancelTransferOwnership()
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (pendingOwner == address(0)) revert NoTransferPending();//_errMsg("no transfer pending");
+            if (pendingOwner == address(0)) revert NoTransferPending();
             delete pendingOwner;
-            revokeRole(DEFAULT_ADMIN_ROLE, pendingOwner);
             emit OwnershipTransferCancel(owner);
     }
 
@@ -164,7 +151,6 @@ abstract contract C9OwnerControl is AccessControl {
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
             if (_frozen == _toggle) {
-                // _errMsg("bool already set");
                 revert BoolAlreadySet();
             }
             _frozen = _toggle;
@@ -173,12 +159,9 @@ abstract contract C9OwnerControl is AccessControl {
     function __destroy(address _receiver, bool confirm)
         public virtual
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (confirm) {
-    		    selfdestruct(payable(_receiver));
-            }
-            else {
-                // _errMsg("destruct not confirmed");
+            if (!confirm) {
                 revert ActionNotConfirmed();
             }
+    		selfdestruct(payable(_receiver));
         }
 }

@@ -41,11 +41,11 @@ error ZeroTokenId(); //0x1fed7fc5
 interface IC9Token {
     function getTokenParams(uint256 _tokenId) external view returns(uint256[18] memory params);
     function ownerOf(uint256 _tokenId) external view returns(address);
-    function redeemAdd(uint256[] calldata _tokenId) external;
+    function redeemAdd(uint256[] calldata _tokenIds) external;
     function redeemCancel() external;
     function redeemFinish(uint256 _redeemerData) external;
-    function redeemRemove(uint256[] calldata _tokenId) external;
-    function redeemStart(uint256[] calldata _tokenId) external;
+    function redeemRemove(uint256[] calldata _tokenIds) external;
+    function redeemStart(uint256[] calldata _tokenIds) external;
     function preRedeemable(uint256 _tokenId) external view returns(bool);
     function setTokenUpgraded(uint256 _tokenId) external;
     function setTokenValidity(uint256 _tokenId, uint256 _vId) external;
@@ -151,10 +151,9 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * Default receiver is set to owner. Both can be 
      * updated after deployment.
      */
-    constructor(uint256 _royaltyDefaultValue)
-        ERC721("Collect9 NFTs", "C9T")
-        limitRoyalty(_royaltyDefaultValue) {
-            royaltyDefaultValue = uint96(_royaltyDefaultValue);
+    constructor()
+        ERC721("Collect9 NFTs", "C9T") {
+            royaltyDefaultValue = uint96(500);
             royaltyDefaultReceiver = owner;
     }
 
@@ -574,13 +573,11 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * to enforce their conditions.
      */
     function _unlockToken(uint256 _tokenId)
-        private
-        isOwner(_tokenId) {
+        private {
             uint256 _tokenData = _uTokenData[_tokenId];
             if (uint256(uint8(_tokenData>>POS_LOCKED)) == UNLOCKED) {
                 revert TokenNotLocked(_tokenId);
             }
-            // Unlock the token.
             _tokenData = _setTokenParam(
                 _tokenData,
                 POS_LOCKED,
@@ -588,6 +585,20 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                 type(uint8).max
             );
             _uTokenData[_tokenId] = _tokenData;
+    }
+
+    /**
+     * @dev Fail-safe function that can unlock an active token.
+     * This is for any edge cases that may have been missed 
+     * during redeemer testing. Dead tokens are still not 
+     * possible to unlock.
+     */
+    function adminUnlock(uint256 _tokenId)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        tokenExists(_tokenId)
+        notDead(_tokenId) {
+            _unlockToken(_tokenId);
     }
 
     /**
@@ -682,8 +693,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * so only the _tokenId needs to be passed in.
      */
     function getTokenParams(uint256 _tokenId)
-        external view
-        override(C9Struct, IC9Token)
+        external view override
         returns(uint256[18] memory params) {
             uint256 _packedToken = _uTokenData[_tokenId];
             params[0] = uint256(uint8(_packedToken>>POS_UPGRADED));
@@ -813,11 +823,11 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * Once added, the token is locked from further exchange until 
      * either canceled or removed.
      */
-    function redeemAdd(uint256[] calldata _tokenId)
+    function redeemAdd(uint256[] calldata _tokenIds)
         external override {
-            _redeemLockTokens(_tokenId);
-            IC9Redeemer(contractRedeemer).add(msg.sender, _tokenId);
-            emit RedemptionAdd(msg.sender, _tokenId);
+            _redeemLockTokens(_tokenIds);
+            IC9Redeemer(contractRedeemer).add(msg.sender, _tokenIds);
+            emit RedemptionAdd(msg.sender, _tokenIds);
     }
 
     /**
@@ -832,6 +842,9 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             uint256 _tokenId;
             for (uint256 i; i<_batchSize;) {
                 _tokenId = uint256(uint24(_redeemerData>>_tokenOffset));
+                if (msg.sender != ownerOf(_tokenId)) {
+                    revert Unauthorized();
+                }
                 _unlockToken(_tokenId);
                 unchecked {
                     _tokenOffset += UINT_SIZE;
@@ -869,15 +882,20 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * @dev Allows user to remove tokens from 
      * an existing redemption process.
      */
-    function redeemRemove(uint256[] calldata _tokenId)
+    function redeemRemove(uint256[] calldata _tokenIds)
         external override {
-            IC9Redeemer(contractRedeemer).remove(msg.sender, _tokenId);
-            uint256 _batchSize = _tokenId.length;
+            IC9Redeemer(contractRedeemer).remove(msg.sender, _tokenIds);
+            uint256 _batchSize = _tokenIds.length;
+            uint256 _tokenId;
             for (uint256 i; i<_batchSize;) {
-                _unlockToken(_tokenId[i]);
+                _tokenId = _tokenIds[i];
+                if (msg.sender != ownerOf(_tokenId)) {
+                    revert Unauthorized();
+                }
+                _unlockToken(_tokenId);
                 unchecked {++i;}
             }
-            emit RedemptionRemove(msg.sender, _tokenId);
+            emit RedemptionRemove(msg.sender, _tokenIds);
     }
 
     /**
@@ -885,11 +903,11 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      * Once started, the token is locked from further exchange 
      * unless canceled.
      */
-    function redeemStart(uint256[] calldata _tokenId)
+    function redeemStart(uint256[] calldata _tokenIds)
         external override {
-            _redeemLockTokens(_tokenId);
-            IC9Redeemer(contractRedeemer).start(msg.sender, _tokenId);
-            emit RedemptionStart(msg.sender, _tokenId);
+            _redeemLockTokens(_tokenIds);
+            IC9Redeemer(contractRedeemer).start(msg.sender, _tokenIds);
+            emit RedemptionStart(msg.sender, _tokenIds);
     }
 
     /**
@@ -1061,6 +1079,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         tokenExists(_tokenId)
         notDead(_tokenId) {
             if (_vId == 4 || _vId == 5 || _vId > 8) {
+                // 6, 7, 8 are valid dead ids for active ids 1, 2, 3
                 revert InvalidVId(_vId);
             }
             uint256 _currentVId = uint256(uint8(_uTokenData[_tokenId]>>POS_VALIDITY));

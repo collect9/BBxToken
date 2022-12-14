@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >0.8.10;
-
+pragma solidity >=0.8.17;
 
 abstract contract C9Struct {
     
@@ -99,28 +98,5 @@ abstract contract C9Struct {
                 }
                 unchecked {++_sliceIndex2;}
             }
-    }
-
-    function getTokenParams(uint256 _packedToken)
-        external view virtual
-        returns(uint256[18] memory params) {
-            params[0] = uint256(uint8(_packedToken>>POS_UPGRADED));
-            params[1] = uint256(uint8(_packedToken>>POS_DISPLAY));
-            params[2] = uint256(uint8(_packedToken>>POS_LOCKED));
-            params[3] = uint256(uint8(_packedToken>>POS_VALIDITY));
-            params[4] = uint256(uint8(_packedToken>>POS_EDITION));
-            params[5] = uint256(uint8(_packedToken>>POS_CNTRYTAG));
-            params[6] = uint256(uint8(_packedToken>>POS_CNTRYTUSH));
-            params[7] = uint256(uint8(_packedToken>>POS_GENTAG));
-            params[8] = uint256(uint8(_packedToken>>POS_GENTUSH));
-            params[9] = uint256(uint8(_packedToken>>POS_MARKERTUSH));
-            params[10] = uint256(uint8(_packedToken>>POS_SPECIAL));
-            params[11] = uint256(uint8(_packedToken>>POS_RARITYTIER));
-            params[12] = uint256(uint16(_packedToken>>POS_MINTID));
-            params[13] = uint256(uint16(_packedToken>>POS_ROYALTY));
-            params[14] = uint256(uint16(_packedToken>>POS_ROYALTIESDUE));
-            params[15] = uint256(uint32(_packedToken>>POS_TOKENID));
-            params[16] = uint256(uint40(_packedToken>>POS_VALIDITYSTAMP));
-            params[17] = uint256(uint40(_packedToken>>POS_MINTSTAMP));
     }
 }
