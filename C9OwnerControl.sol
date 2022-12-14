@@ -138,8 +138,8 @@ abstract contract C9OwnerControl is AccessControl {
         external {
             // if (pendingOwner == address(0)) _errMsg("no transfer pending");
             // if (pendingOwner != msg.sender) _errMsg("unauthorized");
-            if (pendingOwner == address(0)) revert NoTransferPending();
             if (pendingOwner != msg.sender) revert C9Unauthorized();
+            if (pendingOwner == address(0)) revert NoTransferPending();
             _transferOwnership(msg.sender);
     }
 

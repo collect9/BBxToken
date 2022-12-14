@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0 <0.9.0;
+pragma solidity >0.8.10;
 
 library Helpers {
     function addressToB32B8(address x)
@@ -12,7 +12,7 @@ library Helpers {
             }
     }
 
-    function bpsToPercent(uint96 input)
+    function bpsToPercent(uint256 input)
         internal pure
         returns(bytes4) {
             bytes32 _input = uintToBytes(input);
@@ -47,23 +47,11 @@ library Helpers {
                 if (e0 == 0x20) { //space
                     break;
                 }
-
-                if (e0 == 0x7a) { //z
-                    output = bytes.concat(output, "20.33");
-                }
-                else if (e0 == 0x79) { //y
-                    output = bytes.concat(output, "2.5");
-                }
-                else if (e0 == 0x78) { //x
-                    output = bytes.concat(output, "21.5");
-                }
-                else {
-                    output = bytes.concat(output, e0);
-                }
+                output = bytes.concat(output, e0);
             }
     }
 
-    function flipSpace(bytes memory input, uint8 o0)
+    function flipSpace(bytes memory input, uint256 o0)
         internal pure {
             uint256 o1 = 1+o0;
             if (input[o1] == 0x00) {
@@ -138,7 +126,7 @@ library Helpers {
             return s;
     }
 
-    function tokenIdToBytes(uint32 _id)
+    function tokenIdToBytes(uint256 _id)
         internal pure
         returns (bytes6) {
             bytes memory output = new bytes(6);
@@ -149,6 +137,12 @@ library Helpers {
                 output[j+_offset] = _bid[j];
             }
             return bytes6(output);
+    }
+
+    function uintToBool(uint256 v)
+        internal pure
+        returns(bool) {
+            return v == 1 ? true : false;
     }
 
     // https://ethereum.stackexchange.com/questions/6591/conversion-of-uint-to-string
@@ -168,7 +162,7 @@ library Helpers {
             return ret;
     }
 
-    function uintToOrdinal(uint8 _input)
+    function uintToOrdinal(uint256 _input)
         internal pure
         returns (bytes3) {
             if (_input == 0) {
