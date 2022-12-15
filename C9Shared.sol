@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >0.8.10;
+pragma solidity >=0.8.17;
 
 abstract contract C9Shared {
     bytes3[11] hex3;

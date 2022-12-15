@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.10 <0.9.0;
+pragma solidity >=0.8.17;
 import "./utils/Helpers.sol";
 import "./C9Shared.sol";
-import "./C9Struct2.sol";
+import "./C9Struct.sol";
 
 
 interface IC9MetaData {
@@ -16,7 +16,7 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Struct {
      * too deep error with this portion of the code included.
      */
     function _checkTushMarker(uint256 _markerTush, bytes memory b, uint256 _offset)
-        internal view {
+        private view {
             if (_markerTush > 0) {
                 bytes4 _markertush = _vMarkers[_markerTush-1];
                 assembly {
@@ -130,7 +130,7 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Struct {
                 uint256(uint16(_uTokenData>>POS_MINTID))
             )));
 
-            bytes3 _upgraded = uint256(uint8(_uTokenData>>POS_UPGRADED)) > 0 ? bytes3("YES") : bytes3("NO ");
+            bytes3 _upgraded = uint256(uint8(_uTokenData>>POS_UPGRADED)) == UPGRADED ? bytes3("YES") : bytes3("NO ");
             bytes3 _redeemed = uint256(uint8(_uTokenData>>POS_VALIDITY)) == REDEEMED ? bytes3("YES") : bytes3("NO ");
 
             uint256 _offset = _cntrytag[2] == 0x20 ? 0 : 1;

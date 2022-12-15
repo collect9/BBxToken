@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >0.8.10;
-
+pragma solidity >=0.8.17;
 import "./C9Shared.sol";
 import "./C9Struct.sol";
 import "./C9Token.sol";
@@ -221,7 +220,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
         letterMap[0x61] = ".25"; // a
         letterMap[0x62] = ".33"; // b
         letterMap[0x63] = ".5"; // c
-        letterMap[0x64] = ".67"; // d
+        letterMap[0x68] = ".67"; // h
         letterMap[0x66] = "1."; // f
         tokenContract = _tokenContract;
     }
@@ -230,7 +229,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
      * @dev Adds the bytes32 + bytes8 representation of the address into the 
      * SVG output memory.
      */
-    function addAddress(address _address, bytes memory b) internal pure {
+    function addAddress(address _address, bytes memory b) private pure {
         (bytes32 _a1, bytes8 _a2) = Helpers.addressToB32B8(_address);
         assembly {
             mstore(add(b, 2907), _a1)
@@ -244,7 +243,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
      * Note: this is done so that multiple 
      * SVGs may be displayed on the same page without CSS conflict.
      */
-    function addIds(bytes6 _id, bytes memory b) internal pure {
+    function addIds(bytes6 _id, bytes memory b) private pure {
         uint16[11] memory offsets = [182, 208, 234, 276, 351, 887, 2379, 2457, 2651, 3008, 3070];
         assembly {
             let dst := 0
@@ -258,14 +257,14 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
     /**
      * @dev Adds validity flag info to SVG output memory `b`.
      */
-    function addValidityInfo(uint256 _uTokenData, bytes memory b) internal view {
+    function addValidityInfo(uint256 _uTokenData, bytes memory b) private view {
         uint256 _validityIdx = uint256(uint8(_uTokenData>>POS_VALIDITY));
         uint256 _tokenId = uint256(uint32(_uTokenData>>POS_TOKENID));
 
         bytes3 _clr;
         bytes16 _validity = _vValidity[_validityIdx%5];
         bool _lock = false;
-        if (_validityIdx == 0) {
+        if (_validityIdx == VALID) {
             bool _preRedeemable = IC9Token(tokenContract).preRedeemable(_tokenId);
             if (_preRedeemable) {
                 _clr = "a0f"; // purple
@@ -273,7 +272,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
             }
             else {
                 // If validity 0 and locked == getting reedemed
-                _lock = uint256(uint8(_uTokenData>>POS_LOCKED)) == 1 ? true : false;
+                _lock = uint256(uint8(_uTokenData>>POS_LOCKED)) == LOCKED ? true : false;
                 if (_lock) {
                     _clr = "b50"; // orange
                     _validity = "REDEEM PENDING  ";
@@ -305,7 +304,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
             mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), ">>"))
             dst := add(b, 2535)
             mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _validity))
-            if eq(_validityIdx, REDEEMED) {
+            if gt(_validityIdx, 3) {
                 dst := add(b, 783)
                 mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "0")) // grayscale
             }
@@ -321,7 +320,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
         string calldata _name,
         bytes memory b
         )
-        internal view {
+        private view {
             bytes7 _tagtxt = genTagsToAscii(
                 uint256(uint8(_uTokenData>>POS_GENTAG)),
                 uint256(uint8(_uTokenData>>POS_CNTRYTAG)));
@@ -401,7 +400,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
      * tags. The provides the user with the information necessary to know 
      * what type of tag is present based on the SVG display alone.
      */
-    function addTushMarker(uint256 _markertush, uint256 _gentag) internal view returns (bytes memory e) {
+    function addTushMarker(uint256 _markertush, uint256 _gentag) private view returns (bytes memory e) {
         if (_markertush > 0) {
             e = "<g transform='translate(555 726)' style='opacity:0.8; font-family:\"Brush Script MT\", cursive; font-size:24px; font-weight:700'>"
                 "<text text-anchor='middle' fill='#222'>    </text>"
@@ -429,7 +428,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
      * This is a bit messy but bytes concat seems to get the job done.
      */
     function addVariableBytes(uint256 _uTokenData, string[3] memory _sTokenData, bytes6 _id)
-        internal view
+        private view
         returns(bytes memory vb) {
             bytes memory href = "<a href='https://collect9.io/nft/XXXXXX' target='_blank'>";
             assembly {
@@ -461,8 +460,8 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
     /**
      * @dev If token has been upgraded, add text that shows it has.
      */
-    function addUpgradeText(uint256 _upgraded) internal pure returns(bytes memory upgradedText) {
-        if (_upgraded == 1) {
+    function addUpgradeText(uint256 _upgraded) private pure returns(bytes memory upgradedText) {
+        if (_upgraded == UPGRADED) {
             upgradedText = "<text x='190' y='58' style='font-family: \"Brush Script MT\", cursive;' font-size='22'>        </text>";
             assembly {
                 let dst := add(upgradedText, 117)
@@ -474,7 +473,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
     /**
      * @dev Reconstructs mapped compressed representation `_data` into a barcode SVG.
      */
-    function barCodeSVG(bytes memory _data, bytes6 _id) internal view returns(bytes memory output) {
+    function barCodeSVG(bytes memory _data, bytes6 _id) private view returns(bytes memory output) {
         output = "<svg version='1.1' class='qr' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 264 100'>"
             "<g transform='scale(3 100)'>"
             "<rect x='13'/>"
@@ -547,12 +546,12 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
      * but users should be able to fetch meta-data updates to see 
      * color changes.
      */
-    function checkForSpecialBg(uint256 _rtier, bytes memory b) internal view {
+    function checkForSpecialBg(uint256 _rtier, bytes memory b) private view {
         bytes32 _filter_mod = "turbulence' baseFrequency='0.002";
         bytes32[3] memory mods = [bytes32("1 1 0 0 0 1 0 0 0 0 0 1 0 0 0 0 "),
             "0 0 0 0 1 1 0 0 0 0 0 1 0 0 0 0 ",
             "0 0 0 0 0 1 0 0 0 0 0 1 1 1 0 0 "];
-        if (_rtier == 8) {
+        if (_rtier == 5) {
             assembly {
                 let dst := add(b, 574)
                 mstore(dst, _filter_mod)
@@ -576,7 +575,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
      * @dev Converts integer inputs to the ordinal country ascii text representation 
      * based on input params `_gentag` and `_tag`.
      */
-    function genTagsToAscii(uint256 _gentag, uint256 _tag) internal view returns(bytes7) {
+    function genTagsToAscii(uint256 _gentag, uint256 _tag) private view returns(bytes7) {
         bytes3 __gentag = Helpers.uintToOrdinal(_gentag);
         bytes3 _cntrytag = _vFlags[_tag];
         bytes memory _tmpout = "       ";
@@ -596,7 +595,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
      * this function returns the font size of text depending on input `len` 
      * so that it stays contained.
      */
-    function getNameSize(uint256 len) internal pure returns(bytes2) {
+    function getNameSize(uint256 len) private pure returns(bytes2) {
         if (len < 11) {
             return "52";
         }
@@ -618,7 +617,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
      * To get around that, just display as zero. Just in case this can 
      * happen for months as well, that has been implemented too.
      */
-    function getNFTAge(uint256 _mintstamp) internal view returns(bytes6) {
+    function getNFTAge(uint256 _mintstamp) private view returns(bytes6) {
         uint256 _ds = block.timestamp - _mintstamp;
         uint256 _nyrs = _ds/31556926;
 
@@ -659,7 +658,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
      * If input is not within a valid range (<7), then return a blank 
      * flag will be returned.
      */
-    function getSVGFlag(uint256 _flag) internal pure returns(bytes memory) {
+    function getSVGFlag(uint256 _flag) private pure returns(bytes memory) {
         if (_flag == 0) {
             return FLG_CAN;
         }
@@ -687,7 +686,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
     }
 
     function mapToString(bytes memory b, bytes memory entry, uint256 k, bytes memory start, bytes memory end) 
-        internal view
+        private view
         returns (bytes memory output) {
             bytes1 e0;
             bytes memory tmp;
@@ -711,7 +710,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
      * @dev Reconstructs mapped compressed representation of data into a 
      * micro QRCode SVG from input `_data`.
      */
-    function qrCodeSVG(bytes memory _data) internal view returns(bytes memory output) {
+    function qrCodeSVG(bytes memory _data) private view returns(bytes memory output) {
         bytes memory entry = "      ";
         bytes memory tmp;
         bytes1 e0;
@@ -757,13 +756,14 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
                 if (e0 == 0x67) {
                     delims = true;
                     l = 2;
-                    tmp = "</g><g transform='scale(X 1)'>";
                     e0 = _data[i+1];
-                    assembly {
-                        let dst := add(tmp, 56)
-                        mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), e0))
+                    output = bytes.concat(output, "</g><g transform='scale(");
+                    if (bytes1(bytes(letterMap[e0])) != 0x00) {
+                        output = bytes.concat(output, bytes(letterMap[e0]), " 1)'>");
                     }
-                    output = bytes.concat(output, tmp);
+                    else {
+                        output = bytes.concat(output, e0, " 1)'>");
+                    }
                     entry = "      ";
                     continue;
                 }
@@ -799,7 +799,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
     /**
      * @dev Constructs the SVG XML/HTML code from the fixed (hardcoded) and input `_qrdata`.
      */
-    function qrCodeSVGFull(bytes memory _qrdata) internal view returns (bytes memory) {
+    function qrCodeSVGFull(bytes memory _qrdata) private view returns (bytes memory) {
         bytes memory b = "<svg version='1.1' class='qr' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 17'>"
             "<style type='text/css'>.qr{opacity:0.89;} .qr rect{width:1px;height:1px;}</style>"
             "<symbol id='d'>"

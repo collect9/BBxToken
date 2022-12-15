@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >0.8.10;
+pragma solidity >=0.8.17;
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+
+uint256 constant MAX_TIME_DELAY = 3600;
+
+error InvalidPaymentAmount(uint256 expected, uint256 received); //0x05dbe7d3
+error PaymentFailure(); //0x29292fa2
+error PriceFeedDated(uint256 maxDelay, uint256 received); //0xb8875fad
 
 interface IC9EthPriceFeed {
     function getLatestETHUSDPrice() external view returns (uint256);
@@ -9,7 +15,7 @@ interface IC9EthPriceFeed {
 }
 
 contract C9EthPriceFeed is IC9EthPriceFeed, Ownable {
-    AggregatorV3Interface internal priceFeed;
+    AggregatorV3Interface private priceFeed;
 
     /**
      * Aggregator: ETH/USD
@@ -31,7 +37,7 @@ contract C9EthPriceFeed is IC9EthPriceFeed, Ownable {
         returns (uint256) {
             (,int256 price,,uint256 timeStamp,) = priceFeed.latestRoundData();
             uint256 _ds = block.timestamp - timeStamp;
-            if (_ds > 3600) revert("C9EthPriceFeed: price outdated");//C9Errors.DatedPrice(_ds);
+            if (_ds > MAX_TIME_DELAY) revert PriceFeedDated(MAX_TIME_DELAY, _ds);
             return uint256(price);
     }
 
@@ -48,7 +54,7 @@ contract C9EthPriceFeed is IC9EthPriceFeed, Ownable {
     }
 
     /**
-     * Allows price feed address changes in the future if needed.
+     * Allows price feed address change in the future if needed.
      */
     function setPriceFeed(address _address)
     public
