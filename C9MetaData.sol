@@ -16,7 +16,7 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Struct {
      * too deep error with this portion of the code included.
      */
     function _checkTushMarker(uint256 _markerTush, bytes memory b, uint256 _offset)
-        internal view {
+        private view {
             if (_markerTush > 0) {
                 bytes4 _markertush = _vMarkers[_markerTush-1];
                 assembly {
