@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
+import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 import "./C9OwnerControl.sol";
 import "./C9Token.sol";
 import "./utils/EthPricer.sol";
+
+address constant MINTER_ADDRESS = 0xe9f84235d8e118AeD1Fe1B69b458100e1a4a4d13;
 
 uint256 constant MPOS_ACTIVE = 0;
 uint256 constant MPOS_TIMESTAMP = 8;
 uint256 constant MPOS_PRICEMIN = 56;
 uint256 constant MPOS_PRICEMAX = 88;
-uint256 constant MPOS_DRIFT = 96;
+uint256 constant MPOS_DRIFT = 120;
 
 uint256 constant DEACTIVATE = 0;
 uint256 constant ACTIVATE = 1;
@@ -28,6 +32,7 @@ interface IC9Market {
 }
 
 contract C9Market is IC9Market, C9OwnerControl {
+    using Address for address;
     address payable public Payee;
     uint96 private _floorPrice = 100;
     
@@ -160,7 +165,7 @@ contract C9Market is IC9Market, C9OwnerControl {
      * @dev Cancel token listings.
      */
     function cancelBatch(uint256[] calldata _tokenId)
-        external
+        public
         onlyRole(DEFAULT_ADMIN_ROLE) {
             uint256 _batchSize = _tokenId.length;
             for (uint256 i; i<_batchSize;) {
@@ -218,7 +223,7 @@ contract C9Market is IC9Market, C9OwnerControl {
     function list(ListingStruct calldata _listingStruct)
         public {
             uint256 _tokenId = _listingStruct.tokenId;
-            // This adds about 5k gas per batched... considering removing?
+            // This adds about 5k cost per listing, not worth including
             // address _tokenOwner = C9Token(contractToken).ownerOf(_tokenId);
             // if (msg.sender != _tokenOwner) {
             //     revert Unauthorized();
@@ -256,7 +261,7 @@ contract C9Market is IC9Market, C9OwnerControl {
             uint256 _totalUSDPrice = getTokenUSDPrice(_tokenId);
             uint256 _totalWeiPrice = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_totalUSDPrice);
             _pay(_totalWeiPrice);
-            C9Token(contractToken).safeTransferFrom(address(this), msg.sender, _tokenId);
+            C9Token(contractToken).safeTransferFrom(MINTER_ADDRESS, msg.sender, _tokenId);
             cancel(_tokenId);
             emit Purchase(msg.sender, _tokenId, _totalUSDPrice);
     }
@@ -267,12 +272,12 @@ contract C9Market is IC9Market, C9OwnerControl {
             uint256 _totalUSDPrice = getTokenUSDPrice(_tokenId);
             uint256 _totalWeiPrice = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_totalUSDPrice);
             _pay(_totalWeiPrice);
-            uint256 _batchSize = _tokenId.length;
-            for (uint256 i; i<_batchSize;) {
-                C9Token(contractToken).safeTransferFrom(address(this), msg.sender, _tokenId[i]);
-                cancel(_tokenId[i]);
-                unchecked {++i;}
+            // Safe transfer with _checkOnERC721Received (only needs one check for entire batch)
+            C9Token(contractToken).transferFromBatch(MINTER_ADDRESS, msg.sender, _tokenId);
+            if (!_checkOnERC721Received(MINTER_ADDRESS, msg.sender, _tokenId[0], "")) {
+                revert NonERC721Receiver();
             }
+            cancelBatch(_tokenId);
             emit PurchaseBatch(msg.sender, _tokenId, _totalUSDPrice);
     }
 
@@ -342,9 +347,9 @@ contract C9Market is IC9Market, C9OwnerControl {
         ) {
             uint256 _listingData = _tokenListing[_tokenId];
             active = uint256(uint8(_listingData>>MPOS_ACTIVE));
-            timestamp = uint256(uint8(_listingData>>MPOS_TIMESTAMP));
-            minPrice = uint256(uint8(_listingData>>MPOS_PRICEMIN));
-            maxPrice = uint256(uint8(_listingData>>MPOS_PRICEMAX));
+            timestamp = uint256(uint48(_listingData>>MPOS_TIMESTAMP));
+            minPrice = uint256(uint32(_listingData>>MPOS_PRICEMIN));
+            maxPrice = uint256(uint32(_listingData>>MPOS_PRICEMAX));
             priceDrift = uint256(uint8(_listingData>>MPOS_DRIFT));
     }
 
@@ -432,5 +437,35 @@ contract C9Market is IC9Market, C9OwnerControl {
                 revert AddressAlreadySet();
             }
             Payee = payable(_address);
+    }
+
+    /**
+     * Copy and pasted from ERC721. We want to utilize transfer batch if 
+     * bulk buying, however safeTransferFrom does not have a batched 
+     * version in C9Token, so we need to do one check on ERC721received
+     * in this contract.
+     */
+    function _checkOnERC721Received(
+        address from,
+        address to,
+        uint256 tokenId,
+        bytes memory data
+    ) private returns (bool) {
+        if (to.isContract()) {
+            try IERC721Receiver(to).onERC721Received(_msgSender(), from, tokenId, data) returns (bytes4 retval) {
+                return retval == IERC721Receiver.onERC721Received.selector;
+            } catch (bytes memory reason) {
+                if (reason.length == 0) {
+                    revert NonERC721Receiver();
+                } else {
+                    /// @solidity memory-safe-assembly
+                    assembly {
+                        revert(add(32, reason), mload(reason))
+                    }
+                }
+            }
+        } else {
+            return true;
+        }
     }
 }
