@@ -66,54 +66,6 @@ contract C9Market is IC9Market, C9OwnerControl {
         }
         _;
     }
-
-    /**
-     * @dev Activates a listing if not activated. This is far cheaper 
-     * than deleting and listing again, and also slightly cheaper than 
-     * using the update method.
-     */
-    function _activate(uint256 _tokenId)
-        private
-        listingExists(_tokenId) {
-            uint256 _listingData = _tokenListing[_tokenId];
-            if (uint256(uint8(_listingData>>MPOS_ACTIVE)) == ACTIVATE) {
-                revert ListingAlreadyActive(_tokenId);
-            }
-            _tokenListing[_tokenId] = _setPackedParam(
-                _listingData,
-                MPOS_ACTIVE,
-                ACTIVATE,
-                type(uint8).max
-            );
-    }
-
-    /**
-     * @dev Removes token from marketplace.
-     */
-    function _cancel(uint256 _tokenId)
-        private
-        listingExists(_tokenId) {
-            delete _tokenListing[_tokenId];
-    }
-
-    /**
-     * @dev Deactivates listing. This is cheaper than removing 
-     * and relisting.
-     */
-    function _deactivate(uint256 _tokenId)
-        private
-        listingExists(_tokenId) {
-            uint256 _listingData = _tokenListing[_tokenId];
-            if (uint256(uint8(_listingData>>MPOS_ACTIVE)) == DEACTIVATE) {
-                revert ListingAlreadyDeactivated(_tokenId);
-            }
-            _tokenListing[_tokenId] = _setPackedParam(
-                _listingData,
-                MPOS_ACTIVE,
-                DEACTIVATE,
-                type(uint8).max
-            );
-    }
     
     /**
      * Internal for _list and _update.
@@ -138,35 +90,15 @@ contract C9Market is IC9Market, C9OwnerControl {
             _tokenListing[_tokenId] = _listingData;
     }
 
-    /**
-     * Add a token to the marketplace.
-     */
-    function _list(ListingStruct calldata _listingStruct)
+    function _pay(uint256 _value) 
         private {
-            uint256 _tokenId = _listingStruct.tokenId;
-            // This adds about 5k gas per batched... considering removing?
-            address _tokenOwner = C9Token(contractToken).ownerOf(_tokenId);
-            if (msg.sender != _tokenOwner) {
-                revert Unauthorized();
+            if (msg.value != _value) {
+                revert InvalidPaymentAmount(_value, msg.value);
             }
-            if (_tokenListing[_tokenId] != 0) {
-                revert ListingAlreadyExists(_tokenId);
+            (bool success,) = payable(Payee).call{value: msg.value}("");
+            if(!success) {
+                revert PaymentFailure();
             }
-            _createListing(_listingStruct);
-    }
-
-    /*
-     * @dev Resets the listing timestamp for tokenId.
-     */
-    function _reset(uint256 _tokenId)
-        private
-        listingExists(_tokenId) {
-            _tokenListing[_tokenId] = _setPackedParam(
-                _tokenListing[_tokenId],
-                MPOS_TIMESTAMP,
-                block.timestamp,
-                type(uint48).max
-            );
     }
 
     /*
@@ -180,16 +112,27 @@ contract C9Market is IC9Market, C9OwnerControl {
             return _packedToken;
     }
 
-    /*
-     * @dev Updates listing within in the marketplace.
-     */
-    function _update(ListingStruct calldata _listingStruct)
-        internal
-        listingExists(_listingStruct.tokenId) {
-            _createListing(_listingStruct);
-    }
+    // >>>>>> MARKET FUNCTIONS
 
-    // >>>>>> BATCHES ARE CHEAPER
+    /**
+     * @dev Activates a listing if not activated. This is far cheaper 
+     * than deleting and listing again, and also slightly cheaper than 
+     * using the update method.
+     */
+    function activate(uint256 _tokenId)
+        public
+        listingExists(_tokenId) {
+            uint256 _listingData = _tokenListing[_tokenId];
+            if (uint256(uint8(_listingData>>MPOS_ACTIVE)) == ACTIVATE) {
+                revert ListingAlreadyActive(_tokenId);
+            }
+            _tokenListing[_tokenId] = _setPackedParam(
+                _listingData,
+                MPOS_ACTIVE,
+                ACTIVATE,
+                type(uint8).max
+            );
+    }
 
     /*
      * @dev Activate tokens that are deactivated.
@@ -199,9 +142,18 @@ contract C9Market is IC9Market, C9OwnerControl {
         onlyRole(DEFAULT_ADMIN_ROLE) {
             uint256 _batchSize = _tokenId.length;
             for (uint256 i; i<_batchSize;) {
-                _activate(_tokenId[i]);
+                activate(_tokenId[i]);
                 unchecked {++i;}
             }
+    }
+
+    /**
+     * @dev Removes token from marketplace.
+     */
+    function cancel(uint256 _tokenId)
+        public
+        listingExists(_tokenId) {
+            delete _tokenListing[_tokenId];
     }
 
     /*
@@ -212,9 +164,28 @@ contract C9Market is IC9Market, C9OwnerControl {
         onlyRole(DEFAULT_ADMIN_ROLE) {
             uint256 _batchSize = _tokenId.length;
             for (uint256 i; i<_batchSize;) {
-                _cancel(_tokenId[i]);
+                cancel(_tokenId[i]);
                 unchecked {++i;}
             }
+    }
+
+    /**
+     * @dev Deactivates listing. This is cheaper than removing 
+     * and relisting.
+     */
+    function deactivate(uint256 _tokenId)
+        public
+        listingExists(_tokenId) {
+            uint256 _listingData = _tokenListing[_tokenId];
+            if (uint256(uint8(_listingData>>MPOS_ACTIVE)) == DEACTIVATE) {
+                revert ListingAlreadyDeactivated(_tokenId);
+            }
+            _tokenListing[_tokenId] = _setPackedParam(
+                _listingData,
+                MPOS_ACTIVE,
+                DEACTIVATE,
+                type(uint8).max
+            );
     }
 
     /*
@@ -225,33 +196,7 @@ contract C9Market is IC9Market, C9OwnerControl {
         onlyRole(DEFAULT_ADMIN_ROLE) {
             uint256 _batchSize = _tokenId.length;
             for (uint256 i; i<_batchSize;) {
-                _deactivate(_tokenId[i]);
-                unchecked {++i;}
-            }
-    }
-
-    /*
-     * @dev Add tokens to marketplace.
-     */
-    function listBatch(ListingStruct[] calldata _listingStruct)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE) {
-            uint256 _batchSize = _listingStruct.length;
-            for (uint i; i<_batchSize;) {
-                _list(_listingStruct[i]);
-                unchecked {++i;}
-            }
-    }
-
-    /*
-     * @dev Update existing tokens in marketplace.
-     */
-    function updateBatch(ListingStruct[] calldata _listingStruct)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE) {
-            uint256 _batchSize = _listingStruct.length;
-            for (uint i; i<_batchSize;) {
-                _update(_listingStruct[i]);
+                deactivate(_tokenId[i]);
                 unchecked {++i;}
             }
     }
@@ -266,6 +211,121 @@ contract C9Market is IC9Market, C9OwnerControl {
             bool _listed = _tokenListing[_tokenId] == 0 ? false: true;
             return _listed;
     }
+
+    /**
+     * Add a token to the marketplace.
+     */
+    function list(ListingStruct calldata _listingStruct)
+        public {
+            uint256 _tokenId = _listingStruct.tokenId;
+            // This adds about 5k gas per batched... considering removing?
+            // address _tokenOwner = C9Token(contractToken).ownerOf(_tokenId);
+            // if (msg.sender != _tokenOwner) {
+            //     revert Unauthorized();
+            // }
+            if (_tokenListing[_tokenId] != 0) {
+                revert ListingAlreadyExists(_tokenId);
+            }
+            _createListing(_listingStruct);
+    }
+
+    /*
+     * @dev Add tokens to marketplace.
+     */
+    function listBatch(ListingStruct[] calldata _listingStruct)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            uint256 _batchSize = _listingStruct.length;
+            for (uint i; i<_batchSize;) {
+                list(_listingStruct[i]);
+                unchecked {++i;}
+            }
+    }
+
+    /**
+     * Function that handles purchase. Amount in ETH is calculated, 
+     * user must send and then token is sent to user.
+     * The token's contract address must have this address approved 
+     * to make token transfers from it.
+     * Note: frontend will call getTokenUSDPrice, and then 
+     * getTokenWeiPrice from the ETH pricer contract.
+     */
+    function purchaseToken(uint256 _tokenId)
+        notFrozen()
+        external payable override {
+            uint256 _totalUSDPrice = getTokenUSDPrice(_tokenId);
+            uint256 _totalWeiPrice = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_totalUSDPrice);
+            _pay(_totalWeiPrice);
+            C9Token(contractToken).safeTransferFrom(address(this), msg.sender, _tokenId);
+            cancel(_tokenId);
+            emit Purchase(msg.sender, _tokenId, _totalUSDPrice);
+    }
+
+    function purchaseTokenBatch(uint256[] calldata _tokenId)
+        notFrozen()
+        external payable override {
+            uint256 _totalUSDPrice = getTokenUSDPrice(_tokenId);
+            uint256 _totalWeiPrice = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_totalUSDPrice);
+            _pay(_totalWeiPrice);
+            uint256 _batchSize = _tokenId.length;
+            for (uint256 i; i<_batchSize;) {
+                C9Token(contractToken).safeTransferFrom(address(this), msg.sender, _tokenId[i]);
+                cancel(_tokenId[i]);
+                unchecked {++i;}
+            }
+            emit PurchaseBatch(msg.sender, _tokenId, _totalUSDPrice);
+    }
+
+    /*
+     * @dev Resets the listing timestamp for tokenId.
+     */
+    function reset(uint256 _tokenId)
+        public
+        listingExists(_tokenId) {
+            _tokenListing[_tokenId] = _setPackedParam(
+                _tokenListing[_tokenId],
+                MPOS_TIMESTAMP,
+                block.timestamp,
+                type(uint48).max
+            );
+    }
+
+    /*
+     * @dev Resets the listing timestamp for tokenId.
+     */
+    function resetBatch(uint256[] calldata _tokenId)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            uint256 _batchSize = _tokenId.length;
+            for (uint i; i<_batchSize;) {
+                reset(_tokenId[i]);
+                unchecked {++i;}
+            }
+    }
+
+    /*
+     * @dev Updates listing within in the marketplace.
+     */
+    function update(ListingStruct calldata _listingStruct)
+        public
+        listingExists(_listingStruct.tokenId) {
+            _createListing(_listingStruct);
+    }
+
+    /*
+     * @dev Update existing tokens in marketplace.
+     */
+    function updateBatch(ListingStruct[] calldata _listingStruct)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            uint256 _batchSize = _listingStruct.length;
+            for (uint i; i<_batchSize;) {
+                update(_listingStruct[i]);
+                unchecked {++i;}
+            }
+    }
+
+    // >>>>>> END MARKET FUNCTIONS
 
     /**
      * Returns packed token info in separate uint256.
@@ -323,7 +383,11 @@ contract C9Market is IC9Market, C9OwnerControl {
             }
     }
 
-    function getTokenBatchUSDPrice(uint256[] calldata _tokenId)
+    /**
+     * Returns the token price in USDC for the entire batch of _tokenId.
+     * The front-end can display this result as-is.
+     */
+    function getTokenUSDPrice(uint256[] calldata _tokenId)
         public view
         returns (uint256 _batchPrice) {
             uint256 _batchSize = _tokenId.length;
@@ -331,49 +395,6 @@ contract C9Market is IC9Market, C9OwnerControl {
                 _batchPrice += getTokenUSDPrice(_tokenId[i]);
                 unchecked {++i;}
             }
-    }
-
-    /**
-     * Function that handles purchase. Amount in ETH is calculated, 
-     * user must send and then token is sent to user.
-     * The token's contract address must have this address approved 
-     * to make token transfers from it.
-     * Note: frontend will call getTokenUSDPrice, and then 
-     * getTokenWeiPrice from the ETH pricer contract.
-     */
-    function _pay(uint256 _value) 
-        private {
-        if (msg.value != _value) {
-            revert InvalidPaymentAmount(_value, msg.value);
-        }
-        (bool success,) = payable(Payee).call{value: msg.value}("");
-        if(!success) {
-            revert PaymentFailure();
-        }
-    }
-
-    function purchaseToken(uint256 _tokenId)
-        external payable override {
-            uint256 _totalUSDPrice = getTokenUSDPrice(_tokenId);
-            uint256 _totalWeiPrice = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_totalUSDPrice);
-            _pay(_totalWeiPrice);
-            C9Token(contractToken).safeTransferFrom(address(this), msg.sender, _tokenId);
-            _cancel(_tokenId);
-            emit Purchase(msg.sender, _tokenId, _totalUSDPrice);
-    }
-
-    function purchaseTokenBatch(uint256[] calldata _tokenId)
-        external payable override {
-            uint256 _totalUSDPrice = getTokenBatchUSDPrice(_tokenId);
-            uint256 _totalWeiPrice = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_totalUSDPrice);
-            _pay(_totalWeiPrice);
-            uint256 _batchSize = _tokenId.length;
-            for (uint256 i; i<_batchSize;) {
-                C9Token(contractToken).safeTransferFrom(address(this), msg.sender, _tokenId[i]);
-                _cancel(_tokenId[i]);
-                unchecked {++i;}
-            }
-            emit PurchaseBatch(msg.sender, _tokenId, _totalUSDPrice);
     }
 
     /**
