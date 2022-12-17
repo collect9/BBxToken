@@ -6,7 +6,7 @@ import "./C9OwnerControl.sol";
 import "./C9Token.sol";
 import "./utils/EthPricer.sol";
 
-address constant MINTER_ADDRESS = 0xe9f84235d8e118AeD1Fe1B69b458100e1a4a4d13;
+address constant MINTER_ADDRESS = 0x8B525b744C73e46dB14d0E1ACD8842b3071ff63e;
 
 uint256 constant MPOS_ACTIVE = 0;
 uint256 constant MPOS_TIMESTAMP = 8;
@@ -62,7 +62,8 @@ contract C9Market is IC9Market, C9OwnerControl {
 
     constructor(address _contractToken) {
         contractToken = _contractToken;
-        Payee = payable(msg.sender); 
+        Payee = payable(msg.sender);
+        _frozen = true;
     }
 
     modifier listingExists(uint256 _tokenId) {
@@ -75,26 +76,6 @@ contract C9Market is IC9Market, C9OwnerControl {
     /**
      * Internal for _list and _update.
      */
-    function _createListing(ListingStruct calldata _listingStruct)
-        private {
-            uint256 _tokenId = _listingStruct.tokenId;
-            uint256 _listingPriceMin = _listingStruct.priceMin;
-            if (_listingPriceMin < _floorPrice) {
-                revert MinPriceTooLow(_tokenId, _floorPrice, _listingPriceMin);
-            }
-
-            // Create the packed listing
-            uint256 _listingData;
-            _listingData |= _listingStruct.active<<MPOS_ACTIVE;
-            _listingData |= block.timestamp<<MPOS_TIMESTAMP;
-            _listingData |= _listingPriceMin<<MPOS_PRICEMIN;
-            _listingData |= _listingStruct.priceMax<<MPOS_PRICEMAX;
-            _listingData |= _listingStruct.priceDrift<<MPOS_DRIFT;
-
-            // Save to storage
-            _tokenListing[_tokenId] = _listingData;
-    }
-
     function _pay(uint256 _value) 
         private {
             if (msg.value != _value) {
@@ -120,8 +101,8 @@ contract C9Market is IC9Market, C9OwnerControl {
     // >>>>>> MARKET FUNCTIONS
 
     /**
-     * @dev Activates a listing if not activated. This is far cheaper 
-     * than deleting and listing again, and also slightly cheaper than 
+     * @dev Activates a listing if not activated. This is cheaper 
+     * than deleting and relisting, and also slightly cheaper than 
      * using the update method.
      */
     function activate(uint256 _tokenId)
@@ -140,7 +121,7 @@ contract C9Market is IC9Market, C9OwnerControl {
     }
 
     /*
-     * @dev Activate tokens that are deactivated.
+     * @dev Activate batch version.
      */
     function activateBatch(uint256[] calldata _tokenId)
         external
@@ -148,28 +129,6 @@ contract C9Market is IC9Market, C9OwnerControl {
             uint256 _batchSize = _tokenId.length;
             for (uint256 i; i<_batchSize;) {
                 activate(_tokenId[i]);
-                unchecked {++i;}
-            }
-    }
-
-    /**
-     * @dev Removes token from marketplace.
-     */
-    function cancel(uint256 _tokenId)
-        public
-        listingExists(_tokenId) {
-            delete _tokenListing[_tokenId];
-    }
-
-    /*
-     * @dev Cancel token listings.
-     */
-    function cancelBatch(uint256[] calldata _tokenId)
-        public
-        onlyRole(DEFAULT_ADMIN_ROLE) {
-            uint256 _batchSize = _tokenId.length;
-            for (uint256 i; i<_batchSize;) {
-                cancel(_tokenId[i]);
                 unchecked {++i;}
             }
     }
@@ -217,21 +176,41 @@ contract C9Market is IC9Market, C9OwnerControl {
             return _listed;
     }
 
+    function _list(ListingStruct calldata _listingStruct)
+        private {
+            uint256 _tokenId = _listingStruct.tokenId;
+            uint256 _listingPriceMin = _listingStruct.priceMin;
+            if (_listingPriceMin < _floorPrice) {
+                revert MinPriceTooLow(_tokenId, _floorPrice, _listingPriceMin);
+            }
+
+            // Create the packed listing
+            uint256 _listingData;
+            _listingData |= _listingStruct.active<<MPOS_ACTIVE;
+            _listingData |= block.timestamp<<MPOS_TIMESTAMP;
+            _listingData |= _listingPriceMin<<MPOS_PRICEMIN;
+            _listingData |= _listingStruct.priceMax<<MPOS_PRICEMAX;
+            _listingData |= _listingStruct.priceDrift<<MPOS_DRIFT;
+
+            // Save to storage
+            _tokenListing[_tokenId] = _listingData;
+    }
+
     /**
      * Add a token to the marketplace.
      */
     function list(ListingStruct calldata _listingStruct)
         public {
-            uint256 _tokenId = _listingStruct.tokenId;
             // This adds about 5k cost per listing, not worth including
             // address _tokenOwner = C9Token(contractToken).ownerOf(_tokenId);
             // if (msg.sender != _tokenOwner) {
             //     revert Unauthorized();
             // }
+            uint256 _tokenId = _listingStruct.tokenId;
             if (_tokenListing[_tokenId] != 0) {
                 revert ListingAlreadyExists(_tokenId);
             }
-            _createListing(_listingStruct);
+            _list(_listingStruct);
     }
 
     /*
@@ -248,21 +227,17 @@ contract C9Market is IC9Market, C9OwnerControl {
     }
 
     /**
-     * Function that handles purchase. Amount in ETH is calculated, 
-     * user must send and then token is sent to user.
-     * The token's contract address must have this address approved 
-     * to make token transfers from it.
-     * Note: frontend will call getTokenUSDPrice, and then 
-     * getTokenWeiPrice from the ETH pricer contract.
+     * Function that handles purchase.
      */
     function purchaseToken(uint256 _tokenId)
+        listingExists(_tokenId)
         notFrozen()
         external payable override {
             uint256 _totalUSDPrice = getTokenUSDPrice(_tokenId);
             uint256 _totalWeiPrice = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_totalUSDPrice);
             _pay(_totalWeiPrice);
             C9Token(contractToken).safeTransferFrom(MINTER_ADDRESS, msg.sender, _tokenId);
-            cancel(_tokenId);
+            _remove(_tokenId);
             emit Purchase(msg.sender, _tokenId, _totalUSDPrice);
     }
 
@@ -270,15 +245,47 @@ contract C9Market is IC9Market, C9OwnerControl {
         notFrozen()
         external payable override {
             uint256 _totalUSDPrice = getTokenUSDPrice(_tokenId);
+            removeBatch(_tokenId); // listingExists enforced here
             uint256 _totalWeiPrice = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_totalUSDPrice);
             _pay(_totalWeiPrice);
-            // Safe transfer with _checkOnERC721Received (only needs one check for entire batch)
+            // Transfer with _checkOnERC721Received = safeTransfer (only needs one check for entire batch)
             C9Token(contractToken).transferFromBatch(MINTER_ADDRESS, msg.sender, _tokenId);
             if (!_checkOnERC721Received(MINTER_ADDRESS, msg.sender, _tokenId[0], "")) {
                 revert NonERC721Receiver();
             }
-            cancelBatch(_tokenId);
             emit PurchaseBatch(msg.sender, _tokenId, _totalUSDPrice);
+    }
+
+    /**
+     * @dev Removes token from marketplace.
+     * This internal method does not do a listingExists
+     * check.
+     */
+    function _remove(uint256 _tokenId)
+        private {
+            delete _tokenListing[_tokenId];
+    }
+
+    /**
+     * @dev Removes token from marketplace.
+     */
+    function remove(uint256 _tokenId)
+        public
+        listingExists(_tokenId) {
+            _remove(_tokenId);
+    }
+
+    /*
+     * @dev Cancel batch version.
+     */
+    function removeBatch(uint256[] calldata _tokenId)
+        public
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            uint256 _batchSize = _tokenId.length;
+            for (uint256 i; i<_batchSize;) {
+                remove(_tokenId[i]);
+                unchecked {++i;}
+            }
     }
 
     /*
@@ -314,7 +321,7 @@ contract C9Market is IC9Market, C9OwnerControl {
     function update(ListingStruct calldata _listingStruct)
         public
         listingExists(_listingStruct.tokenId) {
-            _createListing(_listingStruct);
+            _list(_listingStruct);
     }
 
     /*
@@ -337,7 +344,6 @@ contract C9Market is IC9Market, C9OwnerControl {
      */
     function getListingData(uint256 _tokenId)
         public view
-        listingExists(_tokenId)
         returns (
             uint256 active,
             uint256 timestamp,
