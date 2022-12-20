@@ -471,7 +471,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             uint256 __mintId;
             unchecked {__mintId = _mintId[_edition]+1;}
             if (_input.mintid != 0) {
-                __mintId == _input.mintid;
+                __mintId = _input.mintid;
             }
             else {
                 _mintId[_edition] = uint16(__mintId);
