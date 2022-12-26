@@ -11,24 +11,14 @@ import "@openzeppelin/contracts/utils/Context.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
 
-error ApproveToCaller(); //0xb06307db
-error CallerNotOwnerOrApproved(); //0x8c11f105
-error InvalidToken(uint256 tokenId); //0x925d6b18
-error NonERC721Receiver(); //0x80526d0c
-error OwnerAlreadyApproved(); //0x08fb3828
-error OwnerIndexOOB(uint256 maxIndex, uint256 received); //0xc643a750
-error TokenAlreadyMinted(uint256 tokenId); //0x8b474e54
-error TokenEnumIndexOOB(uint256 maxIndex, uint256 received); //0x25601f6d
-error TransferFromToSame(); //0x2f2bdfd9
-error TransferFromIncorrectOwner(address expected, address received); //0xc0eeaa61
-error ZeroAddressInvalid(); //0x14c880ca
+import "./IERC721opt.sol";
 
 /**
  * @dev Implementation of https://eips.ethereum.org/EIPS/eip-721[ERC721] Non-Fungible Token Standard, including
  * the Metadata extension, but not including the Enumerable extension, which is available separately as
  * {ERC721Enumerable}.
  */
-contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable {
+contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable, IERC721opt {
     using Address for address;
     using Strings for uint256;
 
@@ -669,4 +659,63 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable 
         uint256 firstTokenId,
         uint256 batchSize
     ) internal virtual {}
+
+    /**
+     * @dev Collect9 - custom batch functions
+     */
+    function _transferBatch(address from, address to, uint256[] calldata _tokenId)
+        private {
+            uint256 _batchSize = _tokenId.length;
+            if (_batchSize > 64) {
+                revert BatchSizeTooLarge(64, _batchSize);
+            }
+            for (uint256 i; i<_batchSize;) {
+                transferFrom(from, to, _tokenId[i]);
+                unchecked {++i;}
+            }
+    }
+
+    /**
+     * @dev Allows safe batch transfer to make is cheaper to move multiple NFTs 
+     * between two addresses. Max batch size is 64.
+     */
+    function safeTransferFromBatch(address from, address to, uint256[] calldata _tokenId)
+        external {
+            _transferBatch(from, to, _tokenId);
+            // Only need to check one time
+            if (!_checkOnERC721Received(from, to, _tokenId[0], "")) {
+                revert NonERC721Receiver();
+            }
+    }
+
+    /**
+     * @dev Allows batch transfer to many addresses at once. This will save
+     * around ~25% gas with 4 or more addresses sent to at once. This only has a 
+     * safe transfer version to prevent accidents of sending to a 
+     * non-ERC721 receiver.
+     */
+    function splitTransferFrom(address from, address[] calldata to, uint256[] calldata _tokenId)
+        external {
+            uint256 _batchSize = _tokenId.length;
+            if (_batchSize > 64) {
+                revert BatchSizeTooLarge(64, _batchSize);
+            }
+            uint256 _addressBookSize = to.length;
+            if (_addressBookSize != _batchSize) {
+                revert SplitTransferSizeMismatch(_addressBookSize, _batchSize);
+            }
+            for (uint256 i; i<_batchSize;) {
+                _safeTransfer(from, to[i], _tokenId[i], "");
+                unchecked {++i;}
+            }
+    }
+
+    /**
+     * @dev Allows batch transfer to make is cheaper to move multiple NFTs 
+     * between two addresses. Max batch size is 64.
+     */
+    function transferFromBatch(address from, address to, uint256[] calldata _tokenId)
+        external {
+            _transferBatch(from, to, _tokenId);
+    }
 }

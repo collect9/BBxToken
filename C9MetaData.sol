@@ -1,14 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
+import "./abstract/C9Shared.sol";
+import "./abstract/C9Struct.sol";
+import "./interfaces/IC9MetaData.sol";
 import "./utils/Helpers.sol";
-import "./C9Shared.sol";
-import "./C9Struct.sol";
-
-
-interface IC9MetaData {
-    function metaNameDesc(uint256 _uTokenData, string calldata _name) external view returns(bytes memory);
-    function metaAttributes(uint256 _uTokenData) external view returns (bytes memory b);
-}
 
 contract C9MetaData is IC9MetaData, C9Shared, C9Struct {
     /**

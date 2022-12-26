@@ -1,29 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
 import "./C9OwnerControl.sol";
-import "./C9Registrar.sol";
-import "./C9Token.sol";
-import "./utils/EthPricer.sol";
-
-uint256 constant RPOS_STEP = 0;
-uint256 constant RPOS_CODE = 8;
-uint256 constant RPOS_BATCHSIZE = 24;
-uint256 constant RPOS_TOKEN1 = 32;
-uint256 constant UINT_SIZE = 24;
-uint256 constant MAX_BATCH_SIZE = 9;
-
-error AddressToFarInProcess(uint256 minStep, uint256 received); //0xb078ecc8
-error CancelRemainder(uint256 remainingBatch); //0x2c9f7f1d
-error SizeMismatch(uint256 maxSize, uint256 received); //0x97ce59d2
-
-interface IC9Redeemer {
-    function add(address _tokenOwner, uint256[] calldata _tokenId) external;
-    function cancel(address _tokenOwner) external returns(uint256 _data);
-    function getMinRedeemUSD(uint256 _batchSize) external view returns(uint256);
-    function getRedeemerInfo(address _tokenOwner) external view returns(uint256[] memory _info);
-    function remove(address _tokenOwner, uint256[] calldata _tokenId) external;
-    function start(address _tokenOwner, uint256[] calldata _tokenId) external;
-}
+import "./interfaces/IC9Redeemer24.sol";
+import "./interfaces/IC9Registrar.sol";
+import "./interfaces/IC9Token.sol";
+import "./utils/IC9EthPriceFeed.sol";
 
 contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     bytes32 public constant FRONTEND_ROLE = keccak256("FRONTEND_ROLE");
@@ -138,7 +119,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
             uint256 _addBatchSize = _tokenId.length;
             uint256 _newBatchSize = _addBatchSize+_batchSize;
             if (_newBatchSize > MAX_BATCH_SIZE) {
-                revert BatchSizeTooLarge(MAX_BATCH_SIZE, _newBatchSize);
+                revert RedeemerBatchSizeTooLarge(MAX_BATCH_SIZE, _newBatchSize);
             }
             _data = _setTokenParam(
                 _data,
@@ -262,7 +243,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
                 revert ZeroValue();
             }
             if (_batchSize > MAX_BATCH_SIZE) {
-                revert BatchSizeTooLarge(MAX_BATCH_SIZE, _batchSize);
+                revert RedeemerBatchSizeTooLarge(MAX_BATCH_SIZE, _batchSize);
             }
             uint256 _n = _batchSize-1;
             uint256 _bps = _n == 0 ? 100 : 98**_n / 10**(_n*2-2);
@@ -305,7 +286,7 @@ contract C9Redeemer is IC9Redeemer, C9OwnerControl {
         notFrozen() {
             uint256 _batchSize = _tokenId.length;
             if (_batchSize > MAX_BATCH_SIZE) {
-                revert BatchSizeTooLarge(MAX_BATCH_SIZE, _batchSize);
+                revert RedeemerBatchSizeTooLarge(MAX_BATCH_SIZE, _batchSize);
             }
             uint256 _step = IC9Registrar(contractRegistrar).isRegistered(_tokenOwner) ? 4 : 2;
             uint256 _code;

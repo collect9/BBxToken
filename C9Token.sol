@@ -2,54 +2,16 @@
 pragma solidity >=0.8.17;
 import "@openzeppelin/contracts/interfaces/IERC2981.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
-import "./utils/ERC721opt.sol";
 
-import "./C9MetaData.sol";
 import "./C9OwnerControl.sol";
-import "./C9Redeemer24.sol";
-import "./C9Struct.sol";
-import "./C9SVG.sol";
-
+import "./abstract/C9Struct.sol";
+import "./interfaces/IC9MetaData.sol";
+import "./interfaces/IC9SVG.sol";
+import "./interfaces/IC9Redeemer24.sol";
+import "./interfaces/IC9Token.sol";
 import "./utils/Base64.sol";
+import "./utils/ERC721opt.sol";
 import "./utils/Helpers.sol";
-
-error AddressAlreadySet(); //0xf62c2d82
-error BatchSizeTooLarge(uint256 maxSize, uint256 received); //0x01df19f6
-error CallerNotContract(); //0xa85366a7
-error EditionOverflow(uint256 received); //0x5723b5d1
-error IncorrectTokenValidity(uint256 expected, uint256 received); //0xe8c07318
-error InvalidVId(uint256 received); //0xcf8cffb0
-error NoOwnerSupply(address sender); //0x973d81af
-error PeriodTooLong(uint256 maxPeriod, uint256 received); //0xd36b55de
-error RoyaltiesAlreadySet(); //0xe258016d
-error RoyaltyTooHigh(); //0xc2b03beb
-error ValueAlreadySet(); //0x30a4fcdc
-error URIAlreadySet(); //0x82ccdaca
-error URIMissingEndSlash(); //0x21edfe88
-error TokenAlreadyUpgraded(uint256 tokenId); //0xb4aab4a3
-error TokenIsDead(uint256 tokenId); //0xf87e5785
-error TokenIsLocked(uint256 tokenId); //0xdc8fb341
-error TokenNotLocked(uint256 tokenId); //0x5ef77436
-error TokenNotUpgraded(uint256 tokenId); //0x14388074
-error TokenPreRedeemable(uint256 tokenId); //0x04df46e6
-error Unauthorized(); //0x82b42900
-error ZeroEdition(); //0x2c0dcd39
-error ZeroMintId(); //0x1ed046c6
-error ZeroValue(); //0x7c946ed7
-error ZeroTokenId(); //0x1fed7fc5
-
-interface IC9Token {
-    function getTokenParams(uint256 _tokenId) external view returns(uint256[18] memory params);
-    function ownerOf(uint256 _tokenId) external view returns(address);
-    function redeemAdd(uint256[] calldata _tokenIds) external;
-    function redeemCancel() external;
-    function redeemFinish(uint256 _redeemerData) external;
-    function redeemRemove(uint256[] calldata _tokenIds) external;
-    function redeemStart(uint256[] calldata _tokenIds) external;
-    function preRedeemable(uint256 _tokenId) external view returns(bool);
-    function setTokenUpgraded(uint256 _tokenId) external;
-    function setTokenValidity(uint256 _tokenId, uint256 _vId) external;
-}
 
 contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     /**
@@ -1173,22 +1135,6 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                     )
                 )
             );
-    }
-
-    /**
-     * @dev Allows batch transfer to make is cheaper to move multiple NFTs 
-     * between two addresses. Batch size is limited to 32.
-     */
-    function transferFromBatch(address from, address to, uint256[] calldata _tokenId)
-        external {
-            uint256 _batchSize = _tokenId.length;
-            if (_batchSize > 32) {
-                revert BatchSizeTooLarge(32, _batchSize);
-            }
-            for (uint256 i; i<_batchSize;) {
-                transferFrom(from, to, _tokenId[i]);
-                unchecked {++i;}
-            }
     }
 
     /**

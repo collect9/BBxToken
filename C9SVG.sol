@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
-import "./C9Shared.sol";
-import "./C9Struct.sol";
-import "./C9Token.sol";
-import "./utils/Helpers.sol";
+import "./interfaces/IC9SVG.sol";
+import "./interfaces/IC9Token.sol";
 
-interface IC9SVG {
-    function returnSVG(address _address, uint256 _uTokenData, string calldata _sTokenData) external view returns(string memory);
-}
+import "./abstract/C9Shared.sol";
+import "./abstract/C9Struct.sol";
+import "./utils/Helpers.sol";
 
 contract C9SVG is IC9SVG, C9Shared, C9Struct {
     /**
