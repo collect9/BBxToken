@@ -27,7 +27,6 @@ error C9ZeroAddressInvalid(); //0x7c7fa4fb
 
 // Market contract
 error InputSizeMismatch(uint256 tokenIdSize, uint256 listingPriceSize, uint256 sigSize);
-error InvalidSaleFraction(uint256 received);
 error InvalidSigner(address expected, address received);
 
 // Redeemer
@@ -71,8 +70,3 @@ error ZeroEdition(); //0x2c0dcd39
 error ZeroMintId(); //0x1ed046c6
 error ZeroValue(); //0x7c946ed7
 error ZeroTokenId(); //0x1fed7fc5
-
-
-
-
-

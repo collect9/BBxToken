@@ -148,7 +148,7 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
      * @dev Checks to see if caller is the token owner.
      */ 
     modifier isOwner(uint256 _tokenId) {
-        address _tokenOwner = ownerOf(_tokenId);
+        address _tokenOwner = _ownerOf(_tokenId);
         if (msg.sender != _tokenOwner) {
             revert Unauthorized();
         }
@@ -691,16 +691,6 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
             }
     }
 
-    /**
-     * @dev Public override so this can be used within contract.
-     */
-    function ownerOf(uint256 _tokenId)
-        public view
-        override(ERC721, IC9Token)
-        returns (address) {
-            return super.ownerOf(_tokenId);
-    }
-
     //>>>>>>> REDEEMER FUNCTIONS START
 
     /*
@@ -715,7 +705,7 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
             uint256 _tokenData;
             for (uint256 i; i<_batchSize;) {
                 _tokenId = _tokenIds[i];
-                _tokenOwner = ownerOf(_tokenId);
+                _tokenOwner = _ownerOf(_tokenId);
                 if (msg.sender != _tokenOwner) {
                     revert Unauthorized();
                 }
@@ -803,7 +793,7 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
             uint256 _tokenId;
             for (uint256 i; i<_batchSize;) {
                 _tokenId = uint256(uint24(_redeemerData>>_tokenOffset));
-                if (msg.sender != ownerOf(_tokenId)) {
+                if (msg.sender != _ownerOf(_tokenId)) {
                     revert Unauthorized();
                 }
                 _unlockToken(_tokenId);
@@ -834,7 +824,7 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
                 }
             }
             emit RedemptionFinish(
-                ownerOf(uint256(uint24(_redeemerData>>RPOS_TOKEN1))),
+                _ownerOf(uint256(uint24(_redeemerData>>RPOS_TOKEN1))),
                 _batchSize
             );
     }
@@ -850,7 +840,7 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
             uint256 _tokenId;
             for (uint256 i; i<_batchSize;) {
                 _tokenId = _tokenIds[i];
-                if (msg.sender != ownerOf(_tokenId)) {
+                if (msg.sender != _ownerOf(_tokenId)) {
                     revert Unauthorized();
                 }
                 _unlockToken(_tokenId);
@@ -1069,7 +1059,7 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
                 UPGRADED,
                 BOOL_MASK
             );
-            emit TokenUpgraded(ownerOf(_tokenId), _tokenId);
+            emit TokenUpgraded(_ownerOf(_tokenId), _tokenId);
     }
 
     /**
@@ -1082,7 +1072,7 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
         tokenExists(_tokenId)
         returns (string memory) {
             return IC9SVG(contractSVG).returnSVG(
-                ownerOf(_tokenId),
+                _ownerOf(_tokenId),
                 _uTokenData[_tokenId],
                 _sTokenData[_tokenId]
             );
@@ -1099,7 +1089,7 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
      * still displays the cached on-chain version.
      */
     function tokenURI(uint256 _tokenId)
-        public view override
+        public view override(ERC721, IERC721Metadata)
         tokenExists(_tokenId)
         returns (string memory) {
             uint256 _tokenData = _uTokenData[_tokenId];
