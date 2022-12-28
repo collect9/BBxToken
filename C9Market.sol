@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
 import "./C9OwnerControl.sol";
-import "./utils/interfaces/IC9ERC721.sol";
+import "./interfaces/IC9Token.sol";
 import "./utils/interfaces/IC9EthPriceFeed.sol";
 
 address constant MINTER_ADDRESS = 0x8B525b744C73e46dB14d0E1ACD8842b3071ff63e;
 
 contract C9Market is C9OwnerControl {
 
-    uint96 private _saleFraction = 100;
     address private contractPricer;
     address private immutable contractToken;
 
@@ -77,11 +76,8 @@ contract C9Market is C9OwnerControl {
         notFrozen() {
             _checkSigner(_tokenId, _listingPrice, sig);
             uint256 _totalUSDPrice = _listingPrice;
-            if (_saleFraction < 100) {
-                _totalUSDPrice = _totalUSDPrice * _saleFraction / 100;
-            }
             _checkPayment(_totalUSDPrice);
-            IC9ERC721(contractToken).safeTransferFrom(MINTER_ADDRESS, msg.sender, _tokenId);
+            IC9Token(contractToken).safeTransferFrom(MINTER_ADDRESS, msg.sender, _tokenId);
             emit Purchase(msg.sender, _totalUSDPrice, _tokenId);
     }
 
@@ -104,14 +100,9 @@ contract C9Market is C9OwnerControl {
                 emit Purchase(msg.sender, _tokenId[i], _listingPrice[i]);
                 unchecked {++i;}
             }
-
-            if (_saleFraction < 100) {
-                _totalUSDPrice = _totalUSDPrice * _saleFraction / 100;
-            }
-
             _checkPayment(_totalUSDPrice);
 
-            IC9ERC721(contractToken).safeTransferFromBatch(MINTER_ADDRESS, msg.sender, _tokenId);
+            IC9Token(contractToken).safeTransferFromBatch(MINTER_ADDRESS, msg.sender, _tokenId);
             emit PurchaseBatch(msg.sender, _totalUSDPrice, _tokenId);
     }
 
@@ -146,20 +137,4 @@ contract C9Market is C9OwnerControl {
 
             return (v, r, s);
     }
-
-    /**
-     * Sets the min listing floor price.
-     */
-    function setSaleFraction(uint256 _newSaleFraction)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (_newSaleFraction == _saleFraction) {
-                revert ValueAlreadySet();
-            }
-            if (_saleFraction > 100 || _saleFraction < 30) {
-                revert InvalidSaleFraction(_newSaleFraction);
-            } 
-            _saleFraction = uint96(_newSaleFraction);
-    }
-
 }
