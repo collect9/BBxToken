@@ -2,6 +2,8 @@
 pragma solidity >=0.8.17;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
+import "./abstract/C9Errors.sol";
+
 /**
 * This contract is meant to act as a combination of 
 * AccessControl and Ownable (2 step).
@@ -22,14 +24,6 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 * NOTE: If multiple addresses are granted DEFAULT_ADMIN_ROLE, 
 * they cannot revoke owner. Only owner can renounce itself.
 */
-
-error ActionNotConfirmed(); //0xacdb9fab
-error BoolAlreadySet(); //0xf04e4fd9
-error ContractFrozen(); //0x4051e961
-error NoRoleOnAccount(); //0xb1a60829
-error NoTransferPending(); //0x9c6b0866
-error C9Unauthorized(); //0xa020ddad
-error C9ZeroAddressInvalid(); //0x7c7fa4fb
 
 abstract contract C9OwnerControl is AccessControl {
     address public owner;

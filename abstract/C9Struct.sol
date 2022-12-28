@@ -2,17 +2,29 @@
 pragma solidity >=0.8.17;
 
 abstract contract C9Struct {
-    
+    uint256 constant BOOL_MASK = 1;
+
+    // Validity
     uint256 constant VALID = 0;
     uint256 constant ROYALTIES = 1;
     uint256 constant INACTIVE = 2;
     uint256 constant OTHER = 3;
     uint256 constant REDEEMED = 4;
 
+    // Upgraded
     uint256 constant UPGRADED = 1;
 
+    // Locked
     uint256 constant UNLOCKED = 0;
     uint256 constant LOCKED = 1;
+
+    // Displays
+    uint256 constant ONCHAIN_SVG = 0;
+    uint256 constant EXTERNAL_IMG = 1;
+
+    // URIs
+    uint256 constant URI0 = 0;
+    uint256 constant URI1 = 1;
 
     struct TokenData {
         uint256 upgraded;
@@ -35,46 +47,26 @@ abstract contract C9Struct {
         uint256 mintstamp; // Minting timestamp
         string sData;
     }
-    
-    enum TokenProps {
-        UPGRADED,
-        DISPLAY,
-        LOCKED,
-        VALIDITY,
-        EDITION,
-        CNTRYTAG,
-        CNTRYTUSH,
-        GENTAG,
-        GENTUSH,
-        MARKERTUSH,
-        SPECIAL,
-        RARITYTIER,
-        MINTID,
-        ROYALTY,
-        ROYALTIESDUE,
-        TOKENID,
-        VALIDITYSTAMP,
-        MINTSTAMP
-    }
 
     uint256 constant POS_UPGRADED = 0;
-    uint256 constant POS_DISPLAY = 8;
-    uint256 constant POS_LOCKED = 16;
-    uint256 constant POS_VALIDITY = 24;
-    uint256 constant POS_EDITION = 32;
-    uint256 constant POS_CNTRYTAG = 40;
-    uint256 constant POS_CNTRYTUSH = 48;
-    uint256 constant POS_GENTAG = 56;
-    uint256 constant POS_GENTUSH = 64;
-    uint256 constant POS_MARKERTUSH = 72;
-    uint256 constant POS_SPECIAL = 80;
-    uint256 constant POS_RARITYTIER = 88;
-    uint256 constant POS_MINTID = 96;
-    uint256 constant POS_ROYALTY = 112;
-    uint256 constant POS_ROYALTIESDUE = 128;
-    uint256 constant POS_TOKENID = 144;
-    uint256 constant POS_VALIDITYSTAMP = 176;
-    uint256 constant POS_MINTSTAMP = 216;
+    uint256 constant POS_DISPLAY = 1;
+    uint256 constant POS_LOCKED = 2;
+    uint256 constant POS_VALIDITY = 3;
+    uint256 constant POS_EDITION = 11;
+    uint256 constant POS_CNTRYTAG = 19;
+    uint256 constant POS_CNTRYTUSH = 27;
+    uint256 constant POS_GENTAG = 35;
+    uint256 constant POS_GENTUSH = 43;
+    uint256 constant POS_MARKERTUSH = 51;
+    uint256 constant POS_SPECIAL = 59;
+    uint256 constant POS_RARITYTIER = 67;
+    uint256 constant POS_MINTID = 75;
+    uint256 constant POS_ROYALTY = 91;
+    uint256 constant POS_ROYALTIESDUE = 107;
+    uint256 constant POS_TOKENID = 123;
+    uint256 constant POS_VALIDITYSTAMP = 155;
+    uint256 constant POS_MINTSTAMP = 195;
+    uint256 constant POS_RESERVED = 235;
 
     /*
      * @dev Returns the indices that split sTokenData into 

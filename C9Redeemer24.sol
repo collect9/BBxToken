@@ -4,7 +4,7 @@ import "./C9OwnerControl.sol";
 import "./interfaces/IC9Redeemer24.sol";
 import "./interfaces/IC9Registrar.sol";
 import "./interfaces/IC9Token.sol";
-import "./utils/IC9EthPriceFeed.sol";
+import "./utils/interfaces/IC9EthPriceFeed.sol";
 
 contract C9Redeemer is IC9Redeemer, C9OwnerControl {
     bytes32 public constant FRONTEND_ROLE = keccak256("FRONTEND_ROLE");

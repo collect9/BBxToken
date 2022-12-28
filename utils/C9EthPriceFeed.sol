@@ -2,7 +2,9 @@
 pragma solidity >=0.8.17;
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "./IC9EthPriceFeed.sol";
+
+import "./../abstract/C9Errors.sol";
+import "./interfaces/IC9EthPriceFeed.sol";
 
 contract C9EthPriceFeed is IC9EthPriceFeed, Ownable {
     AggregatorV3Interface private priceFeed;

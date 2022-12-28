@@ -3,7 +3,7 @@ pragma solidity >=0.8.17;
 import "./C9OwnerControl.sol";
 import "./abstract/C9Struct.sol";
 import "./interfaces/IC9Token.sol";
-import "./utils/EthPricer.sol";
+import "./utils/interfaces/IC9EthPriceFeed.sol";
 
 contract C9ValidityHandler is C9Struct, C9OwnerControl {
 

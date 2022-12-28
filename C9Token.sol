@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
-import "@openzeppelin/contracts/interfaces/IERC2981.sol";
-import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
-
 import "./C9OwnerControl.sol";
 import "./abstract/C9Struct.sol";
 import "./interfaces/IC9MetaData.sol";
@@ -10,14 +7,15 @@ import "./interfaces/IC9SVG.sol";
 import "./interfaces/IC9Redeemer24.sol";
 import "./interfaces/IC9Token.sol";
 import "./utils/Base64.sol";
-import "./utils/ERC721opt.sol";
+import "./utils/C9ERC721.sol";
 import "./utils/Helpers.sol";
 
-contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
+contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
     /**
      * @dev Contract access roles.
      */
     bytes32 public constant REDEEMER_ROLE = keccak256("REDEEMER_ROLE");
+    bytes32 public constant RESERVED_ROLE = keccak256("RESERVED_ROLE");
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
     bytes32 public constant VALIDITY_ROLE = keccak256("VALIDITY_ROLE");
 
@@ -207,7 +205,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         override(ERC721)
         notFrozen() {
             uint256 _tokenData = _uTokenData[tokenId];
-            if (uint256(uint8(_tokenData>>POS_LOCKED)) == LOCKED) {
+            if (_tokenData>>POS_LOCKED & BOOL_MASK == LOCKED) {
                 revert TokenIsLocked(tokenId);
             }
             // Adds ~3K extra gas to tx if true
@@ -399,7 +397,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                     _input.gentush,
                     _input.markertush,
                     _input.special,
-                    _input.sData[0:_splitIndex]
+                    _input.sData[:_splitIndex]
                 )
             );
     }
@@ -522,7 +520,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                     _tokenData,
                     POS_LOCKED,
                     LOCKED,
-                    type(uint8).max
+                    BOOL_MASK
                 );
             }
             _uTokenData[_tokenId] = _tokenData;
@@ -537,14 +535,14 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     function _unlockToken(uint256 _tokenId)
         private {
             uint256 _tokenData = _uTokenData[_tokenId];
-            if (uint256(uint8(_tokenData>>POS_LOCKED)) == UNLOCKED) {
+            if (_tokenData>>POS_LOCKED & BOOL_MASK == UNLOCKED) {
                 revert TokenNotLocked(_tokenId);
             }
             _tokenData = _setTokenParam(
                 _tokenData,
                 POS_LOCKED,
                 UNLOCKED,
-                type(uint8).max
+                BOOL_MASK
             );
             _uTokenData[_tokenId] = _tokenData;
     }
@@ -656,11 +654,11 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
      */
     function getTokenParams(uint256 _tokenId)
         external view override
-        returns(uint256[18] memory params) {
+        returns(uint256[19] memory params) {
             uint256 _packedToken = _uTokenData[_tokenId];
-            params[0] = uint256(uint8(_packedToken>>POS_UPGRADED));
-            params[1] = uint256(uint8(_packedToken>>POS_DISPLAY));
-            params[2] = uint256(uint8(_packedToken>>POS_LOCKED));
+            params[0] = _packedToken>>POS_UPGRADED & BOOL_MASK;
+            params[1] = _packedToken>>POS_DISPLAY & BOOL_MASK;
+            params[2] = _packedToken>>POS_LOCKED & BOOL_MASK;
             params[3] = uint256(uint8(_packedToken>>POS_VALIDITY));
             params[4] = uint256(uint8(_packedToken>>POS_EDITION));
             params[5] = uint256(uint8(_packedToken>>POS_CNTRYTAG));
@@ -676,6 +674,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             params[15] = uint256(uint32(_packedToken>>POS_TOKENID));
             params[16] = uint256(uint40(_packedToken>>POS_VALIDITYSTAMP));
             params[17] = uint256(uint40(_packedToken>>POS_MINTSTAMP));
+            params[18] = uint256(_packedToken>>POS_RESERVED);
     }
 
     /**
@@ -693,7 +692,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
     }
 
     /**
-     * @dev To add to the interface for other contracts.
+     * @dev Public override so this can be used within contract.
      */
     function ownerOf(uint256 _tokenId)
         public view
@@ -751,7 +750,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                 }
 
                 // If valid and locked, can only be in redeemer.
-                if (uint256(uint8(_tokenData>>POS_LOCKED)) == LOCKED) {
+                if (_tokenData>>POS_LOCKED & BOOL_MASK == LOCKED) {
                     revert TokenIsLocked(_tokenId);
                 }
                 
@@ -760,7 +759,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
                    _tokenData,
                     POS_LOCKED,
                     LOCKED,
-                    type(uint8).max
+                    BOOL_MASK
                 );
 
                 // Save token data back to storage.
@@ -1002,20 +1001,20 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         external
         isOwner(_tokenId) {
             uint256 _tokenData = _uTokenData[_tokenId];
-            uint256 _val = uint256(uint8(_tokenData>>POS_UPGRADED));
-            if (_val != 1) {
+            uint256 _val = _tokenData>>POS_UPGRADED & BOOL_MASK;
+            if (_val != UPGRADED) {
                 revert TokenNotUpgraded(_tokenId);
             }
-            _val = uint256(uint8(_tokenData>>POS_DISPLAY));
+            _val = _tokenData>>POS_DISPLAY & BOOL_MASK;
             if (Helpers.uintToBool(_val) == _flag) {
                 revert BoolAlreadySet();
             }
-            uint256 _display = _flag ? 1 : 0;
+            uint256 _display = _flag ? EXTERNAL_IMG : ONCHAIN_SVG;
             _uTokenData[_tokenId] = _setTokenParam(
                 _tokenData,
                 POS_DISPLAY,
                 _display,
-                type(uint8).max
+                BOOL_MASK
             );
     }
 
@@ -1040,8 +1039,8 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         isContract()
         tokenExists(_tokenId)
         notDead(_tokenId) {
-            if (_vId == 4 || _vId == 5 || _vId > 8) {
-                // 6, 7, 8 are valid dead ids for active ids 1, 2, 3
+            if (_vId == REDEEMED) {
+                // 6, 7, 8 are dead ids for invalid active ids 1, 2, 3
                 revert InvalidVId(_vId);
             }
             uint256 _currentVId = uint256(uint8(_uTokenData[_tokenId]>>POS_VALIDITY));
@@ -1061,14 +1060,14 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         tokenExists(_tokenId)
         notDead(_tokenId) {
             uint256 _tokenData = _uTokenData[_tokenId];
-            if (uint256(uint8(_tokenData>>POS_UPGRADED)) == UPGRADED) {
+            if (_tokenData>>POS_UPGRADED & BOOL_MASK == UPGRADED) {
                 revert TokenAlreadyUpgraded(_tokenId);
             }
             _uTokenData[_tokenId] = _setTokenParam(
                 _tokenData,
                 POS_UPGRADED,
                 UPGRADED,
-                type(uint8).max
+                BOOL_MASK
             );
             emit TokenUpgraded(ownerOf(_tokenId), _tokenId);
     }
@@ -1104,7 +1103,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         tokenExists(_tokenId)
         returns (string memory) {
             uint256 _tokenData = _uTokenData[_tokenId];
-            bool _externalView = uint256(uint8(_tokenData>>POS_DISPLAY)) == 1;
+            bool _externalView = _tokenData>>POS_DISPLAY & BOOL_MASK == EXTERNAL_IMG;
             bytes memory image;
             if (svgOnly || !_externalView) {
                 // Onchain SVG
@@ -1115,7 +1114,7 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
             }
             else {
                 // Token upgraded, get view URI based on if redeemed or not
-                uint256 _viewIdx = uint256(uint8(_tokenData>>POS_VALIDITY)) >= REDEEMED ? 1 : 0;
+                uint256 _viewIdx = uint256(uint8(_tokenData>>POS_VALIDITY)) >= REDEEMED ? URI1 : URI0;
                 image = abi.encodePacked(
                     ',"image":"',
                     _baseURI[_viewIdx],
@@ -1147,5 +1146,25 @@ contract C9Token is IC9Token, C9Struct, ERC721, C9OwnerControl, IERC2981 {
         onlyRole(DEFAULT_ADMIN_ROLE) {
             confirm = false;
             super.__destroy(_receiver, confirm);
-        }
+    }
+
+    /**
+     * @dev Sets the data for the reserved (unused at mint) 
+     * space. Since this storage is already paid for, it may
+     * be used for expansion features that may be available 
+     * later. Such features will only be available to 
+     * external contracts, as this contract will have no
+     * built-in parsing.
+     * 21 bits remain in the token storage slot.
+     */
+    function __setReserved(uint256 _tokenId, uint256 _data)
+        external
+        onlyRole(RESERVED_ROLE) {
+            _uTokenData[_tokenId] = _setTokenParam(
+                _uTokenData[_tokenId],
+                POS_RESERVED,
+                _data,
+                2097151
+            );
+    }
 }

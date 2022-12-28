@@ -1,24 +1,21 @@
 // SPDX-License-Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.8.0) (token/ERC721/ERC721.sol)
 pragma solidity >=0.8.17;
-
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
-import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
-import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
 
-import "./IERC721opt.sol";
+import "./../abstract/C9Errors.sol";
+import "./interfaces/IC9ERC721.sol";
 
 /**
  * @dev Implementation of https://eips.ethereum.org/EIPS/eip-721[ERC721] Non-Fungible Token Standard, including
  * the Metadata extension, but not including the Enumerable extension, which is available separately as
  * {ERC721Enumerable}.
  */
-contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable, IERC721opt {
+contract ERC721 is Context, ERC165, IC9ERC721 {
     using Address for address;
     using Strings for uint256;
 
@@ -690,11 +687,11 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable,
 
     /**
      * @dev Allows batch transfer to many addresses at once. This will save
-     * around ~25% gas with 4 or more addresses sent to at once. This only has a 
+     * around ~20-25% gas with 4 or more addresses sent to at once. This only has a 
      * safe transfer version to prevent accidents of sending to a 
      * non-ERC721 receiver.
      */
-    function splitTransferFrom(address from, address[] calldata to, uint256[] calldata _tokenId)
+    function safeTransferFromMulti(address from, address[] calldata to, uint256[] calldata _tokenId)
         external {
             uint256 _batchSize = _tokenId.length;
             if (_batchSize > 64) {
@@ -702,7 +699,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC721Enumerable,
             }
             uint256 _addressBookSize = to.length;
             if (_addressBookSize != _batchSize) {
-                revert SplitTransferSizeMismatch(_addressBookSize, _batchSize);
+                revert TransferSizeMismatch(_addressBookSize, _batchSize);
             }
             for (uint256 i; i<_batchSize;) {
                 _safeTransfer(from, to[i], _tokenId[i], "");
