@@ -29,14 +29,12 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Struct {
      * @dev Constructs the json string portion containing the external_url, description, 
      * and name parts.
      */
-    function metaNameDesc(uint256 _uTokenData, string calldata _sTokenData)
+    function metaNameDesc(uint256 _tokenId, uint256 _uTokenData, string calldata _sTokenData)
         external view override
         returns(bytes memory) {
             (uint256 sliceIndex1,) = _getSliceIndices(_sTokenData);
             bytes calldata _name = bytes(_sTokenData[:sliceIndex1]);
-            bytes6 _id = Helpers.tokenIdToBytes(
-                uint256(uint32(_uTokenData>>POS_TOKENID))
-            );
+            bytes6 _id = Helpers.tokenIdToBytes(_tokenId);
             bytes3 _gentag = Helpers.uintToOrdinal(
                 uint256(uint8(_uTokenData>>POS_GENTAG))
             );

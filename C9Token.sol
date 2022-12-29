@@ -7,7 +7,7 @@ import "./interfaces/IC9SVG.sol";
 import "./interfaces/IC9Redeemer24.sol";
 import "./interfaces/IC9Token.sol";
 import "./utils/Base64.sol";
-import "./utils/C9ERC721.sol";
+import "./utils/C9ERC721b.sol";
 import "./utils/Helpers.sol";
 
 contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
@@ -181,9 +181,7 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
      * @dev Checks to see if the tokenId exists.
      */
     modifier tokenExists(uint256 _tokenId) {
-        if (!_exists(_tokenId)) {
-            revert InvalidToken(_tokenId);
-        }
+        _requireMinted(_tokenId);
         _;
     }
 
@@ -422,6 +420,8 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
                         _data = _getPhysicalHash(_input, _edition);
                     }
                     if (!_tokenComboExists[_data]) {
+                        // Store token attribute combo
+                        _tokenComboExists[_data] = true;
                         break;
                     }
                 }
@@ -470,16 +470,12 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
             _packedToken |= __mintId<<POS_MINTID;
             _packedToken |= _input.royalty<<POS_ROYALTY;
             _packedToken |= _input.royaltiesdue<<POS_ROYALTIESDUE;
-            _packedToken |= _tokenId<<POS_TOKENID;
             _packedToken |= _timestamp<<POS_VALIDITYSTAMP;
             _packedToken |= _timestamp<<POS_MINTSTAMP;
             _uTokenData[_tokenId] = _packedToken;
 
             // Store token string data
             _sTokenData[_tokenId] = _input.sData;
-
-            // Store token attribute combo
-            _tokenComboExists[_data] = true;
 
             // Mint token
             _mint(msg.sender, _tokenId);
@@ -654,7 +650,7 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
      */
     function getTokenParams(uint256 _tokenId)
         external view override
-        returns(uint256[19] memory params) {
+        returns(uint256[18] memory params) {
             uint256 _packedToken = _uTokenData[_tokenId];
             params[0] = _packedToken>>POS_UPGRADED & BOOL_MASK;
             params[1] = _packedToken>>POS_DISPLAY & BOOL_MASK;
@@ -671,10 +667,9 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
             params[12] = uint256(uint16(_packedToken>>POS_MINTID));
             params[13] = uint256(uint16(_packedToken>>POS_ROYALTY));
             params[14] = uint256(uint16(_packedToken>>POS_ROYALTIESDUE));
-            params[15] = uint256(uint32(_packedToken>>POS_TOKENID));
-            params[16] = uint256(uint40(_packedToken>>POS_VALIDITYSTAMP));
-            params[17] = uint256(uint40(_packedToken>>POS_MINTSTAMP));
-            params[18] = uint256(_packedToken>>POS_RESERVED);
+            params[15] = uint256(uint40(_packedToken>>POS_VALIDITYSTAMP));
+            params[16] = uint256(uint40(_packedToken>>POS_MINTSTAMP));
+            params[17] = uint256(_packedToken>>POS_RESERVED);
     }
 
     /**
@@ -1073,6 +1068,7 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
         returns (string memory) {
             return IC9SVG(contractSVG).returnSVG(
                 _ownerOf(_tokenId),
+                _tokenId,
                 _uTokenData[_tokenId],
                 _sTokenData[_tokenId]
             );
@@ -1117,7 +1113,7 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
                     'data:application/json;base64,',
                     Base64.encode(
                         abi.encodePacked(
-                            IC9MetaData(contractMeta).metaNameDesc(_tokenData, _sTokenData[_tokenId]),
+                            IC9MetaData(contractMeta).metaNameDesc(_tokenId, _tokenData, _sTokenData[_tokenId]),
                             image,
                             IC9MetaData(contractMeta).metaAttributes(_tokenData)
                         )
@@ -1145,16 +1141,19 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
      * later. Such features will only be available to 
      * external contracts, as this contract will have no
      * built-in parsing.
-     * 21 bits remain in the token storage slot.
+     * 53 bits remain in the token storage slot.
      */
-    function __setReserved(uint256 _tokenId, uint256 _data)
+    function __setReserved(uint256[] calldata _tokenId, uint256[] calldata _data)
         external
         onlyRole(RESERVED_ROLE) {
-            _uTokenData[_tokenId] = _setTokenParam(
-                _uTokenData[_tokenId],
-                POS_RESERVED,
-                _data,
-                2097151
-            );
+            uint256 _batchSize = _tokenId.length;
+            for (uint256 i; i<_batchSize;) {
+                _uTokenData[_tokenId[i]] = _setTokenParam(
+                    _uTokenData[_tokenId[i]],
+                    POS_RESERVED,
+                    _data[i],
+                    9007199254740991
+                );
+            }
     }
 }

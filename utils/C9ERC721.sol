@@ -19,6 +19,13 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
     using Address for address;
     using Strings for uint256;
 
+    uint256 constant EPOS_OWNER = 0;
+    uint256 constant EPOS_OWNED_IDX = 160;
+    uint256 constant EPOS_ALL_IDX = 176;
+    uint256 constant EPOS_TRANSFER_COUNTER = 192;
+    uint256 constant EPOS_TRANSFER_VALUE_SUM = 216;
+    uint256 constant MAX_TRANSFER_BATCH_SIZE = 64;
+
     // Token name
     string private _name;
 
@@ -32,10 +39,7 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
      * on both minting and transfers as storage space is reduced to 1/3 the original 
      * by packing these./
      */
-    mapping(uint256 => uint256) private _owners; // _owner(address), _ownedTokensIndex (uint48), _allTokensIndex (uint48);
-
-    // Mapping owner address to token count -> replaced by _ownedTokens.length
-    //mapping(address => uint256) private _balances; 
+    mapping(uint256 => uint256) private _owners; // _owner(address), _ownedTokensIndex (u16), _allTokensIndex (u16), _transferCount(u24), _transferValueSum(u40)
 
     // Mapping from token ID to approved address
     mapping(uint256 => address) private _tokenApprovals;
@@ -86,7 +90,9 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
      * @dev See {IERC721-balanceOf}.
      */
     function balanceOf(address owner) public view virtual override returns (uint256) {
-        if (owner == address(0)) revert ZeroAddressInvalid();
+        if (owner == address(0)) {
+            revert ZeroAddressInvalid();
+        }
         return _ownedTokens[owner].length;
     }
 
@@ -95,7 +101,9 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
      */
     function ownerOf(uint256 tokenId) public view virtual override returns (address) {
         address owner = _ownerOf(tokenId);
-        if (owner == address(0)) revert InvalidToken(tokenId);
+        if (owner == address(0)) {
+            revert InvalidToken(tokenId);
+        }
         return owner;
     }
 
@@ -165,9 +173,9 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
             _ownedTokens[from][tokenIndex] = uint32(lastTokenId); // Move the last token to the slot of the to-delete token
             _owners[lastTokenId] = _setTokenParam(
                 _owners[lastTokenId],
-                160,
+                EPOS_OWNED_IDX,
                 tokenIndex,
-                type(uint48).max
+                type(uint16).max
             );
         }
 
@@ -195,9 +203,9 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
         // Update the moved token's index
         _owners[lastTokenId] = _setTokenParam(
             _owners[lastTokenId],
-            208,
+            EPOS_ALL_IDX,
             tokenIndex,
-            type(uint48).max
+            type(uint16).max
         );
 
         // This also deletes the contents at the last position of the array
@@ -229,7 +237,9 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
      */
     function approve(address to, uint256 tokenId) public virtual override {
         address owner = ownerOf(tokenId);
-        if (to == owner) revert OwnerAlreadyApproved();
+        if (to == owner) {
+            revert OwnerAlreadyApproved();
+        }
         if (_msgSender() != owner) {
             if (!isApprovedForAll(owner, _msgSender())) {
                 revert CallerNotOwnerOrApproved();
@@ -249,12 +259,9 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
     /**
      * @dev Should be possible to clear this without having to transfer.
      */
-    function clearApproved(uint256 tokenId) public {
-        address owner = ownerOf(tokenId);
-        if (_msgSender() != owner) {
-            if (!isApprovedForAll(owner, _msgSender())) {
-                revert CallerNotOwnerOrApproved();
-            }
+    function clearApproved(uint256 tokenId) external {
+        if (!_isApprovedOrOwner(_msgSender(), tokenId)) {
+            revert CallerNotOwnerOrApproved();
         }
         delete _tokenApprovals[tokenId];
     }
@@ -281,9 +288,6 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
         address to,
         uint256 tokenId
     ) public virtual override {
-        if (!_isApprovedOrOwner(_msgSender(), tokenId)) {
-            revert CallerNotOwnerOrApproved();
-        }
         _transfer(from, to, tokenId);
     }
 
@@ -307,9 +311,6 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
         uint256 tokenId,
         bytes memory data
     ) public virtual override {
-        if (!_isApprovedOrOwner(_msgSender(), tokenId)) {
-            revert CallerNotOwnerOrApproved();
-        }
         _safeTransfer(from, to, tokenId, data);
     }
 
@@ -442,10 +443,10 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
         // Remove from enumerations
         _removeTokenFromOwnerEnumeration(
             owner,
-            uint256(uint48(_tokenData>>160))
+            uint256(uint16(_tokenData>>EPOS_OWNED_IDX))
         );
         _removeTokenFromAllTokensEnumeration(
-            uint256(uint48(_tokenData>>208))
+            uint256(uint16(_tokenData>>EPOS_ALL_IDX))
         );
 
         // Clear approvals
@@ -470,7 +471,6 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
      *
      * Emits a {Transfer} event.
      */
-
     function _xfer(address from, address to, uint256 tokenId)
         private {
 
@@ -483,32 +483,64 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
             _allTokens.push(uint32(tokenId));
             _tokenData = _setTokenParam(
                 _tokenData,
-                208,
+                EPOS_ALL_IDX,
                 length,
-                type(uint48).max
+                type(uint16).max
             );
         } else {
             // Else coming from prior owner
-            uint256 _tokenIndex = uint256(uint48(_tokenData>>160));
+            uint256 _tokenIndex = uint256(uint16(_tokenData>>EPOS_OWNED_IDX));
             _removeTokenFromOwnerEnumeration(
                 from,
                 _tokenIndex
             );
+
+            /* Transfer counter and value sum are two values we can store
+               and update for ~1000 more gas, since the storage space is 
+               already used and paid for by the token. This data may be
+               used later on in terms of displaying what tokens have 
+               been exchanged the most, of what most value, etc.
+               This is mostly just trying to take advantage of already 
+               paid space in any way that may be possible.
+             */
+            if (msg.value > 0) {
+                uint256 storeMsgValue = msg.value / 1000000000000000; // Will not see anything below 0.001 Eth
+                if (storeMsgValue > 0) {
+                    uint256 _transferSum = _tokenData>>EPOS_TRANSFER_VALUE_SUM;
+                    unchecked {_transferSum += storeMsgValue;}
+                    _tokenData = _setTokenParam(
+                        _tokenData,
+                        EPOS_TRANSFER_VALUE_SUM,
+                        _transferSum,
+                        type(uint40).max
+                    );
+                }
+
+                uint256 _xferCounter = uint256(uint24(_tokenData>>EPOS_TRANSFER_COUNTER));
+                unchecked {++_xferCounter;}
+                _tokenData = _setTokenParam(
+                    _tokenData,
+                    EPOS_TRANSFER_COUNTER,
+                    _xferCounter,
+                    type(uint24).max
+                );
+            }
         }
 
+        // Set owned token index
         length = _ownedTokens[to].length; //ERC721.balanceOf(to);
         _ownedTokens[to].push(uint32(tokenId));
         _tokenData = _setTokenParam(
             _tokenData,
-            160,
+            EPOS_OWNED_IDX,
             length,
-            type(uint48).max
+            type(uint16).max
         );
 
         // Set new owner
         _tokenData = _setTokenParam(
             _tokenData,
-            0,
+            EPOS_OWNER,
             uint256(uint160(to)),
             type(uint160).max
         );
@@ -526,6 +558,11 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
         if (_owner != from) {
             revert TransferFromIncorrectOwner(_owner, from);
         }
+        if (_msgSender() != _owner) {
+            if (!isApprovedForAll(_owner, _msgSender())) {
+                revert CallerNotOwnerOrApproved();
+            }
+        }
         if (to == address(0)) {
             revert ZeroAddressInvalid();
         }
@@ -536,6 +573,7 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
         _beforeTokenTransfer(from, to, tokenId, 1);
 
         // Clear approvals from the previous owner
+        // Saves about ~100 gas when not set (most cases)
         if (_tokenApprovals[tokenId] != address(0)) {
             delete _tokenApprovals[tokenId];
         }
@@ -663,8 +701,8 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
     function _transferBatch(address from, address to, uint256[] calldata _tokenId)
         private {
             uint256 _batchSize = _tokenId.length;
-            if (_batchSize > 64) {
-                revert BatchSizeTooLarge(64, _batchSize);
+            if (_batchSize > MAX_TRANSFER_BATCH_SIZE) {
+                revert BatchSizeTooLarge(MAX_TRANSFER_BATCH_SIZE, _batchSize);
             }
             for (uint256 i; i<_batchSize;) {
                 transferFrom(from, to, _tokenId[i]);
@@ -676,7 +714,7 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
      * @dev Allows safe batch transfer to make is cheaper to move multiple NFTs 
      * between two addresses. Max batch size is 64.
      */
-    function safeTransferFromBatch(address from, address to, uint256[] calldata _tokenId)
+    function safeTransferFrom(address from, address to, uint256[] calldata _tokenId)
         external {
             _transferBatch(from, to, _tokenId);
             // Only need to check one time
@@ -691,11 +729,11 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
      * safe transfer version to prevent accidents of sending to a 
      * non-ERC721 receiver.
      */
-    function safeTransferFromMulti(address from, address[] calldata to, uint256[] calldata _tokenId)
+    function safeTransferFrom(address from, address[] calldata to, uint256[] calldata _tokenId)
         external {
             uint256 _batchSize = _tokenId.length;
-            if (_batchSize > 64) {
-                revert BatchSizeTooLarge(64, _batchSize);
+            if (_batchSize > MAX_TRANSFER_BATCH_SIZE) {
+                revert BatchSizeTooLarge(MAX_TRANSFER_BATCH_SIZE, _batchSize);
             }
             uint256 _addressBookSize = to.length;
             if (_addressBookSize != _batchSize) {
@@ -711,8 +749,22 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
      * @dev Allows batch transfer to make is cheaper to move multiple NFTs 
      * between two addresses. Max batch size is 64.
      */
-    function transferFromBatch(address from, address to, uint256[] calldata _tokenId)
+    function transferFrom(address from, address to, uint256[] calldata _tokenId)
         external {
             _transferBatch(from, to, _tokenId);
+    }
+
+    /**
+     * @dev Get all params stored for tokenId.
+     */
+    function getTokenParamsERC(uint256 _tokenId)
+        external view
+        returns(uint256[5] memory params) {
+            uint256 _packedToken = _owners[_tokenId];
+            params[0] = uint256(uint160(_packedToken));
+            params[1] = uint256(uint16(_packedToken>>EPOS_OWNED_IDX));
+            params[2] = uint256(uint16(_packedToken>>EPOS_ALL_IDX));
+            params[3] = uint256(uint24(_packedToken>>EPOS_TRANSFER_COUNTER));
+            params[4] = uint256(uint40(_packedToken>>EPOS_TRANSFER_VALUE_SUM));
     }
 }

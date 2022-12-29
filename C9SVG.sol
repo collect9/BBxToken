@@ -254,9 +254,8 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
     /**
      * @dev Adds validity flag info to SVG output memory `b`.
      */
-    function addValidityInfo(uint256 _uTokenData, bytes memory b) private view {
+    function addValidityInfo(uint256 _tokenId, uint256 _uTokenData, bytes memory b) private view {
         uint256 _validityIdx = uint256(uint8(_uTokenData>>POS_VALIDITY));
-        uint256 _tokenId = uint256(uint32(_uTokenData>>POS_TOKENID));
 
         bytes3 _clr;
         bytes16 _validity = _vValidity[_validityIdx%5];
@@ -824,18 +823,17 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
      * @dev External function to call and return the SVG string built from `_token`  
      * and owner `_address`.
      */
-    function returnSVG(address _address, uint256 _uTokenData, string calldata _sTokenData)
+    function returnSVG(address _address, uint256 _tokenId, uint256 _uTokenData, string calldata _sTokenData)
         external view override
         returns (string memory) {
         
-        uint256 _tokenId = uint256(uint32(_uTokenData>>POS_TOKENID));
         (uint256 _splitIndex1, uint256 _splitIndex2) = _getSliceIndices(_sTokenData);
         bytes6 _id = Helpers.tokenIdToBytes(_tokenId);
 
         bytes memory b = svgOpener;
         addIds(_id, b);
         addTokenInfo(_uTokenData, _sTokenData[:_splitIndex1], b);
-        addValidityInfo(_uTokenData, b);
+        addValidityInfo(_tokenId, _uTokenData, b);
         addAddress(_address, b);
         checkForSpecialBg(uint256(uint8(_uTokenData>>POS_SPECIAL)), b);
 
