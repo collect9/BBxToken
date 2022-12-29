@@ -45,6 +45,12 @@ abstract contract C9Struct {
         uint256 tokenid; // Physical authentication id
         uint256 validitystamp; // Needed if validity invalid
         uint256 mintstamp; // Minting timestamp
+        uint256 insurance; // Insured value
+        string sData;
+    }
+
+    struct TokenSData {
+        uint256 tokenId; // Physical authentication id
         string sData;
     }
 
@@ -63,10 +69,10 @@ abstract contract C9Struct {
     uint256 constant POS_MINTID = 75;
     uint256 constant POS_ROYALTY = 91;
     uint256 constant POS_ROYALTIESDUE = 107;
-    uint256 constant POS_TOKENID = 123;
-    uint256 constant POS_VALIDITYSTAMP = 155;
-    uint256 constant POS_MINTSTAMP = 195;
-    uint256 constant POS_RESERVED = 235;
+    uint256 constant POS_VALIDITYSTAMP = 123;
+    uint256 constant POS_MINTSTAMP = 163;
+    uint256 constant POS_INSURANCE = 203;
+    uint256 constant POS_RESERVED = 227;
 
     /*
      * @dev Returns the indices that split sTokenData into 

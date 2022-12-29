@@ -495,26 +495,25 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
                 _tokenIndex
             );
 
-            /* Transfer counter and value sum are two values we can store
-               and update for ~1000 more gas, since the storage space is 
-               already used and paid for by the token. This data may be
-               used later on in terms of displaying what tokens have 
-               been exchanged the most, of what most value, etc.
-               This is mostly just trying to take advantage of already 
-               paid space in any way that may be possible.
+            /*
+            Transfer counter and value sum are two values we can store
+            and update for ~1000 more gas, since the storage space is 
+            already used and paid for by the token.
+            This method may not be reliable in capturing data, but  
+            could still provide a small subsample of what are the most 
+            exchanged, of most value, etc. This will only capture 
+            exchanges as part of payable methods.
              */
-            if (msg.value > 0) {
-                uint256 storeMsgValue = msg.value / 1000000000000000; // Will not see anything below 0.001 Eth
-                if (storeMsgValue > 0) {
-                    uint256 _transferSum = _tokenData>>EPOS_TRANSFER_VALUE_SUM;
-                    unchecked {_transferSum += storeMsgValue;}
-                    _tokenData = _setTokenParam(
-                        _tokenData,
-                        EPOS_TRANSFER_VALUE_SUM,
-                        _transferSum,
-                        type(uint40).max
-                    );
-                }
+            if (msg.value > 100000000000000) {
+                uint256 storeMsgValue = msg.value / 100000000000000; // Will not see anything below 0.0001 Eth
+                uint256 _transferSum = _tokenData>>EPOS_TRANSFER_VALUE_SUM;
+                unchecked {_transferSum += storeMsgValue;}
+                _tokenData = _setTokenParam(
+                    _tokenData,
+                    EPOS_TRANSFER_VALUE_SUM,
+                    _transferSum,
+                    type(uint40).max
+                );
 
                 uint256 _xferCounter = uint256(uint24(_tokenData>>EPOS_TRANSFER_COUNTER));
                 unchecked {++_xferCounter;}
@@ -714,11 +713,11 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
      * @dev Allows safe batch transfer to make is cheaper to move multiple NFTs 
      * between two addresses. Max batch size is 64.
      */
-    function safeTransferFrom(address from, address to, uint256[] calldata _tokenId)
+    function safeTransferFrom(address from, address to, uint256[] calldata tokenId)
         external {
-            _transferBatch(from, to, _tokenId);
+            _transferBatch(from, to, tokenId);
             // Only need to check one time
-            if (!_checkOnERC721Received(from, to, _tokenId[0], "")) {
+            if (!_checkOnERC721Received(from, to, tokenId[0], "")) {
                 revert NonERC721Receiver();
             }
     }
@@ -729,9 +728,9 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
      * safe transfer version to prevent accidents of sending to a 
      * non-ERC721 receiver.
      */
-    function safeTransferFrom(address from, address[] calldata to, uint256[] calldata _tokenId)
+    function safeTransferFrom(address from, address[] calldata to, uint256[] calldata tokenId)
         external {
-            uint256 _batchSize = _tokenId.length;
+            uint256 _batchSize = tokenId.length;
             if (_batchSize > MAX_TRANSFER_BATCH_SIZE) {
                 revert BatchSizeTooLarge(MAX_TRANSFER_BATCH_SIZE, _batchSize);
             }
@@ -740,7 +739,7 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
                 revert TransferSizeMismatch(_addressBookSize, _batchSize);
             }
             for (uint256 i; i<_batchSize;) {
-                _safeTransfer(from, to[i], _tokenId[i], "");
+                _safeTransfer(from, to[i], tokenId[i], "");
                 unchecked {++i;}
             }
     }
@@ -749,9 +748,9 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
      * @dev Allows batch transfer to make is cheaper to move multiple NFTs 
      * between two addresses. Max batch size is 64.
      */
-    function transferFrom(address from, address to, uint256[] calldata _tokenId)
+    function transferFrom(address from, address to, uint256[] calldata tokenId)
         external {
-            _transferBatch(from, to, _tokenId);
+            _transferBatch(from, to, tokenId);
     }
 
     /**

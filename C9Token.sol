@@ -17,6 +17,7 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
     bytes32 public constant REDEEMER_ROLE = keccak256("REDEEMER_ROLE");
     bytes32 public constant RESERVED_ROLE = keccak256("RESERVED_ROLE");
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
+    bytes32 public constant UPDATER_ROLE  = keccak256("UPDATER_ROLE");
     bytes32 public constant VALIDITY_ROLE = keccak256("VALIDITY_ROLE");
 
     /**
@@ -472,6 +473,7 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
             _packedToken |= _input.royaltiesdue<<POS_ROYALTIESDUE;
             _packedToken |= _timestamp<<POS_VALIDITYSTAMP;
             _packedToken |= _timestamp<<POS_MINTSTAMP;
+            _packedToken |= _input.insurance<<POS_INSURANCE;
             _uTokenData[_tokenId] = _packedToken;
 
             // Store token string data
@@ -650,7 +652,7 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
      */
     function getTokenParams(uint256 _tokenId)
         external view override
-        returns(uint256[18] memory params) {
+        returns(uint256[19] memory params) {
             uint256 _packedToken = _uTokenData[_tokenId];
             params[0] = _packedToken>>POS_UPGRADED & BOOL_MASK;
             params[1] = _packedToken>>POS_DISPLAY & BOOL_MASK;
@@ -669,7 +671,8 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
             params[14] = uint256(uint16(_packedToken>>POS_ROYALTIESDUE));
             params[15] = uint256(uint40(_packedToken>>POS_VALIDITYSTAMP));
             params[16] = uint256(uint40(_packedToken>>POS_MINTSTAMP));
-            params[17] = uint256(_packedToken>>POS_RESERVED);
+            params[17] = uint256(uint24(_packedToken>>POS_INSURANCE));
+            params[18] = uint256(_packedToken>>POS_RESERVED);
     }
 
     /**
@@ -1004,15 +1007,58 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
     }
 
     /**
+     * @dev Sets/updates the insured value of the physical collectible.
+     * Cost is around ~8650 gas / token batched 96.
+     * Tested to also handle 272 at once (~8475 / token).
+     * A once a year full update should be viable even at 
+     * $3K ETH and 50GWEI gas ($350 est).
+     */
+    function _setTokenInsuredValue(uint256 _tokenId, uint256 _insuredValue)
+        private
+        tokenExists(_tokenId)
+        notDead(_tokenId) {
+            uint256 _tokenData = _uTokenData[_tokenId];
+            uint256 _val = uint256(uint24(_tokenData>>POS_INSURANCE));
+            if (_val != _insuredValue) {
+                _tokenData = _setTokenParam(
+                    _tokenData,
+                    POS_INSURANCE,
+                    _insuredValue,
+                    type(uint24).max
+                );
+                _uTokenData[_tokenId] = _tokenData;
+            }
+    }
+
+    function setTokenInsuredValue(uint256[2][] calldata _data)
+        external 
+        onlyRole(UPDATER_ROLE) {
+            uint256 _batchSize = _data.length;
+            for (uint256 i; i<_batchSize;) {
+                _setTokenInsuredValue(_data[i][0], _data[i][1]);
+                unchecked {++i;}
+            }
+    }
+
+    /**
      * @dev Allows the compressed data that is used to display the 
      * micro QR code on the SVG to be updated.
      */
-    function setTokenSData(uint256 _tokenId, string memory _sData)
-        public 
-        onlyRole(DEFAULT_ADMIN_ROLE)
+    function _setTokenSData(uint256 _tokenId, string calldata _sData)
+        private
         tokenExists(_tokenId)
         notDead(_tokenId) {
             _sTokenData[_tokenId] = _sData;
+    }
+
+    function setTokenSData(TokenSData[] calldata _data)
+        external 
+        onlyRole(UPDATER_ROLE) {
+            uint256 _batchSize = _data.length;
+            for (uint256 i; i<_batchSize;) {
+                _setTokenSData(_data[i].tokenId, _data[i].sData);
+                unchecked {++i;}
+            }
     }
 
     /*
@@ -1141,19 +1187,31 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
      * later. Such features will only be available to 
      * external contracts, as this contract will have no
      * built-in parsing.
-     * 53 bits remain in the token storage slot.
+     * 29 bits remain in the reserved storage space.
      */
-    function __setReserved(uint256[] calldata _tokenId, uint256[] calldata _data)
+    function __setReserved(uint256 _tokenId, uint256 _data)
+        private
+        tokenExists(_tokenId)
+        notDead(_tokenId) {
+            _uTokenData[_tokenId] = _setTokenParam(
+                _uTokenData[_tokenId],
+                POS_RESERVED,
+                _data,
+                536870911
+            );
+    }
+
+    /**
+     * @dev The cost to set/update should be comparable 
+     * to updating insured values.
+     */
+    function _setReserved(uint256[2][] calldata _data)
         external
         onlyRole(RESERVED_ROLE) {
-            uint256 _batchSize = _tokenId.length;
+            uint256 _batchSize = _data.length;
             for (uint256 i; i<_batchSize;) {
-                _uTokenData[_tokenId[i]] = _setTokenParam(
-                    _uTokenData[_tokenId[i]],
-                    POS_RESERVED,
-                    _data[i],
-                    9007199254740991
-                );
+                __setReserved(_data[i][0], _data[i][1]);
+                unchecked {++i;}
             }
     }
 }
