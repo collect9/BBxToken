@@ -51,6 +51,7 @@ error AddressAlreadySet(); //0xf62c2d82
 error CallerNotContract(); //0xa85366a7
 error EditionOverflow(uint256 received); //0x5723b5d1
 error IncorrectTokenValidity(uint256 expected, uint256 received); //0xe8c07318
+error Input2SizeMismatch(uint256 inputSize1, uint256 inputSize2);
 error InvalidVId(uint256 received); //0xcf8cffb0
 error NoOwnerSupply(address sender); //0x973d81af
 error PeriodTooLong(uint256 maxPeriod, uint256 received); //0xd36b55de

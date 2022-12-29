@@ -69,11 +69,13 @@ abstract contract C9Shared {
     /*
      * @dev Tush tag special markers.
      */
-    bytes4[4] _vMarkers = [
+    bytes4[6] _vMarkers = [
         bytes4("4L  "),
         "EMBS",
         "EMBF",
-        "CE  "
+        "CE  ",
+        "ks  ",
+        "Bs  "
     ];
 
     /*

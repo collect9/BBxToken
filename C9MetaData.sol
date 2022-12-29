@@ -12,7 +12,7 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Struct {
      */
     function _checkTushMarker(uint256 _markerTush, bytes memory b, uint256 _offset)
         private view {
-            if (_markerTush > 0) {
+            if (_markerTush > 0 && _markerTush < 5) {
                 bytes4 _markertush = _vMarkers[_markerTush-1];
                 assembly {
                     let dst := add(b, 316)

@@ -400,7 +400,7 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
         if (_markertush > 0) {
             e = "<g transform='translate(555 726)' style='opacity:0.8; font-family:\"Brush Script MT\", cursive; font-size:24px; font-weight:700'>"
                 "<text text-anchor='middle' fill='#222'>    </text>"
-                "</g>";
+                "</g>"; 
             bytes4 x = _vMarkers[_markertush-1];
             bytes4 y = x == bytes4("CE  ") ?
                 bytes4("c e ") :
@@ -414,6 +414,12 @@ contract C9SVG is IC9SVG, C9Shared, C9Struct {
                 switch _gentag case 0 {
                     dst := add(e, 193)
                     mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), "eee"))
+                }
+            }
+            if (_markertush > 4) {
+                assembly {
+                    let dst := add(e, 56)
+                    mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), "75 "))
                 }
             }
         }

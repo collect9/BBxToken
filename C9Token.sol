@@ -7,7 +7,7 @@ import "./interfaces/IC9SVG.sol";
 import "./interfaces/IC9Redeemer24.sol";
 import "./interfaces/IC9Token.sol";
 import "./utils/Base64.sol";
-import "./utils/C9ERC721b.sol";
+import "./utils/C9ERC721.sol";
 import "./utils/Helpers.sol";
 
 contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {

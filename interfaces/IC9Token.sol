@@ -5,7 +5,7 @@ import "./../utils/interfaces/IC9ERC721.sol";
 
 interface IC9Token is IC9ERC721, IERC2981 {
 
-    function getTokenParams(uint256 _tokenId) external view returns(uint256[18] memory params);
+    function getTokenParams(uint256 _tokenId) external view returns(uint256[19] memory params);
 
     function redeemAdd(uint256[] calldata _tokenIds) external;
 
