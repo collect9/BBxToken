@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
-import "./C9OwnerControl.sol";
 import "./abstract/C9Struct.sol";
 import "./interfaces/IC9MetaData.sol";
 import "./interfaces/IC9SVG.sol";
@@ -10,12 +9,11 @@ import "./utils/Base64.sol";
 import "./utils/C9ERC721.sol";
 import "./utils/Helpers.sol";
 
-contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
+contract C9Token is C9Struct, ERC721, IC9Token {
     /**
      * @dev Contract access roles.
      */
     bytes32 public constant REDEEMER_ROLE = keccak256("REDEEMER_ROLE");
-    bytes32 public constant RESERVED_ROLE = keccak256("RESERVED_ROLE");
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
     bytes32 public constant UPDATER_ROLE  = keccak256("UPDATER_ROLE");
     bytes32 public constant VALIDITY_ROLE = keccak256("VALIDITY_ROLE");
@@ -219,7 +217,7 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
      */
     function supportsInterface(bytes4 interfaceId)
         public view
-        override(IERC165, ERC721, AccessControl)
+        override(IERC165, ERC721)
         returns (bool) {
             return interfaceId == type(IERC2981).interfaceId || super.supportsInterface(interfaceId);
     }
@@ -1189,7 +1187,7 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
      * built-in parsing.
      * 29 bits remain in the reserved storage space.
      */
-    function __setReserved(uint256 _tokenId, uint256 _data)
+    function _setReserved(uint256 _tokenId, uint256 _data)
         private
         tokenExists(_tokenId)
         notDead(_tokenId) {
@@ -1205,12 +1203,12 @@ contract C9Token is C9OwnerControl, C9Struct, ERC721, IC9Token {
      * @dev The cost to set/update should be comparable 
      * to updating insured values.
      */
-    function _setReserved(uint256[2][] calldata _data)
-        external
+    function setReserved(uint256[2][] calldata _data)
+        external override
         onlyRole(RESERVED_ROLE) {
             uint256 _batchSize = _data.length;
             for (uint256 i; i<_batchSize;) {
-                __setReserved(_data[i][0], _data[i][1]);
+                _setReserved(_data[i][0], _data[i][1]);
                 unchecked {++i;}
             }
     }

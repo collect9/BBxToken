@@ -19,6 +19,8 @@ interface IC9Token is IC9ERC721, IERC2981 {
 
     function preRedeemable(uint256 _tokenId) external view returns(bool);
 
+    function setReserved(uint256[2][] calldata _data) external;
+
     function setTokenUpgraded(uint256 _tokenId) external;
 
     function setTokenValidity(uint256 _tokenId, uint256 _vId) external;

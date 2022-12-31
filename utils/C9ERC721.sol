@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/utils/Context.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
 
+import "./../C9OwnerControl.sol";
 import "./../abstract/C9Errors.sol";
 import "./interfaces/IC9ERC721.sol";
 
@@ -15,16 +16,18 @@ import "./interfaces/IC9ERC721.sol";
  * the Metadata extension, but not including the Enumerable extension, which is available separately as
  * {ERC721Enumerable}.
  */
-contract ERC721 is Context, ERC165, IC9ERC721 {
+contract ERC721 is Context, ERC165, IC9ERC721, C9OwnerControl {
     using Address for address;
     using Strings for uint256;
 
     uint256 constant EPOS_OWNER = 0;
     uint256 constant EPOS_OWNED_IDX = 160;
-    uint256 constant EPOS_ALL_IDX = 176;
-    uint256 constant EPOS_TRANSFER_COUNTER = 192;
-    uint256 constant EPOS_TRANSFER_VALUE_SUM = 216;
+    uint256 constant EPOS_ALL_IDX = 184;
+    uint256 constant EPOS_TRANSFER_COUNTER = 208;
+    uint256 constant EPOS_RESERVED = 232;
     uint256 constant MAX_TRANSFER_BATCH_SIZE = 64;
+
+    bytes32 public constant RESERVED_ROLE = keccak256("RESERVED_ROLE");
 
     // Token name
     string private _name;
@@ -39,7 +42,7 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
      * on both minting and transfers as storage space is reduced to 1/3 the original 
      * by packing these./
      */
-    mapping(uint256 => uint256) private _owners; // _owner(address), _ownedTokensIndex (u16), _allTokensIndex (u16), _transferCount(u24), _transferValueSum(u40)
+    mapping(uint256 => uint256) private _owners; // _owner(address), _ownedTokensIndex (u24), _allTokensIndex (u24), _transferCount(u24), _reserved (u24)
 
     // Mapping from token ID to approved address
     mapping(uint256 => address) private _tokenApprovals;
@@ -78,7 +81,7 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
     /**
      * @dev See {IERC165-supportsInterface}.
      */
-    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC165, IERC165) returns (bool) {
+    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC165, IERC165, AccessControl) returns (bool) {
         return
             interfaceId == type(IERC721Enumerable).interfaceId ||
             interfaceId == type(IERC721).interfaceId ||
@@ -175,7 +178,7 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
                 _owners[lastTokenId],
                 EPOS_OWNED_IDX,
                 tokenIndex,
-                type(uint16).max
+                type(uint24).max
             );
         }
 
@@ -205,7 +208,7 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
             _owners[lastTokenId],
             EPOS_ALL_IDX,
             tokenIndex,
-            type(uint16).max
+            type(uint24).max
         );
 
         // This also deletes the contents at the last position of the array
@@ -218,7 +221,6 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
      */
     function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
         _requireMinted(tokenId);
-
         string memory baseURI = _baseURI();
         return bytes(baseURI).length > 0 ? string(abi.encodePacked(baseURI, tokenId.toString())) : "";
     }
@@ -443,10 +445,10 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
         // Remove from enumerations
         _removeTokenFromOwnerEnumeration(
             owner,
-            uint256(uint16(_tokenData>>EPOS_OWNED_IDX))
+            uint256(uint24(_tokenData>>EPOS_OWNED_IDX))
         );
         _removeTokenFromAllTokensEnumeration(
-            uint256(uint16(_tokenData>>EPOS_ALL_IDX))
+            uint256(uint24(_tokenData>>EPOS_ALL_IDX))
         );
 
         // Clear approvals
@@ -485,45 +487,27 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
                 _tokenData,
                 EPOS_ALL_IDX,
                 length,
-                type(uint16).max
+                type(uint24).max
             );
         } else {
             // Else coming from prior owner
-            uint256 _tokenIndex = uint256(uint16(_tokenData>>EPOS_OWNED_IDX));
+            uint256 _tokenIndex = uint256(uint24(_tokenData>>EPOS_OWNED_IDX));
             _removeTokenFromOwnerEnumeration(
                 from,
                 _tokenIndex
             );
 
             /*
-            Transfer counter and value sum are two values we can store
-            and update for ~1000 more gas, since the storage space is 
-            already used and paid for by the token.
-            This method may not be reliable in capturing data, but  
-            could still provide a small subsample of what are the most 
-            exchanged, of most value, etc. This will only capture 
-            exchanges as part of payable methods.
+            Transfer counter can be stored for about ~600 more gas.
              */
-            if (msg.value > 100000000000000) {
-                uint256 storeMsgValue = msg.value / 100000000000000; // Will not see anything below 0.0001 Eth
-                uint256 _transferSum = _tokenData>>EPOS_TRANSFER_VALUE_SUM;
-                unchecked {_transferSum += storeMsgValue;}
-                _tokenData = _setTokenParam(
-                    _tokenData,
-                    EPOS_TRANSFER_VALUE_SUM,
-                    _transferSum,
-                    type(uint40).max
-                );
-
-                uint256 _xferCounter = uint256(uint24(_tokenData>>EPOS_TRANSFER_COUNTER));
-                unchecked {++_xferCounter;}
-                _tokenData = _setTokenParam(
-                    _tokenData,
-                    EPOS_TRANSFER_COUNTER,
-                    _xferCounter,
-                    type(uint24).max
-                );
-            }
+            uint256 _xferCounter = uint256(uint24(_tokenData>>EPOS_TRANSFER_COUNTER));
+            unchecked {++_xferCounter;}
+            _tokenData = _setTokenParam(
+                _tokenData,
+                EPOS_TRANSFER_COUNTER,
+                _xferCounter,
+                type(uint24).max
+            );
         }
 
         // Set owned token index
@@ -533,7 +517,7 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
             _tokenData,
             EPOS_OWNED_IDX,
             length,
-            type(uint16).max
+            type(uint24).max
         );
 
         // Set new owner
@@ -758,12 +742,36 @@ contract ERC721 is Context, ERC165, IC9ERC721 {
      */
     function getTokenParamsERC(uint256 _tokenId)
         external view
-        returns(uint256[5] memory params) {
+        returns(uint256[4] memory params) {
             uint256 _packedToken = _owners[_tokenId];
-            params[0] = uint256(uint160(_packedToken));
-            params[1] = uint256(uint16(_packedToken>>EPOS_OWNED_IDX));
-            params[2] = uint256(uint16(_packedToken>>EPOS_ALL_IDX));
-            params[3] = uint256(uint24(_packedToken>>EPOS_TRANSFER_COUNTER));
-            params[4] = uint256(uint40(_packedToken>>EPOS_TRANSFER_VALUE_SUM));
+            params[0] = uint256(uint24(_packedToken>>EPOS_OWNED_IDX));
+            params[1] = uint256(uint24(_packedToken>>EPOS_ALL_IDX));
+            params[2] = uint256(uint24(_packedToken>>EPOS_TRANSFER_COUNTER));
+            params[3] = uint256(uint24(_packedToken>>EPOS_RESERVED));
+    }
+
+    function _setReservedERC(uint256 _tokenId, uint256 _data)
+        private {
+            _requireMinted(_tokenId);
+            _owners[_tokenId] = _setTokenParam(
+                _owners[_tokenId],
+                EPOS_RESERVED,
+                _data,
+                type(uint24).max
+            );
+    }
+
+    /**
+     * @dev The cost to set/update should be comparable 
+     * to updating insured values.
+     */
+    function setReservedERC(uint256[2][] calldata _data)
+        external override
+        onlyRole(RESERVED_ROLE) {
+            uint256 _batchSize = _data.length;
+            for (uint256 i; i<_batchSize;) {
+                _setReservedERC(_data[i][0], _data[i][1]);
+                unchecked {++i;}
+            }
     }
 }
