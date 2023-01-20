@@ -4,134 +4,62 @@ import "./C9OwnerControl.sol";
 import "./interfaces/IC9Registrar.sol";
 
 contract C9Registrar is IC9Registrar, C9OwnerControl {
-    bytes32 public constant FRONTEND_ROLE = keccak256("FRONTEND_ROLE");
+    bytes32 public constant VIEWER_ROLE = keccak256("FRONTEND_ROLE");
 
-    mapping(address => uint256) private _registrationData; //step, code, isRegistered
-    
-    event RegistrarAdminApprove(
+    mapping(address => bytes32) private _registrationData;
+
+    event RegistrarAdd(
         address indexed tokenOwner
     );
-    event RegistrarCancel(
-        address indexed tokenOwner,
-        uint256 indexed processStep
-    );
-    event RegistrarInit(
-        address indexed tokenOwner
-    );
-    event RegistrarUserVerify(
+    event RegistrarRemove(
         address indexed tokenOwner
     );
 
     constructor() {
-        _grantRole(FRONTEND_ROLE, msg.sender); // remove after testing actual frontend
-    }
-
-    modifier registrationStep(address _address, uint256 _step) {
-        uint256 _data = _registrationData[_address];
-        uint256 _expectedStep = uint256(uint8(_data>>GPOS_STEP));
-        if (_step != _expectedStep) {
-            revert WrongProcessStep(_expectedStep, _step);
-        }
-        _;
-    }
-
-    function _removeRegistrationData(address _address)
-        private {
-            delete _registrationData[_address];
-    }
-
-    function isRegistered(address _address)
-        public view override
-        returns (bool) {
-            return uint256(uint8(_registrationData[_address]>>GPOS_REGISTERED)) == REGISTERED;
+        _grantRole(VIEWER_ROLE, msg.sender);
     }
 
     /**
-     * @dev If a user cancels/unlocks token in main contract, the info 
-     * here needs to removed as well. The token contract will call this 
-     * function upon cancel/unlock.
+     * @dev Adds address registration.
      */
-    function cancel()
-        external override {
-            uint256 _data = _registrationData[msg.sender];
-            uint256 lastStep = uint256(uint8(_data>>GPOS_STEP));
-            if (lastStep == 0) {
-                revert AddressNotInProcess();
-            }
-            _removeRegistrationData(msg.sender);
-            emit RegistrarCancel(msg.sender, lastStep);
-    }
-
-    /**
-     * @dev Function the front end will need so it knows which 
-     * button to have enabled.
-     */
-    function getStep(address _address)
-        external view override
-        returns (uint256) {
-            uint256 _data = _registrationData[_address];
-            return uint256(uint8(_data>>GPOS_STEP));
-    }
-
-    /**
-     * @dev Step 1.
-     * User initializes registration
-     */
-    function start()
+    function add(bytes32 _ksig32, bool _replace)
         external override
-        registrationStep(msg.sender, 0)
         notFrozen() {
-            if (isRegistered(msg.sender)) {
+            if (isRegistered(msg.sender) && !_replace) {
                 revert AddressAlreadyRegistered();
             }
-            uint256 _code;
-            unchecked {
-                _code = uint256(
-                    keccak256(
-                        abi.encodePacked(
-                            block.timestamp,
-                            block.difficulty,
-                            block.number,
-                            msg.sender
-                        )
-                    )
-                ) % 65535;
-            }
-            uint256 _newRegistrationData;
-            _newRegistrationData |= 2<<GPOS_STEP;
-            _newRegistrationData |= _code<<GPOS_CODE;
-            _registrationData[msg.sender] = _newRegistrationData;
-            emit RegistrarInit(msg.sender);
-    }
-    /**
-     * @dev Step 2.
-     * Admin/backend retrieves info and sends 
-     * it along with code to user email.
-     */
-    function adminGetCode(address _address)
-        external view
-        onlyRole(FRONTEND_ROLE)
-        returns (uint256) {
-            return uint256(uint16(_registrationData[_address]>>GPOS_CODE));
+            _registrationData[msg.sender] = _ksig32;
+            emit RegistrarAdd(msg.sender);
     }
 
     /**
-     * @dev Step 3.
-     * User verifies info submitted by submitting 
-     * confirmation code. This finishes registration.
-     * Note that no submitted information is KYC yet.
-     * That happens the first time through the redeemer.
+     * @dev Gets the hashed signature data.
      */
-    function userVerifyCode(uint256 _code)
-        external
-        registrationStep(msg.sender, 2)
-        notFrozen() {
-            uint256 _data = _registrationData[msg.sender];
-            if (_code != uint256(uint16(_data>>GPOS_CODE))) {
-                revert CodeMismatch();
+    function getDataFor(address _address)
+        external view override
+        onlyRole(VIEWER_ROLE)
+        returns (bytes32 data) {
+            data = _registrationData[_address];
+    }
+
+    /**
+     * @dev Returns whether or not the address is registered.
+     */
+    function isRegistered(address _address)
+        public view override
+        returns (bool registered) {
+            registered = _registrationData[_address] != bytes32(0);
+    }
+
+    /**
+     * @dev Removes address registration.
+     */
+    function remove()
+        external override {
+            if (!isRegistered(msg.sender)) {
+                revert AddressNotInProcess();
             }
-            _data |= REGISTERED<<GPOS_REGISTERED;
-            _registrationData[msg.sender] = _data;
-            emit RegistrarUserVerify(msg.sender);
+            delete _registrationData[msg.sender];
+            emit RegistrarRemove(msg.sender);
     }
 }
