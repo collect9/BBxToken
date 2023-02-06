@@ -3,6 +3,7 @@ pragma solidity >=0.8.17;
 import "./utils/C9ERC721Base.sol";
 import "./interfaces/IC9Token.sol";
 import "./utils/interfaces/IC9EthPriceFeed.sol";
+import "./abstract/C9Errors.sol";
 
 address constant TOKEN_CONTRACT = 0x5B38Da6a701c568545dCfcB03FcB875f56beddC4;
 uint256 constant GAME_SIZE = 25;
@@ -59,7 +60,9 @@ contract C9Game is ERC721 {
     function viewBoard(uint256 tokenId, uint256 size)
         public view
         returns (uint256[] memory) {
-            //require size = 5,7,9
+            if (size != 25 || size != 49 || size != 81) {
+                revert GameSizeError(size);
+            }
             uint256 _gameSize = size*size;
             uint256[] memory _gameBoard = new uint256[](_gameSize);
             uint256 _packedNumers = _owners[tokenId];
@@ -78,16 +81,14 @@ contract C9Game is ERC721 {
     function checkWinner(uint256 tokenId, uint256[] calldata indices)
         external view {
             if (tokenId < _minTokenId) {
-                // revert expired token from prior round
+                revert ExpiredToken(_minTokenId, tokenId);
             }
-
             uint256 _gameSize = indices.length;
-            //require _gameSize = 5,7,9
             uint256[] memory _gameBoard = viewBoard(tokenId, _gameSize);
             address _tokenOwner = IC9Token(contractToken).ownerOf(_gameBoard[0]);
             for (uint i=1; i<_gameSize;) {
                 if (IC9Token(contractToken).ownerOf(_gameBoard[i]) != _tokenOwner) {
-                    //revert not a winner 
+                    revert NotAWinner(tokenId); 
                 }
                 unchecked {++i;}
             }
@@ -100,7 +101,6 @@ contract C9Game is ERC721 {
             Payout 5% to Collect9
             Roll remainder (5%) into next round
             */
-
     }
 
     function win()

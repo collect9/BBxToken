@@ -27,6 +27,8 @@ error C9ZeroAddressInvalid(); //0x7c7fa4fb
 
 // Market contract
 error InputSizeMismatch(uint256 tokenIdSize, uint256 listingPriceSize, uint256 sigSize);
+error InvalidUPrice(string String, uint256 UInt);
+error InvalidUTokenId(string String, uint256 UInt);
 error InvalidSigner(address expected, address received);
 
 // Redeemer
@@ -39,11 +41,12 @@ error SizeMismatch(uint256 maxSize, uint256 received); //0x97ce59d2
 error AddressAlreadyRegistered(); //0x2d42c772
 error AddressNotInProcess(); //0x286d0071
 error CodeMismatch(); //0x179708c0
+error SigLengthIncorrect();
 error WrongProcessStep(uint256 expected, uint256 received); //0x58f6fd94
 
 // Price Feed
 error InvalidPaymentAmount(uint256 expected, uint256 received); //0x05dbe7d3
-error PaymentFailure(); //0x29292fa2
+error PaymentFailure(address from, address to, uint256 value); //0x29292fa2
 error PriceFeedDated(uint256 maxDelay, uint256 received); //0xb8875fad
 
 // Token
@@ -71,3 +74,9 @@ error ZeroEdition(); //0x2c0dcd39
 error ZeroMintId(); //0x1ed046c6
 error ZeroValue(); //0x7c946ed7
 error ZeroTokenId(); //0x1fed7fc5
+
+// C9Game
+error ExpiredToken(uint256 minTokenId, uint256 receivedTokenId);
+error GameSizeError(uint256 received);
+error NotAWinner(uint256 tokenId);
+
