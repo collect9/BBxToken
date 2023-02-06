@@ -77,12 +77,16 @@ contract C9Game is ERC721 {
     // Fastest/cheapest way is to have the indices to check for a win already supplied
     function checkWinner(uint256 tokenId, uint256[] calldata indices)
         external view {
+            if (tokenId < _minTokenId) {
+                // revert expired token from prior round
+            }
+
             uint256 _gameSize = indices.length;
             //require _gameSize = 5,7,9
             uint256[] memory _gameBoard = viewBoard(tokenId, _gameSize);
             address _tokenOwner = IC9Token(contractToken).ownerOf(_gameBoard[0]);
             for (uint i=1; i<_gameSize;) {
-                if (IC9Token(contractToken).ownerOf(_gameBoard[0]) != _tokenOwner) {
+                if (IC9Token(contractToken).ownerOf(_gameBoard[i]) != _tokenOwner) {
                     //revert not a winner 
                 }
                 unchecked {++i;}
