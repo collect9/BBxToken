@@ -78,5 +78,6 @@ error ZeroTokenId(); //0x1fed7fc5
 // C9Game
 error ExpiredToken(uint256 minTokenId, uint256 receivedTokenId);
 error GameSizeError(uint256 received);
+error InvalidIndices();
 error NotAWinner(uint256 tokenId);
 

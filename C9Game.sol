@@ -27,7 +27,7 @@ contract C9Game is ERC721 {
             _mint(msg.sender, N);
             uint256 _randomNumber;
             uint256 _tokenIndex = _tokenId-1;
-            for (uint i; i<N;) {
+            for (uint256 i; i<N;) {
                 unchecked {
                     _randomNumber = uint256(
                         keccak256(
@@ -57,41 +57,54 @@ contract C9Game is ERC721 {
             return _tokenId;
     }
 
-    function viewBoard(uint256 tokenId, uint256 size)
+    function viewIndicesTokenIds(uint256 tokenId, uint256[] memory _sortedIndices)
         public view
         returns (uint256[] memory) {
-            if (size != 25 || size != 49 || size != 81) {
-                revert GameSizeError(size);
-            }
-            uint256 _gameSize = size*size;
-            uint256[] memory _gameBoard = new uint256[](_gameSize);
+            uint256 _gameSize = _sortedIndices.length;
+            uint256[] memory _c9TokenIds = new uint256[](_gameSize);
             uint256 _packedNumers = _owners[tokenId];
-            uint256 _offset = 160;
-            for (uint i; i<_gameSize;) {
+            uint256 _offset;
+            for (uint256 i; i<_gameSize;) {
                 unchecked {
-                    _gameBoard[i] = uint256(_packedNumers>>_offset) % MODULUS;
-                    ++_offset;
+                    _offset = 160 + _sortedIndices[i];
+                    _c9TokenIds[i] = uint256(_packedNumers>>_offset) % MODULUS;
                     ++i;
                 }
             }
-            return _gameBoard;
+            return _c9TokenIds;
     }
 
-    // Fastest/cheapest way is to have the indices to check for a win already supplied
+    // Indices supplied from front end. The reason is in case multiple valid 
+    // rows are present, the winner can manually choose the row.
     function checkWinner(uint256 tokenId, uint256[] calldata indices)
         external view {
+            // Validate the tokenId
             if (tokenId < _minTokenId) {
                 revert ExpiredToken(_minTokenId, tokenId);
             }
+            // Validate the gameSize
             uint256 _gameSize = indices.length;
-            uint256[] memory _gameBoard = viewBoard(tokenId, _gameSize);
-            address _tokenOwner = IC9Token(contractToken).ownerOf(_gameBoard[0]);
-            for (uint i=1; i<_gameSize;) {
-                if (IC9Token(contractToken).ownerOf(_gameBoard[i]) != _tokenOwner) {
+            if (_gameSize != 5 || _gameSize != 7 || _gameSize != 9) {
+                revert GameSizeError(_gameSize);
+            }
+            // Validate the indices are a row, col, or diag
+            uint256[] memory _sortedIndices = quickSort(indices);
+            if (!validIndices(_sortedIndices)) {
+                revert InvalidIndices();
+            }
+            // Get the C9T tokenIds from the gameboard
+            uint256[] memory _c9TokenIds = viewIndicesTokenIds(tokenId, _sortedIndices);
+
+            // Check to see that all owners of indices are a match
+            
+            address _tokenOwner = IC9Token(contractToken).ownerOf(_c9TokenIds[0]);
+            for (uint256 i=1; i<_gameSize;) {
+                if (IC9Token(contractToken).ownerOf(_c9TokenIds[i]) != _tokenOwner) {
                     revert NotAWinner(tokenId); 
                 }
                 unchecked {++i;}
             }
+
             // If we make it here, we have a winner
 
             /*
@@ -106,5 +119,105 @@ contract C9Game is ERC721 {
     function win()
         private {
             _minTokenId = _tokenId;
+    }
+
+    function quickSort(uint256[] calldata data)
+        public pure 
+        returns (uint256[] memory sorted) {
+            sorted = data;
+            if (sorted.length > 1) {
+                _quick(sorted, 0, sorted.length - 1);
+            }
+    }
+
+    function _quick(uint256[] memory data, uint256 low, uint256 high)
+        private pure {
+            if (low < high) {
+                uint256 pivotVal = data[(low + high) / 2];
+                uint256 low1 = low;
+                uint256 high1 = high;
+
+                for (;;) {
+                    while (data[low1] < pivotVal) {
+                        ++low1;
+                    }
+                    while (data[high1] > pivotVal) {
+                        --high1;
+                    }
+                    if (low1 >= high1) {
+                        break;
+                    }
+                    (data[low1], data[high1]) = (data[high1], data[low1]);
+                    ++low1;
+                    --high1;
+                }
+                if (low < high1) {
+                    _quick(data, low, high1);
+                }
+                ++high1;
+                if (high1 < high) {
+                    _quick(data, high1, high);
+                }
+            }
+    }
+
+    function validIndices(uint256[] memory _sortedIndices)
+        public pure 
+        returns (bool) {
+            uint256 _gameSize = _sortedIndices.length;
+            uint256 _loopSize = _gameSize-1;
+            uint256 index0 = _sortedIndices[0];
+            
+            // Check if a valid col
+            if (index0 < _gameSize) {
+                for (uint256 i=_loopSize; i>0;) {
+                    if (_sortedIndices[i] - _sortedIndices[i-1] != _gameSize) {
+                        break;
+                    }
+                    unchecked {--i;}
+                    if (i==0) {
+                        return true;
+                    }
+                }
+            }
+            // Check if a valid row
+            if (index0 % _gameSize == 0) {
+                for (uint256 i=_loopSize; i>0;) {
+                    if (_sortedIndices[i] - _sortedIndices[i-1] != 1) {
+                        break;
+                    }
+                    unchecked {--i;}
+                    if (i==0) {
+                        return true;
+                    }
+                }
+            }
+            // Check if a valid lower diag
+            uint256 _lDx = _gameSize + 1;
+            if (index0 == 0) {
+                for (uint256 i=_loopSize; i>0;) {
+                    if (_sortedIndices[i] - _sortedIndices[i-1] != _lDx) {
+                        break;
+                    }
+                    unchecked {--i;}
+                    if (i==0) {
+                        return true;
+                    }
+                }
+            }
+            // Check if a valid upper diag
+            _lDx = _gameSize - 1;
+            if (index0 == _gameSize-1) {
+                for (uint256 i=_loopSize; i>0;) {
+                    if (_sortedIndices[i] - _sortedIndices[i-1] != _lDx) {
+                        break;
+                    }
+                    unchecked {--i;}
+                    if (i==0) {
+                        return true;
+                    }
+                }
+            }
+            return false;  // Not a valid indices arrangement
     }
 }
