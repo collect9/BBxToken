@@ -16,15 +16,16 @@ contract C9Game is ERC721 {
     uint256 private _minTokenId;
     address private contractPricer;
     address private immutable contractToken;
+    uint256 private _balance;
+    uint256 private _c9Fees;
 
     constructor(address _contractToken)
         ERC721("Collect9 NFT Game Connect9", "C9X") {
             contractToken = _contractToken;
     }
 
-    function mint(uint256 N) 
-        external payable {
-            _mint(msg.sender, N);
+    function _setTokenGameBoard(uint256 N)
+        private {
             uint256 _randomNumber;
             uint256 _tokenIndex = _tokenId-1;
             for (uint256 i; i<N;) {
@@ -49,6 +50,14 @@ contract C9Game is ERC721 {
                     ++i;
                 }
             }
+    }
+
+    function mint(uint256 N) 
+        external payable {
+            // Check msg.value is correct
+            _balance += msg.value;
+            _mint(msg.sender, N);
+            _setTokenGameBoard(N);
     }
 
     function totalSupply()
@@ -77,7 +86,7 @@ contract C9Game is ERC721 {
     // Indices supplied from front end. The reason is in case multiple valid 
     // rows are present, the winner can manually choose the row.
     function checkWinner(uint256 tokenId, uint256[] calldata indices)
-        external view {
+        external {
             // Validate the tokenId
             if (tokenId < _minTokenId) {
                 revert ExpiredToken(_minTokenId, tokenId);
@@ -94,9 +103,7 @@ contract C9Game is ERC721 {
             }
             // Get the C9T tokenIds from the gameboard
             uint256[] memory _c9TokenIds = viewIndicesTokenIds(tokenId, _sortedIndices);
-
-            // Check to see that all owners of indices are a match
-            
+            // Validate all owners of c9TokenIds are a match
             address _tokenOwner = IC9Token(contractToken).ownerOf(_c9TokenIds[0]);
             for (uint256 i=1; i<_gameSize;) {
                 if (IC9Token(contractToken).ownerOf(_c9TokenIds[i]) != _tokenOwner) {
@@ -106,14 +113,19 @@ contract C9Game is ERC721 {
             }
 
             // If we make it here, we have a winner
-
-            /*
-            If msg.sender == _tokenOwner, payout full 90% to msg.sender
-            Else payout 65% to msg.sender, 25% to _tokenOwner
-
-            Payout 5% to Collect9
-            Roll remainder (5%) into next round
-            */
+            uint256 _winningPayouts = 90*_balance/100;
+            uint256 _c9Fee = 5*_balance/100;
+            // New _balance will be 5% of the original _balance
+            _balance -= (_winningPayouts + _c9Fee);
+            _c9Fees += _c9Fee;
+            
+            if (msg.sender == _tokenOwner) {
+                // Payout full winnings to msg.sender
+            }
+            else {
+                // Payout 75% of _winningPayouts to msg.sender
+                // Payout 25% of _winningPayouts to _tokenOwner
+            }
     }
 
     function win()
@@ -167,7 +179,6 @@ contract C9Game is ERC721 {
             uint256 _gameSize = _sortedIndices.length;
             uint256 _loopSize = _gameSize-1;
             uint256 index0 = _sortedIndices[0];
-            
             // Check if a valid col
             if (index0 < _gameSize) {
                 for (uint256 i=_loopSize; i>0;) {
@@ -219,5 +230,11 @@ contract C9Game is ERC721 {
                 }
             }
             return false;  // Not a valid indices arrangement
+    }
+
+    // Withdraw only the C9Fees
+    function withdraw()
+        external {
+
     }
 }
