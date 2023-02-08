@@ -6,8 +6,6 @@ import "./utils/interfaces/IC9EthPriceFeed.sol";
 import "./abstract/C9Errors.sol";
 
 address constant TOKEN_CONTRACT = 0x5B38Da6a701c568545dCfcB03FcB875f56beddC4;
-uint256 constant GAME_SIZE = 25;
-uint256 constant MODULUS = 272;
 
 contract C9Game is ERC721 {
 
@@ -18,10 +16,12 @@ contract C9Game is ERC721 {
     address private immutable contractToken;
     uint256 private _balance;
     uint256 private _c9Fees;
+    uint256 private _modulus = 272;
 
     constructor(address _contractToken)
         ERC721("Collect9 NFT Game Connect9", "C9X") {
             contractToken = _contractToken;
+            //_modulus = IC9Token(contractToken).totalSupply();
     }
 
     function _setTokenGameBoard(uint256 N)
@@ -52,9 +52,15 @@ contract C9Game is ERC721 {
             }
     }
 
-    function mint(uint256 N) 
-        external payable {
-            // Check msg.value is correct
+    function mint(uint256 N)
+        external payable
+        notFrozen() {
+            /*
+            uint256 purchaseWeiPrice = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(5*N);
+            if (msg.value != purchaseWeiPrice) {
+                revert InvalidPaymentAmount(purchaseWeiPrice, msg.value);
+            }
+            */
             _balance += msg.value;
             _mint(msg.sender, N);
             _setTokenGameBoard(N);
@@ -66,6 +72,28 @@ contract C9Game is ERC721 {
             return _tokenId;
     }
 
+    function viewGameBoard(uint256 tokenId, uint256 _gameSize)
+        external view 
+        returns (uint256[] memory) {
+            // Validate the gameSize
+            if (_gameSize != 5 && _gameSize != 7 && _gameSize != 9) {
+                revert GameSizeError(_gameSize);
+            }
+            uint256 _packedNumers = _owners[tokenId];
+            uint256 _boardSize = _gameSize*_gameSize;
+            uint256[] memory _c9TokenIds = new uint256[](_boardSize);
+            uint256 _offset = 160;
+            uint256 __modulus = _modulus;
+            for (uint256 i; i<_boardSize;) {
+                unchecked {
+                    _c9TokenIds[i] = uint256(_packedNumers>>_offset) % __modulus;
+                    ++i;
+                    ++_offset;
+                }
+            }
+            return _c9TokenIds;
+    }
+
     function viewIndicesTokenIds(uint256 tokenId, uint256[] memory _sortedIndices)
         public view
         returns (uint256[] memory) {
@@ -73,10 +101,11 @@ contract C9Game is ERC721 {
             uint256[] memory _c9TokenIds = new uint256[](_gameSize);
             uint256 _packedNumers = _owners[tokenId];
             uint256 _offset;
+            uint256 __modulus = _modulus;
             for (uint256 i; i<_gameSize;) {
                 unchecked {
                     _offset = 160 + _sortedIndices[i];
-                    _c9TokenIds[i] = uint256(_packedNumers>>_offset) % MODULUS;
+                    _c9TokenIds[i] = uint256(_packedNumers>>_offset) % __modulus;
                     ++i;
                 }
             }
@@ -93,7 +122,7 @@ contract C9Game is ERC721 {
             }
             // Validate the gameSize
             uint256 _gameSize = indices.length;
-            if (_gameSize != 5 || _gameSize != 7 || _gameSize != 9) {
+            if (_gameSize != 5 && _gameSize != 7 && _gameSize != 9) {
                 revert GameSizeError(_gameSize);
             }
             // Validate the indices are a row, col, or diag
@@ -121,16 +150,30 @@ contract C9Game is ERC721 {
             
             if (msg.sender == _tokenOwner) {
                 // Payout full winnings to msg.sender
+                (bool success,) = payable(msg.sender).call{value: _winningPayouts}("");
+                if(!success) {
+                    revert PaymentFailure(address(this), msg.sender, _winningPayouts);
+                }
             }
             else {
                 // Payout 75% of _winningPayouts to msg.sender
+                uint256 _winning75Payouts =  75*_winningPayouts/100;
+                (bool success,) = payable(msg.sender).call{value: _winning75Payouts}("");
+                if(!success) {
+                    revert PaymentFailure(address(this), msg.sender, _winning75Payouts);
+                }
                 // Payout 25% of _winningPayouts to _tokenOwner
+                uint256 _winning25Payouts =  25*_winningPayouts/100;
+                (success,) = payable(_tokenOwner).call{value: _winning25Payouts}("");
+                if(!success) {
+                    revert PaymentFailure(address(this), _tokenOwner, _winning25Payouts);
+                }
             }
-    }
-
-    function win()
-        private {
+            
+            // Freeze contract token params for next round
             _minTokenId = _tokenId;
+            _modulus = IC9Token(contractToken).totalSupply();
+            _frozen = true;
     }
 
     function quickSort(uint256[] calldata data)
@@ -229,12 +272,18 @@ contract C9Game is ERC721 {
                     }
                 }
             }
-            return false;  // Not a valid indices arrangement
+            return false; // Not a valid indices arrangement
     }
 
     // Withdraw only the C9Fees
-    function withdraw()
-        external {
-
+    function withdraw(bool _all)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            if (_all) {
+                payable(owner).transfer(address(this).balance);
+            }
+            else {
+                payable(owner).transfer(_c9Fees);
+            }
     }
 }
