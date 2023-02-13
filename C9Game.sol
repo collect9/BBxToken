@@ -27,7 +27,7 @@ contract C9Game is ERC721 {
     function _setTokenGameBoard(uint256 N)
         private {
             uint256 _randomNumber;
-            uint256 _tokenIndex = _tokenId-1;
+            uint256 _tokenIndex = _tokenCounter-1;
             for (uint256 i; i<N;) {
                 unchecked {
                     _randomNumber = uint256(
@@ -53,8 +53,8 @@ contract C9Game is ERC721 {
     }
 
     function mint(uint256 N)
-        external payable
-        notFrozen() {
+        external payable {
+        //notFrozen() {
             /*
             uint256 purchaseWeiPrice = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(5*N);
             if (msg.value != purchaseWeiPrice) {
@@ -62,14 +62,8 @@ contract C9Game is ERC721 {
             }
             */
             _balance += msg.value;
-            _mint(msg.sender, N);
+            _safeMint(msg.sender, N);
             _setTokenGameBoard(N);
-    }
-
-    function totalSupply()
-        external view
-        returns (uint256) {
-            return _tokenId;
     }
 
     function viewGameBoard(uint256 tokenId, uint256 _gameSize)
@@ -171,9 +165,9 @@ contract C9Game is ERC721 {
             }
             
             // Freeze contract token params for next round
-            _minTokenId = _tokenId;
+            _minTokenId = _tokenCounter;
             _modulus = IC9Token(contractToken).totalSupply();
-            _frozen = true;
+            //_frozen = true;
     }
 
     function quickSort(uint256[] calldata data)
@@ -277,13 +271,13 @@ contract C9Game is ERC721 {
 
     // Withdraw only the C9Fees
     function withdraw(bool _all)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE) {
+        external {
+        //onlyRole(DEFAULT_ADMIN_ROLE) {
             if (_all) {
-                payable(owner).transfer(address(this).balance);
+                //payable(owner).transfer(address(this).balance);
             }
             else {
-                payable(owner).transfer(_c9Fees);
+                //payable(owner).transfer(_c9Fees);
             }
     }
 }
