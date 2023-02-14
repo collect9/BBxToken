@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
 import "./utils/C9ERC721Base.sol";
+import "./interfaces/IC9Game.sol";
 import "./interfaces/IC9Token.sol";
 import "./utils/interfaces/IC9EthPriceFeed.sol";
 import "./abstract/C9Errors.sol";
 
-address constant TOKEN_CONTRACT = 0x5B38Da6a701c568545dCfcB03FcB875f56beddC4;
-
-contract C9Game is ERC721 {
+contract C9Game is IC9Game, ERC721 {
 
     mapping(uint256 => uint256) private _tokenIdBoard;
     uint256 private _seed; //Use contract pricer
@@ -16,12 +15,12 @@ contract C9Game is ERC721 {
     address private immutable contractToken;
     uint256 private _balance;
     uint256 private _c9Fees;
-    uint256 private _modulus = 272;
+    uint256 private _modulus;
 
     constructor(address _contractToken)
         ERC721("Collect9 NFT Game Connect9", "C9X") {
             contractToken = _contractToken;
-            //_modulus = IC9Token(contractToken).totalSupply();
+            _modulus = IC9Token(contractToken).totalSupply();
     }
 
     function _setTokenGameBoard(uint256 N)
@@ -67,7 +66,8 @@ contract C9Game is ERC721 {
     }
 
     function viewGameBoard(uint256 tokenId, uint256 _gameSize)
-        external view 
+        external view
+        override
         returns (uint256[] memory) {
             // Validate the gameSize
             if (_gameSize != 5 && _gameSize != 7 && _gameSize != 9) {
