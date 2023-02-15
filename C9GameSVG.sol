@@ -21,21 +21,22 @@ contract C9GameSVG {
         '</style>'
         '<rect width="100%" height="100%" rx="8%" fill="url(#c9gbg)" />'
         '<text x="120" y="16" class="c9gT" text-anchor="middle">COLLECT9 BINGO NFT</text>'
-        '<text x="22" y="228" class="c9gS">Token ID 0     </text>'
-        '<text x="22" y="237" class="c9gS">View: XxX</text>'
+        '<text x="22" y="228" class="c9gS">Token ID = 0     </text>'
+        '<text x="22" y="237" class="c9gS">View = XxX</text>'
         '<text x="120" y="228" class="c9gS" text-anchor="middle">View Max Win</text>'
-        '<text x="120" y="237" class="c9gS" text-anchor="middle">ETH: 0.00</text>'
+        '<text x="120" y="237" class="c9gS" text-anchor="middle">ETH = 0.00</text>'
         '<text x="218" y="228" class="c9gS" text-anchor="end">Round Min Valid</text>'
-        '<text x="218" y="237" class="c9gS" text-anchor="end">Token ID: 0     </text>'
+        '<text x="218" y="237" class="c9gS" text-anchor="end">Token ID = 0     </text>'
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-005 -005 060 060" width="100%" height="100%">'
         '<defs>'
         '<symbol id="r">'
-        '<rect width="10" height="10" />'
+        '<rect width="10" height="10" style="cursor:pointer;"/>'
         '</symbol>'
         '</defs>'
         '<style>.c9gn {font-family:"Courier New"; font-size:5px; font-weight:bold; opacity:0.4;}</style>';
 
     string constant SVG_FTR = ''
+        '<rect x="0" y="0" width="00" height="00" style="stroke: #FA4; stroke-width: 1; fill: none;" />'
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 276" height="000%" width="000%" x="00%" y="00%">'
         '<symbol id="a">'
         '<path d="M122.4,2,26.2,57.5a11,11,0,0,0,0,19.4h0a11.2,11,0,0,0,11,0l84-48.5V67L74.3,94.3a6,6,0,0,0,0,10L125,133.8a6,6,0,0,0,6,0l98.7-57a11,11,0,0,0,0-19.4L133.6,2A11,11,0,0,0,122.4,2Zm12.2,65V28.5l76,44-33.5,19.3Z"/>'
@@ -150,19 +151,19 @@ contract C9GameSVG {
         bytes3 _viewBoxMax = bytes3(bytes(viewBoxMax[gameSize]));
         bytes6 _tokenId = _sTokenId(tokenId);
         assembly {
-            let dst := add(hdr, 610)
+            let dst := add(hdr, 612)
             mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _tokenId))
-            dst := add(hdr, 663)
+            dst := add(hdr, 666)
             mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), _gameSize))
-            dst := add(hdr, 665)
+            dst := add(hdr, 668)
             mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), _gameSize))
-            dst := add(hdr, 1021)
-            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMin))
             dst := add(hdr, 1026)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMin))
-            dst := add(hdr, 1030)
+            dst := add(hdr, 1031)
+            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMin))
+            dst := add(hdr, 1035)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMax))
-            dst := add(hdr, 1034)
+            dst := add(hdr, 1039)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMax))
         }
 
@@ -178,14 +179,19 @@ contract C9GameSVG {
         string memory ftr = SVG_FTR;
         bytes2 _logoPos = bytes2(bytes(logoPos[gameSize]));
         bytes3 _logoWidth = bytes3(bytes(logoWidth[gameSize]));
+        bytes2 _gameWidth = bytes2(Helpers.uintToBytes(10*gameSize));
         assembly {
-            let dst := add(ftr, 102)
+            let dst := add(ftr, 57)
+            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _gameWidth))
+            dst := add(ftr, 69)
+            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _gameWidth))
+            dst := add(ftr, 196)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _logoWidth))
-            dst := add(ftr, 115)
+            dst := add(ftr, 209)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _logoWidth))
-            dst := add(ftr, 124)
+            dst := add(ftr, 218)
             mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _logoPos))
-            dst := add(ftr, 132)
+            dst := add(ftr, 226)
             mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _logoPos))
         }
         return ftr;
@@ -215,17 +221,17 @@ contract C9GameSVG {
         bytes memory _bAddress = Helpers.toAsciiString(tokenOwner);
         bytes2 _b2Address = bytes2(_bAddress);
         assembly {
-            let dst := add(output, 140)
+            let dst := add(output, 177)
             mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _b2Address))
         }
     }
 
-    function _rect(address tokenOwner, uint256 x, uint256 y, uint256 r, uint256 g, uint256 b)
+    function _rect(address tokenOwner, uint256 tokenId, uint256 x, uint256 y, uint256 r, uint256 g, uint256 b)
     private pure
     returns (string memory output) {
         // Output of the rect element
         output = ''
-            '<use href="#r" x="00" y="00" fill="rgb(000,000,000)"/>'
+            '<use href="#r" x="00" y="00" fill="rgb(000,000,000)" onclick="alert(\'C9TokenId: 000000\')"/>'
             '<text x="00" y="00" class="c9gn" text-anchor="middle">0x</text>';
 
         // Rect position and color
@@ -235,9 +241,16 @@ contract C9GameSVG {
         _rgb(output, g, 75);
         _rgb(output, b, 79);
 
+        //TokenId onclick
+        bytes6 _tokenId = _sTokenId(tokenId);
+        assembly {
+            let dst := add(output, 112)
+            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _tokenId))
+        }
+
         // Text position and label
-        _coor(output, x+5, 95);
-        _coor(output, y+7, 102);
+        _coor(output, x+5, 132);
+        _coor(output, y+7, 139);
         _label(output, tokenOwner);
     }
 
@@ -262,7 +275,7 @@ contract C9GameSVG {
                     _tokenId = IC9Token(contractToken).tokenByIndex(_tokenIds[z]);
                     _tokenOwner = IC9Token(contractToken).ownerOf(_tokenId);
                     (r, g, b) = _addressToRGB(_tokenOwner);
-                    output = string.concat(output, _rect(_tokenOwner, x, y, r, g, b));
+                    output = string.concat(output, _rect(_tokenOwner, _tokenId, x, y, r, g, b));
                 }
                 unchecked {
                     y+=10;
