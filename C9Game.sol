@@ -85,29 +85,31 @@ contract C9Game is IC9Game, ERC721 {
     function _setTokenGameBoard(uint256 N)
         private {
             uint256 _randomNumber;
-            uint256 _tokenIndex = _tokenCounter-1;
-            for (uint256 i; i<N;) {
+            uint256 _tokenIdMax = _tokenCounter;
+            uint256 _tokenId = _tokenIdMax-N;
+            uint256 __seed = _seed;
+            for (_tokenId; _tokenId<_tokenIdMax;) {
                 unchecked {
                     _randomNumber = uint256(
                         keccak256(
                             abi.encodePacked(
                                 block.prevrandao,
                                 msg.sender,
-                                _seed
+                                __seed
                             )
                         )
                     );
-                    _seed += _randomNumber;
-                    _owners[_tokenIndex] = _setTokenParam(
-                        _owners[_tokenIndex],
+                    __seed += _randomNumber;
+                    _owners[_tokenId] = _setTokenParam(
+                        _owners[_tokenId],
                         160,
                         _randomNumber,
                         type(uint96).max
                     );
-                    --_tokenIndex;
-                    ++i;
+                    ++_tokenId;
                 }
             }
+            _seed = __seed;
     }
 
     function balances()
