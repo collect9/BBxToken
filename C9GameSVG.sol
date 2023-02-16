@@ -14,11 +14,16 @@ contract C9GameSVG {
         '<stop offset="0" stop-color="#C76CD7" />'
         '<stop offset="1" stop-color="#3123AE" />'
         '</linearGradient>'
+        '<filter id="c9GS">'
+        '<feColorMatrix type="saturate" values="1.0"/>'
+        '</filter>'
         '</defs>'
         '<style>'
+        '.c9gE {font-size:34px; fill:red;}'
         '.c9gT {font-size:14px; fill:#ded;}'
         '.c9gS {font-size:7px; fill:#ded;}'
         '</style>'
+        '<g filter="url(#c9GS)">'
         '<rect width="100%" height="100%" rx="8%" fill="url(#c9gbg)" />'
         '<text x="120" y="16" class="c9gT" text-anchor="middle">COLLECT9 BINGO NFT</text>'
         '<text x="22" y="228" class="c9gS">Token ID = 0     </text>'
@@ -44,7 +49,10 @@ contract C9GameSVG {
         '<use href="#a"/>'
         '<use href="#a" transform="translate(0 9.3) rotate(240 125 138)"/>'
         '<use href="#a" transform="translate(9 4) rotate(120 125 138)"/>'
-        '</svg></svg></svg>';
+        '</svg></svg>'
+        '</g>'
+        '<text x="50%" y="55%" class="c9gE" text-anchor="middle">       </text>'
+        '</svg>';
 
     mapping(uint256 => string) viewBoxMin;
     mapping(uint256 => string) viewBoxMax;
@@ -150,25 +158,37 @@ contract C9GameSVG {
         bytes3 _viewBoxMin = bytes3(bytes(viewBoxMin[gameSize]));
         bytes3 _viewBoxMax = bytes3(bytes(viewBoxMax[gameSize]));
         bytes6 _tokenId = _sTokenId(tokenId);
+        uint256 _roundMinTokenId = IC9Game(contractGame).minRoundTokenId();
+        bytes6 _minTokenId = _sTokenId(_roundMinTokenId);
         assembly {
-            let dst := add(hdr, 612)
+            let dst := add(hdr, 740)
             mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _tokenId))
-            dst := add(hdr, 666)
+            dst := add(hdr, 794)
             mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), _gameSize))
-            dst := add(hdr, 668)
+            dst := add(hdr, 796)
             mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), _gameSize))
-            dst := add(hdr, 1026)
+            dst := add(hdr, 1017)
+            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _minTokenId))
+            dst := add(hdr, 1154)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMin))
-            dst := add(hdr, 1031)
+            dst := add(hdr, 1159)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMin))
-            dst := add(hdr, 1035)
+            dst := add(hdr, 1163)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMax))
-            dst := add(hdr, 1039)
+            dst := add(hdr, 1167)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMax))
         }
 
+        bool _valid = tokenId >= _roundMinTokenId ? true : false;
+        if (!_valid) {
+            assembly {
+                let dst := add(hdr, 398)
+                mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "0")) 
+            }
+        }
+
         // Max pot comes from reading reading game contract balance and calc
-        // Round min valid comes from reading game contract
+        
 
         return hdr;   
     }
@@ -257,8 +277,6 @@ contract C9GameSVG {
     function _buildRects(uint256 tokenId, uint256 gameSize)
     private view 
     returns (string memory output) {
-    //public view
-    //returns (uint256[] memory) {
         uint256 x;
         uint256 y;
         uint256 z;
