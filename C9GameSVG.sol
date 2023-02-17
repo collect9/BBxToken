@@ -143,7 +143,7 @@ contract C9GameSVG {
         bytes3 _viewBoxMin = bytes3(bytes(viewBoxMin[gameSize]));
         bytes3 _viewBoxMax = bytes3(bytes(viewBoxMax[gameSize]));
         bytes6 _tokenId = _sTokenId(tokenId);
-        uint256 _roundMinTokenId = IC9Game(contractGame).minRoundTokenId();
+        uint256 _roundMinTokenId = IC9Game(contractGame).minRoundValidTokenId();
         bytes6 _minTokenId = _sTokenId(_roundMinTokenId);
         assembly {
             let dst := add(hdr, 740)
@@ -316,16 +316,21 @@ contract C9GameSVG {
     function svgImage(uint256 tokenId, uint256 gameSize)
     external view
     returns (string memory output) {
-        string memory hdr = _setHDR(tokenId, gameSize);
-        string memory rects = _buildRects(tokenId, gameSize);
-        string memory middle = _middleLabel(gameSize);
-        string memory ftr = _setFTR(gameSize);
-        return string.concat(
-            hdr,
-            rects,
-            middle,
-            ftr
-        );
+        if (IC9Token(contractToken).ownerOf(tokenId) != address(0)) {
+            string memory hdr = _setHDR(tokenId, gameSize);
+            string memory rects = _buildRects(tokenId, gameSize);
+            string memory middle = _middleLabel(gameSize);
+            string memory ftr = _setFTR(gameSize);
+            return string.concat(
+                hdr,
+                rects,
+                middle,
+                ftr
+            );
+        }
+        else {
+            return "";
+        }
     }
 
     function __destroy()
