@@ -167,7 +167,7 @@ contract C9GameSVG {
             mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), _gameSize))
             dst := add(hdr, 796)
             mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), _gameSize))
-            dst := add(hdr, 1017)
+            dst := add(hdr, 1091)
             mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _minTokenId))
             dst := add(hdr, 1154)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMin))
