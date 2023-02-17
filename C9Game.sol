@@ -44,13 +44,16 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
 
     /*
      * Network: Mainnet
-     * LINK: 
      * VRF: 
      * Network: Sepolia
      * VRF: 0x8103B0A8A00be2DDC778e6e7eaa21791Cd364625
     */
-    constructor(address _contractToken, address _contractPriceFeed, address _vrfCoordinator)
-        ERC721("Collect9 NFT Bingo ConnectX", "C9X")
+    constructor(
+        address _contractToken,
+        address _contractPriceFeed,
+        address _vrfCoordinator
+        )
+        ERC721("Collect9 NFT Bingo", "C9X")
         C9RandomSeed(_vrfCoordinator)
     {
         _mintingFee = 5;
@@ -187,6 +190,14 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
             _minTokenId = _tokenCounter;
             _modulus = IC9Token(contractToken).totalSupply();
             _frozen = true;            
+    }
+
+    function currentPots(uint256 _gameSize)
+        external view
+        returns(uint256[2] memory splitPayouts) {
+            uint256 winningPayouts = 90*_balance*_payoutTiers[_gameSize]/1000000;
+            splitPayouts[0] = _payoutSplit[0]*winningPayouts;
+            splitPayouts[1] = _payoutSplit[1]*winningPayouts;
     }
 
     function fulfillRandomWords(uint256 _requestId, uint256[] memory _randomWords)
