@@ -1,122 +1,108 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
+
+import "./utils/Helpers.sol";
 import "./utils/C9ERC721Base.sol";
+import "./utils/C9VRF3.sol";
+
 import "./interfaces/IC9Game.sol";
 import "./interfaces/IC9Token.sol";
 import "./utils/interfaces/IC9EthPriceFeed.sol";
 import "./abstract/C9Errors.sol";
 
-contract C9Game is IC9Game, ERC721 {
+contract C9Game is IC9Game, ERC721, C9RandomSeed {
+    // Tracking of contract balance with fees
+    uint256 private _balance;
+    uint256 private _c9Fees;
+    uint256 private _mintingFee;
 
-    mapping(uint256 => uint256) private _tokenIdBoard;
-    uint256 public _seed; //Use contract pricer
+    // Current round parameters
     uint256 private _minTokenId;
-    address public contractPricer;
-    address public immutable contractToken;
-    uint256 public _balance;
-    uint256 public _c9Fees;
-    uint256 public _modulus;
+    uint256 private _modulus;
 
-    uint128[2] private _payoutSplit;
+    // Connecting contracts
+    address private contractPricer;
+    address private immutable contractToken;
+
+    // Payout fractions
+    uint48[2] private _payoutSplit;
     mapping(uint256 => uint256) private _payoutTiers;
 
+    // Event for winner owns the C9Ts
     event Winner1(
         address indexed winner,
         uint256 indexed tokenId,
         uint256 indexed winnings
     );
 
+    // Event for winner does not own the C9Ts
     event Winner2(
         address indexed winner,
         address indexed tokenOwner,
         uint256 indexed winnings
     );
 
-    constructor(address _contractToken)
-        ERC721("Collect9 NFT Bingo ConnectX", "C9X") {
-            contractToken = _contractToken;
-            _modulus = IC9Token(contractToken).totalSupply();
-            _payoutSplit[0] = 25;
-            _payoutSplit[1] = 75;
-            _payoutTiers[5] = 33;
-            _payoutTiers[7] = 67;
-            _payoutTiers[9] = 100;
+    /*
+     * Network: Mainnet
+     * LINK: 
+     * VRF: 
+     * Network: Sepolia
+     * VRF: 0x8103B0A8A00be2DDC778e6e7eaa21791Cd364625
+    */
+    constructor(address _contractToken, address _contractPriceFeed, address _vrfCoordinator)
+        ERC721("Collect9 NFT Bingo ConnectX", "C9X")
+        C9RandomSeed(_vrfCoordinator)
+    {
+        _mintingFee = 5;
+        _payoutSplit = [uint48(25), 75];
+        _payoutTiers[5] = 33;
+        _payoutTiers[7] = 67;
+        _payoutTiers[9] = 100;
+        _modulus = IC9Token(_contractToken).totalSupply();
+        contractPricer = _contractPriceFeed;
+        contractToken = _contractToken;
     }
 
-    function _quick(uint256[] memory data, uint256 low, uint256 high)
-        private pure {
-            if (low < high) {
-                uint256 pivotVal = data[(low + high) / 2];
-                uint256 low1 = low;
-                uint256 high1 = high;
-                for (;;) {
-                    while (data[low1] < pivotVal) {
-                        ++low1;
-                    }
-                    while (data[high1] > pivotVal) {
-                        --high1;
-                    }
-                    if (low1 >= high1) {
-                        break;
-                    }
-                    (data[low1], data[high1]) = (data[high1], data[low1]);
-                    ++low1;
-                    --high1;
-                }
-                if (low < high1) {
-                    _quick(data, low, high1);
-                }
-                ++high1;
-                if (high1 < high) {
-                    _quick(data, high1, high);
-                }
-            }
-    }
-
-    function _quickSort(uint256[] calldata data)
-        private pure 
-        returns (uint256[] memory sorted) {
-            sorted = data;
-            if (sorted.length > 1) {
-                _quick(sorted, 0, sorted.length - 1);
-            }
-    }
-
-    function _setTokenGameBoard(uint256 N)
+    /*
+     * @dev This is a batch function that
+     * sets the game boards for the last N tokens minted.
+     * _tokenCounter, a state variable, is the last tokenID 
+     * minted. It, along with _seed are copied to memory to 
+     * nreduce gas costs in the loop.
+     */
+    function _setTokenGameBoard(uint256 N, uint256 _randomMintSeed)
         private {
-            uint256 _randomNumber;
             uint256 _tokenIdMax = _tokenCounter;
             uint256 _tokenId = _tokenIdMax-N;
-            uint256 __seed = _seed;
             for (_tokenId; _tokenId<_tokenIdMax;) {
                 unchecked {
-                    _randomNumber = uint256(
+                    _owners[_tokenId] = _setTokenParam(
+                        _owners[_tokenId],
+                        160,
+                        _randomMintSeed,
+                        type(uint96).max
+                    );
+                    _randomMintSeed += uint256(
                         keccak256(
                             abi.encodePacked(
                                 block.prevrandao,
                                 msg.sender,
-                                __seed
+                                _randomMintSeed
                             )
                         )
-                    );
-                    __seed += _randomNumber;
-                    _owners[_tokenId] = _setTokenParam(
-                        _owners[_tokenId],
-                        160,
-                        _randomNumber,
-                        type(uint96).max
                     );
                     ++_tokenId;
                 }
             }
-            _seed = __seed;
     }
 
     function balances()
         external view
         onlyRole(DEFAULT_ADMIN_ROLE)
-        returns(uint256, uint256, uint256) {
-            return (address(this).balance, _balance, _c9Fees);
+        returns(uint256 balance, uint256 c9WeiBalance, uint256 c9WeiFees) {
+            balance = address(this).balance;
+            c9WeiBalance = _balance;
+            c9WeiFees = _c9Fees;
     }
 
     // Indices supplied from front end. The reason is in case multiple valid 
@@ -143,7 +129,7 @@ contract C9Game is IC9Game, ERC721 {
                 revert("checkWinner() GameSizeError");
             }
             // Validate the indices are a row, col, or diag
-            uint256[] memory _sortedIndices = _quickSort(indices);
+            uint256[] memory _sortedIndices = Helpers.quickSort(indices);
             if (!validIndices(_sortedIndices)) {
                 //revert InvalidIndices();
                 revert("checkWinner() InvalidIndices");
@@ -200,10 +186,31 @@ contract C9Game is IC9Game, ERC721 {
             // // Freeze contract token params for next round
             _minTokenId = _tokenCounter;
             _modulus = IC9Token(contractToken).totalSupply();
-            unchecked {
-                _seed += block.timestamp;
-            }
             _frozen = true;            
+    }
+
+    function fulfillRandomWords(uint256 _requestId, uint256[] memory _randomWords)
+        internal override {
+            super.fulfillRandomWords(_requestId, _randomWords);
+            uint256 N = statusRequests[_requestId].numberOfMints;
+            _safeMint(statusRequests[_requestId].requester, N);
+            _setTokenGameBoard(N, _randomWords[0]);
+    }
+
+    /**
+     * @dev Returns list of contracts this contract is linked to.
+     */
+    function getContracts()
+        external view
+        returns(address pricerContract, address tokenContract) {
+            pricerContract = contractPricer;
+            tokenContract = contractToken;
+    }
+
+    function getMintingFee(uint256 N)
+        public view
+        returns (uint256) {
+            return IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_mintingFee*N);
     }
 
     function minRoundTokenId()
@@ -215,22 +222,45 @@ contract C9Game is IC9Game, ERC721 {
 
     function mint(uint256 N)
         external payable
+        onlyRole(DEFAULT_ADMIN_ROLE) 
         notFrozen() {
-            /*
-            uint256 purchaseWeiPrice = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(5*N);
-            if (msg.value != purchaseWeiPrice) {
-                revert InvalidPaymentAmount(purchaseWeiPrice, msg.value);
+            if (N > 0) {
+                uint256 mintingFeeWei = getMintingFee(N);
+                if (msg.value != mintingFeeWei) {
+                    //revert InvalidPaymentAmount(mintingFeeWei, msg.value);
+                    revert("mint() InvalidPaymentAmount()");
+                }
+                _balance += msg.value;
+                requestRandomWords(msg.sender, N);
             }
-            */
-            _balance += msg.value;
-            _safeMint(msg.sender, N);
-            _setTokenGameBoard(N);
+            else {
+                revert("Cannot Mint 0");
+            }
     }
 
-    function setPayoutSplit(uint128[2] calldata amounts)
+    /**
+     * @dev Sets/updates the pricer contract 
+     * address if ever needed.
+     */
+    function setContractPricer(address _address)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            _payoutSplit = amounts;
+            if (contractPricer == _address) {
+                revert AddressAlreadySet();
+            }
+            contractPricer = _address;
+    }
+
+    function setMintingFee(uint256 fee)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            _mintingFee = fee;
+    }
+
+    function setPayoutSplit(uint256 winnerAmt, uint256 tokenOwnerAmt)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            _payoutSplit = [uint48(winnerAmt), uint48(tokenOwnerAmt)];
     }
 
     function setPayoutTier(uint256 tier, uint256 amount)
@@ -350,7 +380,10 @@ contract C9Game is IC9Game, ERC721 {
                 payable(owner).transfer(address(this).balance);
                 _balance = 0;
                 _c9Fees = 0;
-            }        
+            }
+            else {
+                revert ActionNotConfirmed();
+            }
     }
 
     function withdrawFees(bool confirm)
@@ -360,6 +393,9 @@ contract C9Game is IC9Game, ERC721 {
                 payable(owner).transfer(_c9Fees);
                 _balance -= _c9Fees;
                 _c9Fees = 0;
+            }
+            else {
+                revert ActionNotConfirmed();
             }
     }
 }
