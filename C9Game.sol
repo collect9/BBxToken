@@ -10,6 +10,8 @@ import "./interfaces/IC9Token.sol";
 import "./utils/interfaces/IC9EthPriceFeed.sol";
 import "./abstract/C9Errors.sol";
 
+uint256 constant MAX_MINT_BATCH_SIZE = 32;
+
 contract C9Game is IC9Game, ERC721, C9RandomSeed {
     // Tracking of contract balance with fees
     uint256 private _balance;
@@ -17,7 +19,7 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
     uint256 private _mintingFee;
 
     // Current round parameters
-    uint256 private _minTokenId;
+    uint256 private _minValidTokenId;
     uint256 private _modulus;
 
     // Connecting contracts
@@ -29,16 +31,16 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
     mapping(uint256 => uint256) private _payoutTiers;
 
     // Event for winner owns the C9Ts
-    event Winner1(
+    event WinnerFull(
         address indexed winner,
         uint256 indexed tokenId,
         uint256 indexed winnings
     );
 
     // Event for winner does not own the C9Ts
-    event Winner2(
+    event WinnerSplit(
         address indexed winner,
-        address indexed tokenOwner,
+        uint256 indexed tokenId,
         uint256 indexed winnings
     );
 
@@ -56,14 +58,37 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
         ERC721("Collect9 NFT Bingo", "C9X")
         C9RandomSeed(_vrfCoordinator)
     {
+        _modulus = IC9Token(_contractToken).totalSupply();
         _mintingFee = 5;
         _payoutSplit = [uint48(25), 75];
-        _payoutTiers[5] = 33;
-        _payoutTiers[7] = 67;
+        _payoutTiers[5] = 40;
+        _payoutTiers[7] = 70;
         _payoutTiers[9] = 100;
-        _modulus = IC9Token(_contractToken).totalSupply();
         contractPricer = _contractPriceFeed;
         contractToken = _contractToken;
+    }
+
+    modifier validGameSize(uint256 _gameSize) {
+        if (_gameSize != 5 && _gameSize != 7 && _gameSize != 9) {
+                revert GameSizeError(_gameSize);
+        }
+        _;
+    }
+
+    /**
+     * @dev Required overrides from imported contracts.
+     * This one checks to make sure the token is not locked 
+     * due to being expired or that the contract is not 
+     * frozen.
+     */
+    function _beforeTokenTransfer(address from, address to, uint256 tokenId, uint256 batchSize)
+        internal
+        override
+        notFrozen() {
+            if (tokenId < _minValidTokenId) {
+                revert ExpiredToken(_minValidTokenId, tokenId);
+            }
+            super._beforeTokenTransfer(from, to, tokenId, batchSize);
     }
 
     /*
@@ -73,24 +98,28 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
      * minted. It, along with _seed are copied to memory to 
      * nreduce gas costs in the loop.
      */
-    function _setTokenGameBoard(uint256 N, uint256 _randomMintSeed)
+    function _setTokenGameBoards(uint256 N, uint256 _randomSeed)
         private {
             uint256 _tokenIdMax = _tokenCounter;
             uint256 _tokenId = _tokenIdMax-N;
             for (_tokenId; _tokenId<_tokenIdMax;) {
+                _owners[_tokenId] = _setTokenParam(
+                    _owners[_tokenId],
+                    160,
+                    _randomSeed,
+                    type(uint96).max
+                );
+                /*
+                Unchecked because don't care if _randomSeed overflows 
+                and warps around since it is still random and useful.
+                */
                 unchecked {
-                    _owners[_tokenId] = _setTokenParam(
-                        _owners[_tokenId],
-                        160,
-                        _randomMintSeed,
-                        type(uint96).max
-                    );
-                    _randomMintSeed += uint256(
+                    _randomSeed += uint256(
                         keccak256(
                             abi.encodePacked(
                                 block.prevrandao,
                                 msg.sender,
-                                _randomMintSeed
+                                _randomSeed
                             )
                         )
                     );
@@ -99,17 +128,21 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
             }
     }
 
+    /*
+     * @dev Returns contract balances.
+     */
     function balances()
         external view
         onlyRole(DEFAULT_ADMIN_ROLE)
-        returns(uint256 balance, uint256 c9WeiBalance, uint256 c9WeiFees) {
+        returns(uint256 balance, uint256 c9Balance, uint256 c9Fees) {
             balance = address(this).balance;
-            c9WeiBalance = _balance;
-            c9WeiFees = _c9Fees;
+            c9Balance = _balance;
+            c9Fees = _c9Fees;
     }
 
     // Indices supplied from front end. The reason is in case multiple valid 
     // rows are present, the winner can manually choose the row.
+    // Maybe add non-entrancy guard for this
     function checkWinner(uint256 tokenId, uint256[] calldata indices)
         external {
             // Validate token exists
@@ -121,8 +154,8 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
                 revert("checkWinner() CallerNotOwnerOrApproved");
             }
             // Validate the tokenId
-            if (tokenId < _minTokenId) {
-                //revert ExpiredToken(_minTokenId, tokenId);
+            if (tokenId < _minValidTokenId) {
+                //revert ExpiredToken(_minValidTokenId, tokenId);
                 revert("checkWinner() ExpiredToken");
             }
             // Validate the gameSize
@@ -152,60 +185,91 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
                 unchecked {++i;}
             }
 
-            // If we make it here, we have a winner
-            uint256 _winningPayouts = 90*_balance*_payoutTiers[_gameSize]/10000;
-            uint256 _c9Fee = 5*_balance/100;
-            // New _balance will be 5% of the original _balance
-            _balance -= (_winningPayouts + _c9Fee);
-            _c9Fees += _c9Fee;
+            // If we make it here, we have a winner!
+            uint256[2] memory _winningPayoutsSplit = currentPotSplit(_gameSize);
+            uint256 _winningPayoutsFull = _winningPayoutsSplit[0] + _winningPayoutsSplit[1];
             
+            // Update the remaining balances/pot for the next round.
+            _balance -= _winningPayoutsFull;
+
+            // Set the contract params for next round
+            _minValidTokenId = _tokenCounter;
+            _modulus = IC9Token(contractToken).totalSupply();
+
+            // Freeze contract (will be unfrozen to start next round)
+            _frozen = true;
+            
+            // Process payout for the round
             if (msg.sender == _tokenOwner) {
-                // Payout full winnings to msg.sender
-                (bool success,) = payable(msg.sender).call{value: _winningPayouts}("");
+                // Payout 100% of _winningPayoutsFull to msg.sender
+                (bool success,) = payable(msg.sender).call{value: _winningPayoutsFull}("");
                 if(!success) {
                     //revert PaymentFailure(address(this), msg.sender, _winningPayouts);
                     revert("checkWinner() PaymentFailure1");
                 }
-                emit Winner1(msg.sender, tokenId, _winningPayouts);
+                emit WinnerFull(msg.sender, tokenId, _winningPayoutsFull);
             }
             else {
-                // Payout 75% of _winningPayouts to msg.sender
-                uint256 _winning1Payouts =  _payoutSplit[1]*_winningPayouts/100;
-                (bool success,) = payable(msg.sender).call{value: _winning1Payouts}("");
+                // Payout 75% of _winningPayoutsFull to msg.sender
+                // Payout 25% of _winningPayoutsFull to _tokenOwner
+                (bool success,) = payable(msg.sender).call{value: _winningPayoutsSplit[1]}("");
                 if(!success) {
                     //revert PaymentFailure(address(this), msg.sender, _winning1Payouts);
                     revert("checkWinner() PaymentFailure2");
                 }
-                // Payout 25% of _winningPayouts to _tokenOwner
-                uint256 _winning0Payouts =  _payoutSplit[0]*_winningPayouts/100;
-                (success,) = payable(_tokenOwner).call{value: _winning0Payouts}("");
+                (success,) = payable(_tokenOwner).call{value: _winningPayoutsSplit[0]}("");
                 if(!success) {
                     //revert PaymentFailure(address(this), _tokenOwner, _winning0Payouts);
                     revert("checkWinner() PaymentFailure3");
                 }
-                emit Winner2(msg.sender, _tokenOwner, _winningPayouts);
+                emit WinnerSplit(msg.sender, tokenId, _winningPayoutsSplit[1]);
+                emit WinnerSplit(_tokenOwner, tokenId, _winningPayoutsSplit[0]);
             }
-            
-            // // Freeze contract token params for next round
-            _minTokenId = _tokenCounter;
-            _modulus = IC9Token(contractToken).totalSupply();
-            _frozen = true;            
     }
 
-    function currentPots(uint256 _gameSize)
-        external view
+    /**
+     * @dev Returns the current game pot in Wei.
+     * This is the full winning for when the winner 
+     * also owns the C9T NFTs that formed the winning array.
+     * _balance is 75% of the mint fees. Thus 89.3% of 
+     * _balance is ~67% of the mint fees, which is the 
+     * intended amount pot.
+     */
+    function currentPot(uint256 _gameSize)
+        public view
+        returns(uint256 winningPayouts) {
+            winningPayouts = 893*_balance*_payoutTiers[_gameSize]/100000;
+    }
+
+    /**
+     * @dev Returns split-win information.
+     * This is the winning when the winner does not 
+     * own the C9Ts that formed the winning array. The winner 
+     * gets payout[1] and the owner of the C9Ts that formed the 
+     * winning arrays gets payout[0].
+     * The sum of the return is the full winning for when the winner 
+     * also owns the C9T NFTs that formed the winning array.
+     */
+    function currentPotSplit(uint256 _gameSize)
+        public view
         returns(uint256[2] memory splitPayouts) {
-            uint256 winningPayouts = 90*_balance*_payoutTiers[_gameSize]/1000000;
-            splitPayouts[0] = _payoutSplit[0]*winningPayouts;
-            splitPayouts[1] = _payoutSplit[1]*winningPayouts;
+            uint256 _winningPayouts = currentPot(_gameSize);
+            splitPayouts[0] = _payoutSplit[0]*_winningPayouts;
+            splitPayouts[1] = _payoutSplit[1]*_winningPayouts;
     }
 
+    /**
+     * @dev Second part of the minting.
+     * Once the random number request has been fulfilled, the 
+     * contract will mint the NFTs to the requester, who has 
+     * already paid the minting fee.
+     */
     function fulfillRandomWords(uint256 _requestId, uint256[] memory _randomWords)
         internal override {
             super.fulfillRandomWords(_requestId, _randomWords);
             uint256 N = statusRequests[_requestId].numberOfMints;
             _safeMint(statusRequests[_requestId].requester, N);
-            _setTokenGameBoard(N, _randomWords[0]);
+            _setTokenGameBoards(N, _randomWords[0]);
     }
 
     /**
@@ -218,34 +282,55 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
             tokenContract = contractToken;
     }
 
+    /**
+     * @dev Returns the minting fee for N tokens in Wei.
+     */
     function getMintingFee(uint256 N)
         public view
         returns (uint256) {
             return IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_mintingFee*N);
     }
 
-    function minRoundTokenId()
+    /**
+     * @dev The minimum tokenID that is valid for the current 
+     * playing round. All tokenIDs that are less than this tokenID 
+     * are no longer valid / expired, and are locked to the holder's 
+     * account to prevent users from trying to sell expired game boards. 
+     */
+    function minRoundValidTokenId()
         external view
         override
         returns (uint256) {
-            return _minTokenId;
+            return _minValidTokenId;
     }
 
+    /**
+     * Part 1 to the minting process.
+     * The user requests NFTs to be minted by calling this function.
+     * Upon success of the transaction, the request will then be 
+     * fulfilled by this contract after the Chainlink VRF responds.
+     * The max batch size is input so that users do not accidentally 
+     * request a batch too large that could cause step 2 to fail.
+     */
     function mint(uint256 N)
         external payable
         onlyRole(DEFAULT_ADMIN_ROLE) 
         notFrozen() {
             if (N > 0) {
+                if (N > MAX_MINT_BATCH_SIZE) {
+                    revert BatchSizeTooLarge(MAX_MINT_BATCH_SIZE, N);
+                }
                 uint256 mintingFeeWei = getMintingFee(N);
                 if (msg.value != mintingFeeWei) {
                     //revert InvalidPaymentAmount(mintingFeeWei, msg.value);
                     revert("mint() InvalidPaymentAmount()");
                 }
-                _balance += msg.value;
+                _balance += (75*msg.value/100);
+                _c9Fees += (20*msg.value/100);
                 requestRandomWords(msg.sender, N);
             }
             else {
-                revert("Cannot Mint 0");
+                revert("mint() Cannot Mint 0");
             }
     }
 
@@ -280,39 +365,43 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
             _payoutTiers[tier] = amount;
     }
 
+    /**
+     * @dev View function to see the numbers generated 
+     * in the game board. This is essentially the base 
+     * of the playing board.
+     */
     function viewGameBoard(uint256 tokenId, uint256 _gameSize)
         external view
         override
+        validGameSize(_gameSize)
         returns (uint256[] memory) {
-            // Validate the gameSize
-            if (_gameSize != 5 && _gameSize != 7 && _gameSize != 9) {
-                //revert GameSizeError(_gameSize);
-                revert("viewGameBoard() GameSizeError");
-            }
-            uint256 _packedNumers = _owners[tokenId];
             uint256 _boardSize = _gameSize*_gameSize;
-            uint256[] memory _c9TokenIds = new uint256[](_boardSize);
+            uint256 _packedNumers = _owners[tokenId];
             uint256 _offset = 160;
             uint256 __modulus = _modulus;
+            uint256[] memory _c9TokenIdEnums = new uint256[](_boardSize);
             for (uint256 i; i<_boardSize;) {
                 unchecked {
-                    _c9TokenIds[i] = uint256(_packedNumers>>_offset) % __modulus;
+                    _c9TokenIdEnums[i] = uint256(_packedNumers>>_offset) % __modulus;
                     ++i;
                     ++_offset;
                 }
             }
-            return _c9TokenIds;
+            return _c9TokenIdEnums;
     }
 
+    /*
+     * @dev View function to convert indices of the game board into C9T tokenIds.
+     */
     function viewIndicesTokenIds(uint256 tokenId, uint256[] memory _sortedIndices)
         public view
         returns (uint256[] memory) {
             uint256 _gameSize = _sortedIndices.length;
-            uint256[] memory _c9TokenIds = new uint256[](_gameSize);
             uint256 _packedNumers = _owners[tokenId];
             uint256 _offset;
             uint256 __modulus = _modulus;
             uint256 _c9EnumIndex;
+            uint256[] memory _c9TokenIds = new uint256[](_gameSize);
             for (uint256 i; i<_gameSize;) {
                 unchecked {
                     _offset = 160 + _sortedIndices[i];
@@ -330,31 +419,34 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
             uint256 _gameSize = _sortedIndices.length;
             uint256 _loopSize = _gameSize-1;
             uint256 index0 = _sortedIndices[0];
-            // Check if a valid col
+
+            // 1. Check if the arrangement is a valid column
             if (index0 < _gameSize) {
                 for (uint256 i=_loopSize; i>0;) {
                     if (_sortedIndices[i] - _sortedIndices[i-1] != _gameSize) {
                         break;
                     }
                     unchecked {--i;}
-                    if (i==0) {
+                    if (i == 0) {
                         return true;
                     }
                 }
             }
-            // Check if a valid row
+
+            // 2. Check if the arrangement is a valid row
             if (index0 % _gameSize == 0) {
                 for (uint256 i=_loopSize; i>0;) {
                     if (_sortedIndices[i] - _sortedIndices[i-1] != 1) {
                         break;
                     }
                     unchecked {--i;}
-                    if (i==0) {
+                    if (i == 0) {
                         return true;
                     }
                 }
             }
-            // Check if a valid lower diag
+
+            // 3. Check if the arrangement is a valid lower diag
             uint256 _lDx = _gameSize + 1;
             if (index0 == 0) {
                 for (uint256 i=_loopSize; i>0;) {
@@ -362,12 +454,13 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
                         break;
                     }
                     unchecked {--i;}
-                    if (i==0) {
+                    if (i == 0) {
                         return true;
                     }
                 }
             }
-            // Check if a valid upper diag
+
+            // 4. Check if the arrangement is a valid upper diag
             _lDx = _gameSize - 1;
             if (index0 == _gameSize-1) {
                 for (uint256 i=_loopSize; i>0;) {
@@ -375,28 +468,44 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
                         break;
                     }
                     unchecked {--i;}
-                    if (i==0) {
+                    if (i == 0) {
                         return true;
                     }
                 }
             }
-            return false; // Not a valid indices arrangement
+
+            // 5. No valid arrangements found
+            return false;
     }
 
-    function withdraw(bool confirm)
+    /*
+     * @dev Removes the full balance.
+     * This is only to be used as a fail-safe incase the 
+     * contract isn't functional, so funds do not get
+     * stuck and thus lost.
+     */
+    function withdraw(uint256 amount, bool confirm)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
             if (confirm) {
-                // Remove the full balance
-                payable(owner).transfer(address(this).balance);
-                _balance = 0;
-                _c9Fees = 0;
+                if (amount == 0) {
+                    payable(owner).transfer(address(this).balance);
+                    _balance = 0;
+                }
+                else {
+                    payable(owner).transfer(amount);
+                    _balance -= amount;
+                }
             }
             else {
                 revert ActionNotConfirmed();
             }
     }
 
+    /*
+     * @dev Removes the fee balance that accumulates 
+     * after the completion of rounds.
+     */
     function withdrawFees(bool confirm)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {

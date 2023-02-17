@@ -3,7 +3,7 @@ pragma solidity >=0.8.17;
 
 interface IC9Game {
 
-    function minRoundTokenId()
+    function minRoundValidTokenId()
     external view
     returns (uint256);
 
