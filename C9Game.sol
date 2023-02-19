@@ -2,7 +2,8 @@
 pragma solidity >=0.8.17;
 
 import "./utils/Helpers.sol";
-import "./utils/C9ERC721Base.sol";
+//import "./utils/C9ERC721Base.sol";
+import "./utils/C9ERC721BaseEnum.sol";
 import "./utils/C9VRF3.sol";
 
 import "./interfaces/IC9Game.sol";
@@ -10,13 +11,14 @@ import "./interfaces/IC9Token.sol";
 import "./utils/interfaces/IC9EthPriceFeed.sol";
 import "./abstract/C9Errors.sol";
 
-uint256 constant MAX_MINT_BATCH_SIZE = 32;
+uint256 constant MAX_MINT_BATCH_SIZE = 64;
 
-contract C9Game is IC9Game, ERC721, C9RandomSeed {
+contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
     // Tracking of contract balance with fees
     uint256 private _balance;
     uint256 private _c9Fees;
     uint256 private _mintingFee;
+    uint256 private _c9PortionFee;
 
     // Current round parameters
     uint256 private _minValidTokenId;
@@ -31,7 +33,7 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
     mapping(uint256 => uint256) private _payoutTiers;
 
     // Event for winner owns the C9Ts
-    event WinnerFull(
+    event Winner(
         address indexed winner,
         uint256 indexed tokenId,
         uint256 indexed winnings
@@ -55,11 +57,12 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
         address _contractPriceFeed,
         address _vrfCoordinator
         )
-        ERC721("Collect9 NFT Bingo", "C9X")
+        C9ERC721("Collect9 NFT Bingo", "C9X")
         C9RandomSeed(_vrfCoordinator)
     {
         _modulus = IC9Token(_contractToken).totalSupply();
         _mintingFee = 5;
+        _c9PortionFee = 25;
         _payoutSplit = [uint48(25), 75];
         _payoutTiers[5] = 40;
         _payoutTiers[7] = 70;
@@ -147,28 +150,25 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
         external {
             // Validate token exists
             if (!_exists(tokenId)) {
-                revert("checkWinner() InvalidToken(tokenId)");
+                revert InvalidToken(tokenId);
             }
             // Validate msg.sender is owner
             if (ownerOf(tokenId) != msg.sender) {
-                revert("checkWinner() CallerNotOwnerOrApproved");
+                revert CallerNotOwnerOrApproved();
             }
             // Validate the tokenId
             if (tokenId < _minValidTokenId) {
-                //revert ExpiredToken(_minValidTokenId, tokenId);
-                revert("checkWinner() ExpiredToken");
+                revert ExpiredToken(_minValidTokenId, tokenId);
             }
             // Validate the gameSize
             uint256 _gameSize = indices.length;
             if (_gameSize != 5 && _gameSize != 7 && _gameSize != 9) {
-                //revert GameSizeError(_gameSize);
-                revert("checkWinner() GameSizeError");
+                revert GameSizeError(_gameSize);
             }
             // Validate the indices are a row, col, or diag
             uint256[] memory _sortedIndices = Helpers.quickSort(indices);
             if (!validIndices(_sortedIndices)) {
-                //revert InvalidIndices();
-                revert("checkWinner() InvalidIndices");
+                revert InvalidIndices();
             }
             // Get the C9T tokenIds from the gameboard
             uint256[] memory _c9TokenIds = viewIndicesTokenIds(tokenId, _sortedIndices);
@@ -178,49 +178,54 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
             for (uint256 i=1; i<_gameSize;) {
                 if (IC9Token(contractToken).ownerOf(_c9TokenIds[i]) != _tokenOwner) {
                     if (_sortedIndices[i] != middleIdx) {
-                        //revert NotAWinner(tokenId);
-                        revert("checkWinner() NotAWinner");
+                        revert NotAWinner(tokenId);
                     }
                 }
                 unchecked {++i;}
             }
 
             // If we make it here, we have a winner!
+
+            // 1. Get the payout balance
             uint256[2] memory _winningPayoutsSplit = currentPotSplit(_gameSize);
             uint256 _winningPayoutsFull = _winningPayoutsSplit[0] + _winningPayoutsSplit[1];
             
-            // Update the remaining balances/pot for the next round.
+            // 2. Update the remaining balances/pot for the next round.
             _balance -= _winningPayoutsFull;
 
-            // Set the contract params for next round
+            // 3. Set the contract params for next round
             _minValidTokenId = _tokenCounter;
             _modulus = IC9Token(contractToken).totalSupply();
 
-            // Freeze contract (will be unfrozen to start next round)
+            // 4. Freeze contract (will be unfrozen to start next round)
             _frozen = true;
             
-            // Process payout for the round
+            // 5. Process payout
             if (msg.sender == _tokenOwner) {
-                // Payout 100% of _winningPayoutsFull to msg.sender
+                // 5a. Payout 100% of _winningPayoutsFull to msg.sender
                 (bool success,) = payable(msg.sender).call{value: _winningPayoutsFull}("");
                 if(!success) {
-                    //revert PaymentFailure(address(this), msg.sender, _winningPayouts);
-                    revert("checkWinner() PaymentFailure1");
+                    revert PaymentFailure(address(this), msg.sender, _winningPayoutsFull);
                 }
-                emit WinnerFull(msg.sender, tokenId, _winningPayoutsFull);
+                emit Winner(msg.sender, tokenId, _winningPayoutsFull);
             }
             else {
-                // Payout 75% of _winningPayoutsFull to msg.sender
-                // Payout 25% of _winningPayoutsFull to _tokenOwner
+                // 5b. Payout (75%, 25%) of _winningPayoutsFull to (msg.sender, _tokenOwner)
                 (bool success,) = payable(msg.sender).call{value: _winningPayoutsSplit[1]}("");
                 if(!success) {
-                    //revert PaymentFailure(address(this), msg.sender, _winning1Payouts);
-                    revert("checkWinner() PaymentFailure2");
+                    revert SplitPaymentFailure(
+                        address(this),
+                        msg.sender,
+                        _winningPayoutsSplit[1]
+                    );
                 }
                 (success,) = payable(_tokenOwner).call{value: _winningPayoutsSplit[0]}("");
                 if(!success) {
-                    //revert PaymentFailure(address(this), _tokenOwner, _winning0Payouts);
-                    revert("checkWinner() PaymentFailure3");
+                    revert SplitPaymentFailure(
+                        address(this),
+                        _tokenOwner,
+                        _winningPayoutsSplit[0]
+                    );
                 }
                 emit WinnerSplit(msg.sender, tokenId, _winningPayoutsSplit[1]);
                 emit WinnerSplit(_tokenOwner, tokenId, _winningPayoutsSplit[0]);
@@ -231,9 +236,9 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
      * @dev Returns the current game pot in Wei.
      * This is the full winning for when the winner 
      * also owns the C9T NFTs that formed the winning array.
-     * _balance is 75% of the mint fees. Thus 89.3% of 
+     * _balance is ~75% of the mint fees. Thus 89.3% of 
      * _balance is ~67% of the mint fees, which is the 
-     * intended amount pot.
+     * intended pot.
      */
     function currentPot(uint256 _gameSize)
         public view
@@ -254,8 +259,19 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
         public view
         returns(uint256[2] memory splitPayouts) {
             uint256 _winningPayouts = currentPot(_gameSize);
-            splitPayouts[0] = _payoutSplit[0]*_winningPayouts;
-            splitPayouts[1] = _payoutSplit[1]*_winningPayouts;
+            splitPayouts[0] = _payoutSplit[0]*_winningPayouts/100;
+            splitPayouts[1] = _payoutSplit[1]*_winningPayouts/100;
+    }
+
+    /**
+     * @dev Returns split-win information.
+     * Deposit function if needed for the next round in case the last winner 
+     * is of a 9x9 board that cleans out the pot.
+     */
+    function deposit()
+        external payable
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            _balance += msg.value;
     }
 
     /**
@@ -267,8 +283,10 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
     function fulfillRandomWords(uint256 _requestId, uint256[] memory _randomWords)
         internal override {
             super.fulfillRandomWords(_requestId, _randomWords);
-            uint256 N = statusRequests[_requestId].numberOfMints;
-            _safeMint(statusRequests[_requestId].requester, N);
+            uint256 _statusRequest = statusRequests[_requestId];
+            address requester = address(uint160(_statusRequest));
+            uint256 N = uint256(uint96(_statusRequest>>160));
+            _safeMint(requester, N);
             _setTokenGameBoards(N, _randomWords[0]);
     }
 
@@ -322,15 +340,14 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
                 }
                 uint256 mintingFeeWei = getMintingFee(N);
                 if (msg.value != mintingFeeWei) {
-                    //revert InvalidPaymentAmount(mintingFeeWei, msg.value);
-                    revert("mint() InvalidPaymentAmount()");
+                    revert InvalidPaymentAmount(mintingFeeWei, msg.value);
                 }
-                _balance += (75*msg.value/100);
-                _c9Fees += (20*msg.value/100);
+                _balance += ((100-_c9PortionFee)*msg.value/100);
+                _c9Fees += (_c9PortionFee*msg.value/100);
                 requestRandomWords(msg.sender, N);
             }
             else {
-                revert("mint() Cannot Mint 0");
+                revert ZeroMintError();
             }
     }
 

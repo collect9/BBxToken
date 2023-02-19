@@ -3,15 +3,14 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
-import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
+import "./interfaces/IC9ERC721Base.sol";
 
-//import "./../C9OwnerControl.sol";
+import "./../C9OwnerControl.sol";
 import "./../abstract/C9Errors.sol";
 
 uint256 constant MAX_TRANSFER_BATCH_SIZE = 128;
@@ -21,7 +20,7 @@ uint256 constant MAX_TRANSFER_BATCH_SIZE = 128;
  * the Metadata extension, but not including the Enumerable extension, which is available separately as
  * {ERC721Enumerable}.
  */
-contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
+contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
     using Address for address;
     using Strings for uint256;
 
@@ -42,7 +41,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
     mapping(uint256 => uint256) internal _owners;
 
     // Mapping owner address to token count
-    mapping(address => uint256) private _balances;
+    mapping(address => uint256) internal _balances;
 
     // Mapping from token ID to approved address
     // Updated to be packed, uint160 (default address) with 96 extra bits of custom storage
@@ -207,7 +206,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
     function _isApprovedOrOwner(address spender, uint256 tokenId)
     internal view virtual
     returns (bool) {
-        address tokenOwner = ERC721.ownerOf(tokenId);
+        address tokenOwner = _ownerOf(tokenId);
         return (spender == tokenOwner || isApprovedForAll(tokenOwner, spender) || getApproved(tokenId) == spender);
     }
 
@@ -216,9 +215,10 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         uint160 _to = uint160(to);
         uint256 _tokenId = _tokenCounter;
         uint256 _tokenIdN = _tokenId+N;
+        address _zero = address(0);
         for (_tokenId; _tokenId<_tokenIdN;) {
             _owners[_tokenId] = _to;
-            emit Transfer(address(0), to, _tokenId);
+            emit Transfer(_zero, to, _tokenId);
             unchecked {
                 ++_tokenId;
             }
@@ -362,13 +362,13 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
         }
         uint256 _batchSize = tokenIds.length;
         uint256 tokenId;
-
+        uint160 _to = uint160(to);
         for (uint256 i; i<_batchSize;) {
             tokenId = tokenIds[i];
             _beforeTokenTransfer(from, to, tokenId, 1);
             // Set new owner
             _owners[tokenId] = _setTokenParam(
-                _owners[tokenId], 0, uint160(to), type(uint160).max
+                _owners[tokenId], 0, _to, type(uint160).max
             );
             unchecked {++i;}
             emit Transfer(from, to, tokenId);
@@ -466,12 +466,22 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
             totalSupply -= _batchSize;
         }
         for (uint256 i; i<_batchSize;) {
-            if (msg.sender != ERC721.ownerOf(tokenIds[i])) {
+            if (msg.sender != _ownerOf(tokenIds[i])) {
                 revert CallerNotOwnerOrApproved();
             }
             _burn(tokenIds[i]);
             unchecked {++i;}
         }
+    }
+
+    /**
+     * @dev Should be possible to clear (in an obvious way) this without having to transfer.
+     */
+    function clearApproved(uint256 tokenId) external {
+        if (!_isApprovedOrOwner(_msgSender(), tokenId)) {
+            revert CallerNotOwnerOrApproved();
+        }
+        delete _tokenApprovals[tokenId];
     }
 
     /**
@@ -576,7 +586,7 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
      */
     function supportsInterface(bytes4 interfaceId)
     public view virtual
-    override(ERC165, IERC165)
+    override(AccessControl, ERC165, IERC165)
     returns (bool) {
         return
             interfaceId == type(IERC721).interfaceId ||

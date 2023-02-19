@@ -135,7 +135,7 @@ contract C9GameSVG {
         return bytes6(bTokenId);
     }
 
-    function _setHDR(uint256 tokenId, uint256 gameSize)
+    function _setHDR(uint256 tokenId, uint256 gameSize, bytes6 _minTokenId, bool expired)
     private view
     returns (string memory) {
         string memory hdr = SVG_HDR;
@@ -143,8 +143,7 @@ contract C9GameSVG {
         bytes3 _viewBoxMin = bytes3(bytes(viewBoxMin[gameSize]));
         bytes3 _viewBoxMax = bytes3(bytes(viewBoxMax[gameSize]));
         bytes6 _tokenId = _sTokenId(tokenId);
-        uint256 _roundMinTokenId = IC9Game(contractGame).minRoundValidTokenId();
-        bytes6 _minTokenId = _sTokenId(_roundMinTokenId);
+        
         assembly {
             let dst := add(hdr, 740)
             mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _tokenId))
@@ -163,12 +162,10 @@ contract C9GameSVG {
             dst := add(hdr, 1167)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMax))
         }
-
-        bool _valid = tokenId >= _roundMinTokenId ? true : false;
-        if (!_valid) {
+        if (expired) {
             assembly {
-                let dst := add(hdr, 398)
-                mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "0")) 
+                let dst := add(hdr, 393)
+                mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "0"))
             }
         }
 
@@ -178,7 +175,7 @@ contract C9GameSVG {
         return hdr;   
     }
 
-    function _setFTR(uint256 gameSize)
+    function _setFTR(uint256 gameSize, bool expired)
     private view
     returns (string memory) {
         string memory ftr = SVG_FTR;
@@ -205,6 +202,13 @@ contract C9GameSVG {
             dst := add(ftr, 227)
             mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), _logoPos))
         }
+        if (expired) {
+            assembly {
+                let dst := add(ftr, 687)
+                mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), "EXPIRED"))
+            }
+        }
+
         return ftr;
     }
 
@@ -316,11 +320,16 @@ contract C9GameSVG {
     function svgImage(uint256 tokenId, uint256 gameSize)
     external view
     returns (string memory output) {
-        if (IC9Token(contractToken).ownerOf(tokenId) != address(0)) {
-            string memory hdr = _setHDR(tokenId, gameSize);
+        if (tokenId < IC9Game(contractGame).totalSupply()) {
+
+            uint256 _roundMinTokenId = IC9Game(contractGame).minRoundValidTokenId();
+            bytes6 _minTokenId = _sTokenId(_roundMinTokenId);
+            bool _expired = tokenId < _roundMinTokenId ? true : false;
+
+            string memory hdr = _setHDR(tokenId, gameSize, _minTokenId, _expired);
             string memory rects = _buildRects(tokenId, gameSize);
             string memory middle = _middleLabel(gameSize);
-            string memory ftr = _setFTR(gameSize);
+            string memory ftr = _setFTR(gameSize, _expired);
             return string.concat(
                 hdr,
                 rects,
