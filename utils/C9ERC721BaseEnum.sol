@@ -10,7 +10,7 @@ import "./C9ERC721Base.sol";
  * {ERC721Enumerable}.
  */
 abstract contract C9ERC721Enumerable is C9ERC721 {
-    mapping(address => uint24[]) private _ownedTokens;
+    mapping(address => uint24[]) internal _ownedTokens;
 
     function _burn(uint256 tokenId) internal virtual override {
         _removeTokenFromOwnerEnumeration(ownerOf(tokenId), tokenId);

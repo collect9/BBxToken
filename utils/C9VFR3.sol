@@ -4,16 +4,25 @@ import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 
 contract C9RandomSeed is VRFConsumerBaseV2 {
-    event RequestSent(uint256 requestId, uint32 numWords);
-    event RequestFulfilled(uint256 requestId, uint256 randomWords);
+    error StatusRequestDoesNotExist(uint256 requestId);
+
+    event RequestSent(
+        uint256 indexed requestId,
+        address indexed requester,
+        uint256 indexed numberOfMints
+    );
+    event RequestFulfilled(
+        uint256 indexed requestId,
+        uint256 indexed randomWord
+    );
 
     VRFCoordinatorV2Interface COORDINATOR;
 
-    struct RequestStatus {
-        address requester;
-        uint96 numberOfMints;
-    }
-    mapping(uint256 => RequestStatus) internal statusRequests;
+    // struct RequestStatus {
+    //     address requester;
+    //     uint96 numberOfMints;
+    // }
+    mapping(uint256 => uint256) internal statusRequests;
 
     // Your subscription ID.
     uint64 constant SUB_ID = 39;
@@ -22,14 +31,6 @@ contract C9RandomSeed is VRFConsumerBaseV2 {
     // For a list of available gas lanes on each network,
     // see https://docs.chain.link/docs/vrf/v2/subscription/supported-networks/#configurations
     bytes32 constant KEY_HASH = 0x474e34a077df58807dbe9c96d3c009b23b3c6d0cce433e59bbf5b34f823bc56c;
-
-    // Depends on the number of requested values that you want sent to the
-    // fulfillRandomWords() function. Storing each word costs about 20,000 gas,
-    // so 100,000 is a safe default for this example contract. Test and adjust
-    // this limit based on the network that you select, the size of the request,
-    // and the processing of the callback request in the fulfillRandomWords()
-    // function.
-    uint32 constant CALL_BACK_GAS_LIMIT = 50000;
 
     // The default is 3, but you can set this higher.
     uint16 constant REQ_CONFIRMATIONS = 3;
@@ -49,9 +50,9 @@ contract C9RandomSeed is VRFConsumerBaseV2 {
 
     // Assumes the subscription is funded sufficiently.
     function requestRandomWords(address requester, uint256 numberOfMints)
-        internal {
+        internal virtual {
             // Will revert if subscription is not set and funded.
-            uint256 gasLimit = CALL_BACK_GAS_LIMIT*numberOfMints;
+            uint256 gasLimit = 100000+40000*numberOfMints;
             uint256 requestId = COORDINATOR.requestRandomWords(
                 KEY_HASH,
                 SUB_ID,
@@ -59,14 +60,18 @@ contract C9RandomSeed is VRFConsumerBaseV2 {
                 uint32(gasLimit),
                 NUM_WORDS
             );
-            statusRequests[requestId] = RequestStatus(requester, uint96(numberOfMints));
-            emit RequestSent(requestId, NUM_WORDS);
+            //statusRequests[requestId] = RequestStatus(requester, uint96(numberOfMints));
+            uint256 _statusRequest = uint160(requester);
+            _statusRequest |= numberOfMints<<160;
+            statusRequests[requestId] = _statusRequest;
+            emit RequestSent(requestId, requester, numberOfMints);
     }
 
-    function fulfillRandomWords(uint256 _requestId, uint256[] memory /*_randomWords*/)
+    function fulfillRandomWords(uint256 _requestId, uint256[] memory _randomWords)
         internal virtual override {
-            if (statusRequests[_requestId].numberOfMints == 0) {
-                revert("Status request does not exist.");
+            if (statusRequests[_requestId] == 0) {
+                revert StatusRequestDoesNotExist(_requestId);
             }
+            emit RequestFulfilled(_requestId, _randomWords[0]);
     }
 }

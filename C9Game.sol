@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
 
+// Maybe consider using future price data... user submits request for mint. Mint is delayed about ~2 hours or until next price feed update.
+// PRE-MINT NFTs on REQUEST, FILL IN DATA ON FULFILL
+
 import "./utils/Helpers.sol";
 //import "./utils/C9ERC721Base.sol";
 import "./utils/C9ERC721BaseEnum.sol";
@@ -11,9 +14,17 @@ import "./interfaces/IC9Token.sol";
 import "./utils/interfaces/IC9EthPriceFeed.sol";
 import "./abstract/C9Errors.sol";
 
-uint256 constant MAX_MINT_BATCH_SIZE = 64;
+uint256 constant MAX_MINT_BATCH_SIZE = 50;
 
 contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
+    /*
+    _owners
+    0-160: owner
+    160-176: owned token index (u16)
+    176-192: roundID (u16)
+    192-256: randomSeed (u64)
+    */
+
     // Tracking of contract balance with fees
     uint256 private _balance;
     uint256 private _c9Fees;
@@ -21,7 +32,7 @@ contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
     uint256 private _c9PortionFee;
 
     // Current round parameters
-    uint256 private _minValidTokenId;
+    uint256 private _roundId;
     uint256 private _modulus;
 
     // Connecting contracts
@@ -101,17 +112,16 @@ contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
      * minted. It, along with _seed are copied to memory to 
      * nreduce gas costs in the loop.
      */
-    function _setTokenGameBoards(uint256 N, uint256 _randomSeed)
+    function _setTokenGameBoards(uint256 _tokenId, uint256 N, uint256 _randomSeed)
         private {
-            uint256 _tokenIdMax = _tokenCounter;
-            uint256 _tokenId = _tokenIdMax-N;
+            uint256 _packedToken;
+            uint256 __roundId = _roundId;
+            uint256 _tokenIdMax = _tokenId+N;
             for (_tokenId; _tokenId<_tokenIdMax;) {
-                _owners[_tokenId] = _setTokenParam(
-                    _owners[_tokenId],
-                    160,
-                    _randomSeed,
-                    type(uint96).max
-                );
+                _packedToken = _owners[_tokenId];
+                _packedToken |= __roundId<<176;
+                _packedToken |= _randomSeed<<192;
+                _owners[_tokenId] = _packedToken;
                 /*
                 Unchecked because don't care if _randomSeed overflows 
                 and warps around since it is still random and useful.
@@ -279,15 +289,16 @@ contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
      * Once the random number request has been fulfilled, the 
      * contract will mint the NFTs to the requester, who has 
      * already paid the minting fee.
+     * Potential problem here if VRF fulfills recent before older.
+     * Fix: harcode the round ID into the gameBoard and base expiry on that.
      */
     function fulfillRandomWords(uint256 _requestId, uint256[] memory _randomWords)
         internal override {
             super.fulfillRandomWords(_requestId, _randomWords);
             uint256 _statusRequest = statusRequests[_requestId];
-            address requester = address(uint160(_statusRequest));
-            uint256 N = uint256(uint96(_statusRequest>>160));
-            _safeMint(requester, N);
-            _setTokenGameBoards(N, _randomWords[0]);
+            uint256 tokenId = uint256(uint24(_statusRequest>>160));
+            uint256 N = uint256(uint8(_statusRequest>>184));
+            _setTokenGameBoards(tokenId, N, _randomWords[0]);
     }
 
     /**
@@ -322,14 +333,6 @@ contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
             return _minValidTokenId;
     }
 
-    /**
-     * Part 1 to the minting process.
-     * The user requests NFTs to be minted by calling this function.
-     * Upon success of the transaction, the request will then be 
-     * fulfilled by this contract after the Chainlink VRF responds.
-     * The max batch size is input so that users do not accidentally 
-     * request a batch too large that could cause step 2 to fail.
-     */
     function mint(uint256 N)
         external payable
         onlyRole(DEFAULT_ADMIN_ROLE) 
@@ -349,6 +352,13 @@ contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
             else {
                 revert ZeroMintError();
             }
+    }
+
+    // Assumes the subscription is funded sufficiently.
+    function requestRandomWords(address requester, uint256 numberOfMints)
+        internal override {
+            super.requestRandomWords(requester, numberOfMints);
+            _safeMint(requester, numberOfMints);
     }
 
     /**
@@ -393,15 +403,17 @@ contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
         validGameSize(_gameSize)
         returns (uint256[] memory) {
             uint256 _boardSize = _gameSize*_gameSize;
-            uint256 _packedNumers = _owners[tokenId];
-            uint256 _offset = 160;
+            uint256 _randomExpanded = uint256(
+                keccak256(
+                    abi.encodePacked(_owners[tokenId]>>176)
+                )
+            );
             uint256 __modulus = _modulus;
             uint256[] memory _c9TokenIdEnums = new uint256[](_boardSize);
             for (uint256 i; i<_boardSize;) {
                 unchecked {
-                    _c9TokenIdEnums[i] = uint256(_packedNumers>>_offset) % __modulus;
+                    _c9TokenIdEnums[i] = uint256(_randomExpanded>>i) % __modulus;
                     ++i;
-                    ++_offset;
                 }
             }
             return _c9TokenIdEnums;
@@ -414,20 +426,22 @@ contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
         public view
         returns (uint256[] memory) {
             uint256 _gameSize = _sortedIndices.length;
-            uint256 _packedNumers = _owners[tokenId];
-            uint256 _offset;
+            uint256 _randomExpanded = uint256(
+                keccak256(
+                    abi.encodePacked(_owners[tokenId]>>176)
+                )
+            );
             uint256 __modulus = _modulus;
             uint256 _c9EnumIndex;
-            uint256[] memory _c9TokenIds = new uint256[](_gameSize);
+            uint256[] memory _c9TokenIdEnums = new uint256[](_gameSize);
             for (uint256 i; i<_gameSize;) {
                 unchecked {
-                    _offset = 160 + _sortedIndices[i];
-                    _c9EnumIndex = uint256(_packedNumers>>_offset) % __modulus;
-                    _c9TokenIds[i] = IC9Token(contractToken).tokenByIndex(_c9EnumIndex);
+                    _c9EnumIndex = uint256(_randomExpanded>>_sortedIndices[i]) % __modulus;
+                    _c9TokenIdEnums[i] = IC9Token(contractToken).tokenByIndex(_c9EnumIndex);
                     ++i;
                 }
             }
-            return _c9TokenIds;
+            return _c9TokenIdEnums;
     }
 
     function validIndices(uint256[] memory _sortedIndices)
