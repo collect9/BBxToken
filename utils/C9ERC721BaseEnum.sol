@@ -78,7 +78,7 @@ abstract contract C9ERC721Enumerable is C9ERC721 {
 
     function _mint(address to, uint256 N)
     internal virtual override {
-        uint160 _to = uint160(to);
+        uint256 _to = uint256(uint160(to));
         uint256 _tokenId = _tokenCounter;
         uint256 _tokenIdN = _tokenId+N;
         address _zero = address(0);

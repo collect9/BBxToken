@@ -1,7 +1,8 @@
 //SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
 import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
-import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
+//import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
+import "./VRFConsumerBaseV2a.sol";
 
 contract C9RandomSeed is VRFConsumerBaseV2 {
     error StatusRequestDoesNotExist(uint256 requestId);
@@ -17,11 +18,6 @@ contract C9RandomSeed is VRFConsumerBaseV2 {
     );
 
     VRFCoordinatorV2Interface COORDINATOR;
-
-    // struct RequestStatus {
-    //     address requester;
-    //     uint96 numberOfMints;
-    // }
     mapping(uint256 => uint256) internal statusRequests;
 
     // Your subscription ID.
@@ -39,6 +35,8 @@ contract C9RandomSeed is VRFConsumerBaseV2 {
     // Cannot exceed VRFCoordinatorV2.MAX_NUM_WORDS.
     uint32 constant NUM_WORDS = 1;
 
+    uint32 constant GAS_LIMIT = 200000;
+
     /**
      * SEPOLIA
      * COORDINATOR: 0x8103B0A8A00be2DDC778e6e7eaa21791Cd364625
@@ -49,25 +47,23 @@ contract C9RandomSeed is VRFConsumerBaseV2 {
     }
 
     // Assumes the subscription is funded sufficiently.
-    function requestRandomWords(address requester, uint256 numberOfMints)
+    function requestRandomWords(address requester, uint256 tokenId, uint256 numberOfMints)
         internal virtual {
             // Will revert if subscription is not set and funded.
-            uint256 gasLimit = 100000+40000*numberOfMints;
             uint256 requestId = COORDINATOR.requestRandomWords(
                 KEY_HASH,
                 SUB_ID,
                 REQ_CONFIRMATIONS,
-                uint32(gasLimit),
+                GAS_LIMIT,
                 NUM_WORDS
             );
-            //statusRequests[requestId] = RequestStatus(requester, uint96(numberOfMints));
-            uint256 _statusRequest = uint160(requester);
-            _statusRequest |= numberOfMints<<160;
-            statusRequests[requestId] = _statusRequest;
+            uint256 _requestInfo = tokenId;
+            _requestInfo |= numberOfMints<<24;
+            statusRequests[requestId] = _requestInfo;
             emit RequestSent(requestId, requester, numberOfMints);
     }
 
-    function fulfillRandomWords(uint256 _requestId, uint256[] memory _randomWords)
+    function fulfillRandomWords(uint256 _requestId, uint256[] calldata _randomWords)
         internal virtual override {
             if (statusRequests[_requestId] == 0) {
                 revert StatusRequestDoesNotExist(_requestId);

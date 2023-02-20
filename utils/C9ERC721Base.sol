@@ -41,7 +41,7 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
     mapping(uint256 => uint256) internal _owners;
 
     // Mapping owner address to token count
-    mapping(address => uint256) internal _balances;
+    mapping(address => uint256) private _balances;
 
     // Mapping from token ID to approved address
     // Updated to be packed, uint160 (default address) with 96 extra bits of custom storage

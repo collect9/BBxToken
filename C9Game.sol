@@ -5,8 +5,8 @@ pragma solidity >=0.8.17;
 // PRE-MINT NFTs on REQUEST, FILL IN DATA ON FULFILL
 
 import "./utils/Helpers.sol";
-//import "./utils/C9ERC721Base.sol";
-import "./utils/C9ERC721BaseEnum.sol";
+import "./utils/C9ERC721Base.sol";
+//import "./utils/C9ERC721BaseEnum.sol";
 import "./utils/C9VRF3.sol";
 
 import "./interfaces/IC9Game.sol";
@@ -15,10 +15,12 @@ import "./utils/interfaces/IC9EthPriceFeed.sol";
 import "./abstract/C9Errors.sol";
 
 uint256 constant MAX_MINT_BATCH_SIZE = 50;
+uint256 constant POS_ROUND_ID = 176;
+uint256 constant POS_SEED = 192;
 
-contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
+contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     /*
-    _owners
+    _owners Enumerable
     0-160: owner
     160-176: owned token index (u16)
     176-192: roundID (u16)
@@ -71,9 +73,11 @@ contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
         C9ERC721("Collect9 NFT Bingo", "C9X")
         C9RandomSeed(_vrfCoordinator)
     {
-        _modulus = IC9Token(_contractToken).totalSupply();
         _mintingFee = 5;
         _c9PortionFee = 25;
+        _roundId = 1;
+        _modulus = IC9Token(_contractToken).totalSupply();
+        
         _payoutSplit = [uint48(25), 75];
         _payoutTiers[5] = 40;
         _payoutTiers[7] = 70;
@@ -99,8 +103,9 @@ contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
         internal
         override
         notFrozen() {
-            if (tokenId < _minValidTokenId) {
-                revert ExpiredToken(_minValidTokenId, tokenId);
+            uint256 _tokenRoundId = uint256(uint8(_owners[tokenId]>>POS_ROUND_ID));
+            if (_tokenRoundId < _roundId) {
+                revert ExpiredToken(tokenId, _tokenRoundId, _roundId);
             }
             super._beforeTokenTransfer(from, to, tokenId, batchSize);
     }
@@ -115,12 +120,12 @@ contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
     function _setTokenGameBoards(uint256 _tokenId, uint256 N, uint256 _randomSeed)
         private {
             uint256 _packedToken;
-            uint256 __roundId = _roundId;
+            uint256 _currentRoundId = _roundId;
             uint256 _tokenIdMax = _tokenId+N;
             for (_tokenId; _tokenId<_tokenIdMax;) {
                 _packedToken = _owners[_tokenId];
-                _packedToken |= __roundId<<176;
-                _packedToken |= _randomSeed<<192;
+                _packedToken |= _currentRoundId<<POS_ROUND_ID;
+                _packedToken |= _randomSeed<<POS_SEED;
                 _owners[_tokenId] = _packedToken;
                 /*
                 Unchecked because don't care if _randomSeed overflows 
@@ -130,8 +135,6 @@ contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
                     _randomSeed += uint256(
                         keccak256(
                             abi.encodePacked(
-                                block.prevrandao,
-                                msg.sender,
                                 _randomSeed
                             )
                         )
@@ -167,8 +170,9 @@ contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
                 revert CallerNotOwnerOrApproved();
             }
             // Validate the tokenId
-            if (tokenId < _minValidTokenId) {
-                revert ExpiredToken(_minValidTokenId, tokenId);
+            uint256 _tokenRoundId = uint256(uint8(_owners[tokenId]>>POS_ROUND_ID));
+            if (_tokenRoundId < _roundId) {
+                revert ExpiredToken(tokenId, _tokenRoundId, _roundId);
             }
             // Validate the gameSize
             uint256 _gameSize = indices.length;
@@ -197,14 +201,14 @@ contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
             // If we make it here, we have a winner!
 
             // 1. Get the payout balance
-            uint256[2] memory _winningPayoutsSplit = currentPotSplit(_gameSize);
-            uint256 _winningPayoutsFull = _winningPayoutsSplit[0] + _winningPayoutsSplit[1];
+            (uint256 split0, uint256 split1) = currentPotSplit(_gameSize);
+            uint256 _winningPayoutsFull = split0 + split1;
             
             // 2. Update the remaining balances/pot for the next round.
             _balance -= _winningPayoutsFull;
 
             // 3. Set the contract params for next round
-            _minValidTokenId = _tokenCounter;
+            unchecked {++_roundId;}
             _modulus = IC9Token(contractToken).totalSupply();
 
             // 4. Freeze contract (will be unfrozen to start next round)
@@ -221,24 +225,24 @@ contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
             }
             else {
                 // 5b. Payout (75%, 25%) of _winningPayoutsFull to (msg.sender, _tokenOwner)
-                (bool success,) = payable(msg.sender).call{value: _winningPayoutsSplit[1]}("");
+                (bool success,) = payable(msg.sender).call{value: split1}("");
                 if(!success) {
                     revert SplitPaymentFailure(
                         address(this),
                         msg.sender,
-                        _winningPayoutsSplit[1]
+                        split1
                     );
                 }
-                (success,) = payable(_tokenOwner).call{value: _winningPayoutsSplit[0]}("");
+                (success,) = payable(_tokenOwner).call{value: split0}("");
                 if(!success) {
                     revert SplitPaymentFailure(
                         address(this),
                         _tokenOwner,
-                        _winningPayoutsSplit[0]
+                        split0
                     );
                 }
-                emit WinnerSplit(msg.sender, tokenId, _winningPayoutsSplit[1]);
-                emit WinnerSplit(_tokenOwner, tokenId, _winningPayoutsSplit[0]);
+                emit WinnerSplit(msg.sender, tokenId, split1);
+                emit WinnerSplit(_tokenOwner, tokenId, split0);
             }
     }
 
@@ -267,10 +271,23 @@ contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
      */
     function currentPotSplit(uint256 _gameSize)
         public view
-        returns(uint256[2] memory splitPayouts) {
+        returns(uint256 payout0, uint256 payout1) {
             uint256 _winningPayouts = currentPot(_gameSize);
-            splitPayouts[0] = _payoutSplit[0]*_winningPayouts/100;
-            splitPayouts[1] = _payoutSplit[1]*_winningPayouts/100;
+            payout0 = _payoutSplit[0]*_winningPayouts/100;
+            payout1 = _payoutSplit[1]*_winningPayouts/100;
+    }
+
+    /**
+     * @dev The minimum tokenID that is valid for the current 
+     * playing round. All tokenIDs that are less than this tokenID 
+     * are no longer valid / expired, and are locked to the holder's 
+     * account to prevent users from trying to sell expired game boards. 
+     */
+    function currentRoundId()
+        external view
+        override
+        returns (uint256) {
+            return _roundId;
     }
 
     /**
@@ -292,12 +309,12 @@ contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
      * Potential problem here if VRF fulfills recent before older.
      * Fix: harcode the round ID into the gameBoard and base expiry on that.
      */
-    function fulfillRandomWords(uint256 _requestId, uint256[] memory _randomWords)
+    function fulfillRandomWords(uint256 _requestId, uint256[] calldata _randomWords)
         internal override {
             super.fulfillRandomWords(_requestId, _randomWords);
             uint256 _statusRequest = statusRequests[_requestId];
-            uint256 tokenId = uint256(uint24(_statusRequest>>160));
-            uint256 N = uint256(uint8(_statusRequest>>184));
+            uint256 tokenId = uint256(uint24(_statusRequest));
+            uint256 N = uint256(uint8(_statusRequest>>24));
             _setTokenGameBoards(tokenId, N, _randomWords[0]);
     }
 
@@ -320,19 +337,6 @@ contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
             return IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_mintingFee*N);
     }
 
-    /**
-     * @dev The minimum tokenID that is valid for the current 
-     * playing round. All tokenIDs that are less than this tokenID 
-     * are no longer valid / expired, and are locked to the holder's 
-     * account to prevent users from trying to sell expired game boards. 
-     */
-    function minRoundValidTokenId()
-        external view
-        override
-        returns (uint256) {
-            return _minValidTokenId;
-    }
-
     function mint(uint256 N)
         external payable
         onlyRole(DEFAULT_ADMIN_ROLE) 
@@ -347,18 +351,12 @@ contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
                 }
                 _balance += ((100-_c9PortionFee)*msg.value/100);
                 _c9Fees += (_c9PortionFee*msg.value/100);
-                requestRandomWords(msg.sender, N);
+                requestRandomWords(msg.sender, _tokenCounter, N);
+                _safeMint(msg.sender, N);
             }
             else {
                 revert ZeroMintError();
             }
-    }
-
-    // Assumes the subscription is funded sufficiently.
-    function requestRandomWords(address requester, uint256 numberOfMints)
-        internal override {
-            super.requestRandomWords(requester, numberOfMints);
-            _safeMint(requester, numberOfMints);
     }
 
     /**
@@ -405,7 +403,7 @@ contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
             uint256 _boardSize = _gameSize*_gameSize;
             uint256 _randomExpanded = uint256(
                 keccak256(
-                    abi.encodePacked(_owners[tokenId]>>176)
+                    abi.encodePacked(uint64(_owners[tokenId]>>POS_SEED))
                 )
             );
             uint256 __modulus = _modulus;
@@ -428,7 +426,7 @@ contract C9Game is IC9Game, C9ERC721Enumerable, C9RandomSeed {
             uint256 _gameSize = _sortedIndices.length;
             uint256 _randomExpanded = uint256(
                 keccak256(
-                    abi.encodePacked(_owners[tokenId]>>176)
+                    abi.encodePacked(_owners[tokenId]>>POS_SEED)
                 )
             );
             uint256 __modulus = _modulus;
