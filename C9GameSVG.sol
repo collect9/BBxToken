@@ -2,11 +2,12 @@
 pragma solidity >=0.8.17;
 //import "@openzeppelin/contracts/utils/Strings.sol";
 import "./interfaces/IC9Game.sol";
+import "./interfaces/IC9GameSVG.sol";
 import "./interfaces/IC9Token.sol";
 import "./abstract/C9Errors.sol";
 import "./utils/Helpers.sol";
 
-contract C9GameSVG {
+contract C9GameSVG is IC9GameSVG {
     string constant SVG_HDR = ''
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="100%" height="100%" style="font-family: \'Poppins\', sans-serif; font-weight:bold; fill:#333; padding:05;">'
         '<defs>'
@@ -25,13 +26,13 @@ contract C9GameSVG {
         '</style>'
         '<g filter="url(#c9GS)">'
         '<rect width="100%" height="100%" rx="8%" fill="url(#c9gbg)" />'
-        '<text x="120" y="16" class="c9gT" text-anchor="middle">COLLECT9 BINGO NFT</text>'
+        '<text x="120" y="16" class="c9gT" text-anchor="middle">coLLect9 coNNectX </text>'
         '<text x="22" y="228" class="c9gS">Token ID = 0     </text>'
         '<text x="22" y="237" class="c9gS">View = XxX</text>'
         '<text x="120" y="228" class="c9gS" text-anchor="middle">View Max Win</text>'
         '<text x="120" y="237" class="c9gS" text-anchor="middle">ETH = 0.00</text>'
-        '<text x="218" y="228" class="c9gS" text-anchor="end">Round Min Valid</text>'
-        '<text x="218" y="237" class="c9gS" text-anchor="end">Token ID = 0     </text>'
+        '<text x="218" y="228" class="c9gS" text-anchor="end">Token rID = 0     </text>'
+        '<text x="218" y="237" class="c9gS" text-anchor="end">Current rID = 0     </text>'
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-005 -005 060 060" width="100%" height="100%">'
         '<defs>'
         '<symbol id="r">'
@@ -135,7 +136,7 @@ contract C9GameSVG {
         return bytes6(bTokenId);
     }
 
-    function _setHDR(uint256 tokenId, uint256 gameSize, bytes6 _minTokenId, bool expired)
+    function _setHDR(uint256 tokenId, uint256 gameSize, uint256 tokenRoundId, uint256 currentRoundId, bool expired)
     private view
     returns (string memory) {
         string memory hdr = SVG_HDR;
@@ -143,6 +144,8 @@ contract C9GameSVG {
         bytes3 _viewBoxMin = bytes3(bytes(viewBoxMin[gameSize]));
         bytes3 _viewBoxMax = bytes3(bytes(viewBoxMax[gameSize]));
         bytes6 _tokenId = _sTokenId(tokenId);
+        bytes6 _currentRoundId = _sTokenId(currentRoundId);
+        bytes6 _tokenRoundId = _sTokenId(tokenRoundId);
         
         assembly {
             let dst := add(hdr, 740)
@@ -151,15 +154,17 @@ contract C9GameSVG {
             mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), _gameSize))
             dst := add(hdr, 796)
             mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), _gameSize))
-            dst := add(hdr, 1091)
-            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _minTokenId))
-            dst := add(hdr, 1154)
+            dst := add(hdr, 1017)
+            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _tokenRoundId))
+            dst := add(hdr, 1097)
+            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _currentRoundId))
+            dst := add(hdr, 1160)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMin))
-            dst := add(hdr, 1159)
+            dst := add(hdr, 1165)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMin))
-            dst := add(hdr, 1163)
+            dst := add(hdr, 1169)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMax))
-            dst := add(hdr, 1167)
+            dst := add(hdr, 1173)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMax))
         }
         if (expired) {
@@ -318,28 +323,23 @@ contract C9GameSVG {
      * @dev Puts together the full SVG image.
      */
     function svgImage(uint256 tokenId, uint256 gameSize)
-    external view
+    external view override
     returns (string memory output) {
-        if (tokenId < IC9Game(contractGame).totalSupply()) {
+        uint256 _currentRoundId = IC9Game(contractGame).currentRoundId();
+        uint256 _tokenRoundId = uint256(uint16(tokenId>>POS_ROUND_ID));
+        //bool _expired = _tokenRoundId < _currentRoundId ? true : false;
+        bool _expired = false;
 
-            uint256 _roundMinTokenId = IC9Game(contractGame).minRoundValidTokenId();
-            bytes6 _minTokenId = _sTokenId(_roundMinTokenId);
-            bool _expired = tokenId < _roundMinTokenId ? true : false;
-
-            string memory hdr = _setHDR(tokenId, gameSize, _minTokenId, _expired);
-            string memory rects = _buildRects(tokenId, gameSize);
-            string memory middle = _middleLabel(gameSize);
-            string memory ftr = _setFTR(gameSize, _expired);
-            return string.concat(
-                hdr,
-                rects,
-                middle,
-                ftr
-            );
-        }
-        else {
-            return "";
-        }
+        string memory hdr = _setHDR(tokenId, gameSize, _tokenRoundId, _currentRoundId, _expired);
+        string memory rects = _buildRects(tokenId, gameSize);
+        string memory middle = _middleLabel(gameSize);
+        string memory ftr = _setFTR(gameSize, _expired);
+        return string.concat(
+            hdr,
+            rects,
+            middle,
+            ftr
+        );
     }
 
     function __destroy()

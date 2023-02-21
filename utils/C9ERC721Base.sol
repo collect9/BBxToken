@@ -13,6 +13,9 @@ import "./interfaces/IC9ERC721Base.sol";
 import "./../C9OwnerControl.sol";
 import "./../abstract/C9Errors.sol";
 
+// Need a fulfilled true/false in case any get stuck
+// Admin override can set game boards with external random, and then set it to fulfilled so it request words ever comes back it reverts
+
 uint256 constant MAX_TRANSFER_BATCH_SIZE = 128;
 
 /**
@@ -230,6 +233,27 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
         _tokenCounter = _tokenId;
     }
 
+    function _mint(address[] calldata to, uint256 N)
+    internal virtual {
+        uint256 _tokenId = _tokenCounter;
+        uint160 _to;
+        address _zero = address(0);
+        for (uint256 i; i<N;) {
+            _to = uint160(to[i]);
+            _owners[_tokenId] = _to;
+            ++_balances[to[i]]; 
+            emit Transfer(_zero, to[i], _tokenId);
+            unchecked {
+                ++_tokenId;
+                ++i;
+            }
+        }
+        unchecked {
+            totalSupply += N;  
+        }
+        _tokenCounter = _tokenId;
+    }
+
     /**
      * @dev Returns the owner of the `tokenId`. Does NOT revert if token doesn't exist
      */
@@ -264,6 +288,11 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
         _safeMint(to, N, "");
     }
 
+    function _safeMint(address[] calldata to, uint256 N)
+    internal virtual {
+        _safeMint(to, N, "");
+    }
+
     /**
      * @dev Same as {xref-ERC721-_safeMint-address-uint256-}[`_safeMint`], with an additional `data` parameter which is
      * forwarded in {IERC721Receiver-onERC721Received} to contract recipients.
@@ -274,6 +303,20 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
         uint256 _lastTokenId = _tokenCounter-1;
         if (!_checkOnERC721Received(address(0), to, _lastTokenId, data)) {
             revert NonERC721Receiver();
+        }
+    }
+
+    function _safeMint(address[] calldata to, uint256 N, bytes memory data)
+    internal virtual {
+        _mint(to, N);
+        uint256 _firstTokenId = _tokenCounter-N;
+        for (uint256 i; i<N;) {
+            if (!_checkOnERC721Received(address(0), to[i], _firstTokenId, data)) {
+                revert NonERC721Receiver();
+            }
+            unchecked {
+                ++_firstTokenId;
+            }
         }
     }
 

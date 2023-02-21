@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
 
-// Maybe consider using future price data... user submits request for mint. Mint is delayed about ~2 hours or until next price feed update.
-// PRE-MINT NFTs on REQUEST, FILL IN DATA ON FULFILL
+// Winning Board is forever locked
+// Expired boards can be reactivated for a higher buy-in fee
 
 import "./utils/Helpers.sol";
 import "./utils/C9ERC721Base.sol";
@@ -10,13 +10,12 @@ import "./utils/C9ERC721Base.sol";
 import "./utils/C9VRF3.sol";
 
 import "./interfaces/IC9Game.sol";
+import "./interfaces/IC9GameSVG.sol";
 import "./interfaces/IC9Token.sol";
 import "./utils/interfaces/IC9EthPriceFeed.sol";
 import "./abstract/C9Errors.sol";
 
 uint256 constant MAX_MINT_BATCH_SIZE = 50;
-uint256 constant POS_ROUND_ID = 176;
-uint256 constant POS_SEED = 192;
 
 contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     /*
@@ -26,6 +25,10 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     176-192: roundID (u16)
     192-256: randomSeed (u64)
     */
+    struct MintAddressPool {
+        address to;
+        uint8 N;
+    }
 
     // Tracking of contract balance with fees
     uint256 private _balance;
@@ -39,6 +42,7 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
 
     // Connecting contracts
     address private contractPricer;
+    address private contractSVG;
     address private immutable contractToken;
 
     // Payout fractions
@@ -64,24 +68,31 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
      * VRF: 
      * Network: Sepolia
      * VRF: 0x8103B0A8A00be2DDC778e6e7eaa21791Cd364625
-    */
+     *
+     * A lot of variables since a sustainable fee structure 
+     * isn't known at deployment.
+     */
     constructor(
         address _contractToken,
         address _contractPriceFeed,
         address _vrfCoordinator
         )
-        C9ERC721("Collect9 NFT Bingo", "C9X")
+        C9ERC721("Collect9 ConnectX NFT", "C9X")
         C9RandomSeed(_vrfCoordinator)
     {
+        // Fee params
         _mintingFee = 5;
         _c9PortionFee = 25;
-        _roundId = 1;
-        _modulus = IC9Token(_contractToken).totalSupply();
-        
         _payoutSplit = [uint48(25), 75];
         _payoutTiers[5] = 40;
         _payoutTiers[7] = 70;
         _payoutTiers[9] = 100;
+        
+        // Round params
+        _roundId = 1;
+        _modulus = IC9Token(_contractToken).totalSupply();
+        
+        // Linked contracts
         contractPricer = _contractPriceFeed;
         contractToken = _contractToken;
     }
@@ -89,6 +100,14 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     modifier validGameSize(uint256 _gameSize) {
         if (_gameSize != 5 && _gameSize != 7 && _gameSize != 9) {
                 revert GameSizeError(_gameSize);
+        }
+        _;
+    }
+
+    modifier validRoundId(uint256 tokenId) {
+        uint256 _tokenRoundId = uint256(uint8(_owners[tokenId]>>POS_ROUND_ID));
+        if (_tokenRoundId < _roundId) {
+            revert ExpiredToken(tokenId, _tokenRoundId, _roundId);
         }
         _;
     }
@@ -102,11 +121,8 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     function _beforeTokenTransfer(address from, address to, uint256 tokenId, uint256 batchSize)
         internal
         override
-        notFrozen() {
-            uint256 _tokenRoundId = uint256(uint8(_owners[tokenId]>>POS_ROUND_ID));
-            if (_tokenRoundId < _roundId) {
-                revert ExpiredToken(tokenId, _tokenRoundId, _roundId);
-            }
+        notFrozen()
+        validRoundId(tokenId) {
             super._beforeTokenTransfer(from, to, tokenId, batchSize);
     }
 
@@ -250,14 +266,11 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
      * @dev Returns the current game pot in Wei.
      * This is the full winning for when the winner 
      * also owns the C9T NFTs that formed the winning array.
-     * _balance is ~75% of the mint fees. Thus 89.3% of 
-     * _balance is ~67% of the mint fees, which is the 
-     * intended pot.
      */
     function currentPot(uint256 _gameSize)
         public view
         returns(uint256 winningPayouts) {
-            winningPayouts = 893*_balance*_payoutTiers[_gameSize]/100000;
+            winningPayouts = _balance*_payoutTiers[_gameSize]/100;
     }
 
     /**
@@ -309,7 +322,7 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
      * Potential problem here if VRF fulfills recent before older.
      * Fix: harcode the round ID into the gameBoard and base expiry on that.
      */
-    function fulfillRandomWords(uint256 _requestId, uint256[] calldata _randomWords)
+    function fulfillRandomWords(uint256 _requestId, uint256[] memory _randomWords)
         internal override {
             super.fulfillRandomWords(_requestId, _randomWords);
             uint256 _statusRequest = statusRequests[_requestId];
@@ -323,8 +336,9 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
      */
     function getContracts()
         external view
-        returns(address pricerContract, address tokenContract) {
+        returns(address pricerContract, address svgContract, address tokenContract) {
             pricerContract = contractPricer;
+            svgContract = contractSVG;
             tokenContract = contractToken;
     }
 
@@ -339,7 +353,6 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
 
     function mint(uint256 N)
         external payable
-        onlyRole(DEFAULT_ADMIN_ROLE) 
         notFrozen() {
             if (N > 0) {
                 if (N > MAX_MINT_BATCH_SIZE) {
@@ -359,6 +372,37 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             }
     }
 
+    function mintPool(MintAddressPool[] calldata addressPool)
+        external payable
+        notFrozen() {
+            uint256 _poolSize = addressPool.length;
+            uint256 N;
+            for (uint256 i; i<_poolSize;) {
+                N += addressPool[i].N;
+                unchecked {++i;}
+            }
+
+            if (N > 0) {
+                if (N > MAX_MINT_BATCH_SIZE) {
+                    revert BatchSizeTooLarge(MAX_MINT_BATCH_SIZE, N);
+                }
+                uint256 mintingFeeWei = getMintingFee(N);
+                if (msg.value != mintingFeeWei) {
+                    revert InvalidPaymentAmount(mintingFeeWei, msg.value);
+                }
+                _balance += ((100-_c9PortionFee)*msg.value/100);
+                _c9Fees += (_c9PortionFee*msg.value/100);
+                requestRandomWords(msg.sender, _tokenCounter, N);
+                for (uint256 i; i<_poolSize;) {
+                    _safeMint(addressPool[i].to, addressPool[i].N);
+                    unchecked {++i;}
+                }
+            }
+            else {
+                revert ZeroMintError();
+            }
+    }
+
     /**
      * @dev Sets/updates the pricer contract 
      * address if ever needed.
@@ -370,6 +414,15 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
                 revert AddressAlreadySet();
             }
             contractPricer = _address;
+    }
+
+    /**
+     * @dev Sets the SVG display contract address.
+     */
+    function setContractSVG(address _address)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            contractSVG = _address;
     }
 
     function setMintingFee(uint256 fee)
@@ -389,6 +442,23 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
         onlyRole(DEFAULT_ADMIN_ROLE) {
             _payoutTiers[tier] = amount;
     }
+
+    /**
+     * @dev Returns the base64 representation of the SVG string. 
+     * This is desired when including the string in json data which 
+     * does not allow special characters found in hmtl/xml code.
+     */
+    function svgImage(uint256 tokenId, uint256 gameSize)
+        public view
+        returns (string memory) {
+            if (_exists(tokenId)) {
+                return IC9GameSVG(contractSVG).svgImage(tokenId, gameSize);
+            }
+            else {
+                return "";
+            }
+    }
+
 
     /**
      * @dev View function to see the numbers generated 

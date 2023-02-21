@@ -1,8 +1,8 @@
 //SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
 import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
-//import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
-import "./VRFConsumerBaseV2a.sol";
+import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
+//import "./VRFConsumerBaseV2a.sol";
 
 contract C9RandomSeed is VRFConsumerBaseV2 {
     error StatusRequestDoesNotExist(uint256 requestId);
@@ -35,7 +35,7 @@ contract C9RandomSeed is VRFConsumerBaseV2 {
     // Cannot exceed VRFCoordinatorV2.MAX_NUM_WORDS.
     uint32 constant NUM_WORDS = 1;
 
-    uint32 constant GAS_LIMIT = 200000;
+    uint32 constant GAS_LIMIT = 125000;
 
     /**
      * SEPOLIA
@@ -50,11 +50,12 @@ contract C9RandomSeed is VRFConsumerBaseV2 {
     function requestRandomWords(address requester, uint256 tokenId, uint256 numberOfMints)
         internal virtual {
             // Will revert if subscription is not set and funded.
+            uint256 _gasLimit = GAS_LIMIT + 8000*numberOfMints;
             uint256 requestId = COORDINATOR.requestRandomWords(
                 KEY_HASH,
                 SUB_ID,
                 REQ_CONFIRMATIONS,
-                GAS_LIMIT,
+                uint32(_gasLimit),
                 NUM_WORDS
             );
             uint256 _requestInfo = tokenId;
@@ -63,7 +64,7 @@ contract C9RandomSeed is VRFConsumerBaseV2 {
             emit RequestSent(requestId, requester, numberOfMints);
     }
 
-    function fulfillRandomWords(uint256 _requestId, uint256[] calldata _randomWords)
+    function fulfillRandomWords(uint256 _requestId, uint256[] memory _randomWords)
         internal virtual override {
             if (statusRequests[_requestId] == 0) {
                 revert StatusRequestDoesNotExist(_requestId);

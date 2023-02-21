@@ -90,6 +90,57 @@ library Helpers {
             return bytes4(output);
     }
 
+    //https://ethereum.stackexchange.com/questions/126899/convert-bytes-to-hexadecimal-string-in-solidity
+    function iToHex(bytes memory buffer) public pure returns (string memory) {
+        // Fixed buffer size for hexadecimal convertion
+        bytes memory converted = new bytes(buffer.length * 2);
+        bytes memory _base = "0123456789abcdef";
+        for (uint256 i = 0; i < buffer.length; i++) {
+            converted[i * 2] = _base[uint8(buffer[i]) / _base.length];
+            converted[i * 2 + 1] = _base[uint8(buffer[i]) % _base.length];
+        }
+        return string(abi.encodePacked("0x", converted));
+    }
+
+    function _quick(uint256[] memory data, uint256 low, uint256 high)
+        private pure {
+            if (low < high) {
+                uint256 pivotVal = data[(low + high) / 2];
+                uint256 low1 = low;
+                uint256 high1 = high;
+                for (;;) {
+                    while (data[low1] < pivotVal) {
+                        ++low1;
+                    }
+                    while (data[high1] > pivotVal) {
+                        --high1;
+                    }
+                    if (low1 >= high1) {
+                        break;
+                    }
+                    (data[low1], data[high1]) = (data[high1], data[low1]);
+                    ++low1;
+                    --high1;
+                }
+                if (low < high1) {
+                    _quick(data, low, high1);
+                }
+                ++high1;
+                if (high1 < high) {
+                    _quick(data, high1, high);
+                }
+            }
+    }
+
+    function quickSort(uint256[] calldata data)
+        internal pure 
+        returns (uint256[] memory sorted) {
+            sorted = data;
+            if (sorted.length > 1) {
+                _quick(sorted, 0, sorted.length - 1);
+            }
+    }
+
     function remove2Null(bytes2 input)
         internal pure
         returns (bytes2) {
@@ -109,6 +160,19 @@ library Helpers {
         internal pure
         returns (bool) {
             return keccak256(bytes(_a)) == keccak256(bytes(_b));
+    }
+
+    function strToUint(string memory _str)
+        internal pure
+        returns (uint256 res, bool err) {
+        for (uint256 i; i<bytes(_str).length;) {
+            if ((uint8(bytes(_str)[i]) - 48) < 0 || (uint8(bytes(_str)[i]) - 48) > 9) {
+                return (0, false);
+            }
+            res += (uint8(bytes(_str)[i]) - 48) * 10**(bytes(_str).length - i - 1);
+            unchecked {++i;}
+        }
+        return (res, true);
     }
 
     // https://ethereum.stackexchange.com/questions/8346/convert-address-to-string
