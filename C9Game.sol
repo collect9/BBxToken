@@ -3,6 +3,7 @@ pragma solidity >=0.8.17;
 
 // Winning Board is forever locked
 // Expired boards can be reactivated for a higher buy-in fee
+// Buy-in fee increases with time
 
 import "./utils/Helpers.sol";
 import "./utils/C9ERC721Base.sol";
@@ -19,7 +20,12 @@ uint256 constant MAX_MINT_BATCH_SIZE = 50;
 
 contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     /*
-    _owners Enumerable
+    _owners Non-Enumerable:
+    0-160: owner
+    176-192: roundID (u16)
+    192-256: randomSeed (u64)
+
+    _owners Enumerable:
     0-160: owner
     160-176: owned token index (u16)
     176-192: roundID (u16)
@@ -186,7 +192,7 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
                 revert CallerNotOwnerOrApproved();
             }
             // Validate the tokenId
-            uint256 _tokenRoundId = uint256(uint8(_owners[tokenId]>>POS_ROUND_ID));
+            uint256 _tokenRoundId = uint256(uint16(_owners[tokenId]>>POS_ROUND_ID));
             if (_tokenRoundId < _roundId) {
                 revert ExpiredToken(tokenId, _tokenRoundId, _roundId);
             }
@@ -268,9 +274,9 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
      * also owns the C9T NFTs that formed the winning array.
      */
     function currentPot(uint256 _gameSize)
-        public view
-        returns(uint256 winningPayouts) {
-            winningPayouts = _balance*_payoutTiers[_gameSize]/100;
+        public view override
+        returns(uint256) {
+            return _balance*_payoutTiers[_gameSize]/100;
     }
 
     /**
@@ -449,7 +455,7 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
      * does not allow special characters found in hmtl/xml code.
      */
     function svgImage(uint256 tokenId, uint256 gameSize)
-        public view
+        external view
         returns (string memory) {
             if (_exists(tokenId)) {
                 return IC9GameSVG(contractSVG).svgImage(tokenId, gameSize);
@@ -457,6 +463,12 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             else {
                 return "";
             }
+    }
+
+    function tokenRoundId(uint256 tokenId)
+        external view
+        returns (uint256) {
+            return uint256(uint16(_owners[tokenId]>>POS_ROUND_ID));
     }
 
 

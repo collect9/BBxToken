@@ -8,7 +8,15 @@ uint256 constant POS_SEED = 192;
 
 interface IC9Game is IC9ERC721Base {
 
+    function currentPot(uint256 _gameSize)
+    external view
+    returns(uint256);
+
     function currentRoundId()
+    external view
+    returns (uint256);
+
+    function tokenRoundId(uint256 tokenId)
     external view
     returns (uint256);
 

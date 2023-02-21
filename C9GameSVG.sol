@@ -30,7 +30,7 @@ contract C9GameSVG is IC9GameSVG {
         '<text x="22" y="228" class="c9gS">Token ID = 0     </text>'
         '<text x="22" y="237" class="c9gS">View = XxX</text>'
         '<text x="120" y="228" class="c9gS" text-anchor="middle">View Max Win</text>'
-        '<text x="120" y="237" class="c9gS" text-anchor="middle">ETH = 0.00</text>'
+        '<text x="120" y="237" class="c9gS" text-anchor="middle">ETH =  0.000</text>'
         '<text x="218" y="228" class="c9gS" text-anchor="end">Token rID = 0     </text>'
         '<text x="218" y="237" class="c9gS" text-anchor="end">Current rID = 0     </text>'
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-005 -005 060 060" width="100%" height="100%">'
@@ -146,7 +146,7 @@ contract C9GameSVG is IC9GameSVG {
         bytes6 _tokenId = _sTokenId(tokenId);
         bytes6 _currentRoundId = _sTokenId(currentRoundId);
         bytes6 _tokenRoundId = _sTokenId(tokenRoundId);
-        
+        bytes6 _gamePot = _viewPot(IC9Game(contractGame).currentPot(gameSize));
         assembly {
             let dst := add(hdr, 740)
             mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _tokenId))
@@ -154,17 +154,19 @@ contract C9GameSVG is IC9GameSVG {
             mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), _gameSize))
             dst := add(hdr, 796)
             mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), _gameSize))
-            dst := add(hdr, 1017)
+            dst := add(hdr, 941)
+            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _gamePot))
+            dst := add(hdr, 1019)
             mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _tokenRoundId))
-            dst := add(hdr, 1097)
+            dst := add(hdr, 1099)
             mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _currentRoundId))
-            dst := add(hdr, 1160)
+            dst := add(hdr, 1162)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMin))
-            dst := add(hdr, 1165)
+            dst := add(hdr, 1167)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMin))
-            dst := add(hdr, 1169)
+            dst := add(hdr, 1171)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMax))
-            dst := add(hdr, 1173)
+            dst := add(hdr, 1175)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMax))
         }
         if (expired) {
@@ -174,10 +176,45 @@ contract C9GameSVG is IC9GameSVG {
             }
         }
 
-        // Max pot comes from reading reading game contract balance and calc
+        
         
 
         return hdr;   
+    }
+
+    function _viewPot(uint256 pot)
+    private pure
+    returns (bytes6) {
+        bytes memory _sViewPot = " 0.000";
+        uint256 _leadingDecimal = pot / 10**18;
+        uint256 _trailingDecimal = (pot / 10**15) % 1000;
+        bytes2 _bLeadingDecimal = bytes2(_sTokenId(_leadingDecimal));
+        bytes3 _bTrailingDecimal = bytes3(_sTokenId(_trailingDecimal));
+
+        assembly {
+            let dst := add(_sViewPot, 33)
+            // Leading decimal
+            if gt(_leadingDecimal, 0) {
+                if gt(_leadingDecimal, 9) {
+                    dst := add(_sViewPot, 32)
+                }
+                mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _bLeadingDecimal))
+            }
+            // Trailing decimal
+            dst := add(_sViewPot, 35)
+            if lt(_trailingDecimal, 100) {
+                dst := add(_sViewPot, 36)
+                if lt(_trailingDecimal, 10) {
+                    dst := add(_sViewPot, 37)
+                }
+            }
+            mstore(dst, _bTrailingDecimal)
+            // Put decimal point back in
+            dst := add(_sViewPot, 34)
+            mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "."))
+        }
+
+        return bytes6(_sViewPot);
     }
 
     function _setFTR(uint256 gameSize, bool expired)
@@ -326,9 +363,8 @@ contract C9GameSVG is IC9GameSVG {
     external view override
     returns (string memory output) {
         uint256 _currentRoundId = IC9Game(contractGame).currentRoundId();
-        uint256 _tokenRoundId = uint256(uint16(tokenId>>POS_ROUND_ID));
-        //bool _expired = _tokenRoundId < _currentRoundId ? true : false;
-        bool _expired = false;
+        uint256 _tokenRoundId = IC9Game(contractGame).tokenRoundId(tokenId);
+        bool _expired = _tokenRoundId < _currentRoundId ? true : false;
 
         string memory hdr = _setHDR(tokenId, gameSize, _tokenRoundId, _currentRoundId, _expired);
         string memory rects = _buildRects(tokenId, gameSize);
