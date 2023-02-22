@@ -9,29 +9,28 @@ import "./utils/Helpers.sol";
 
 contract C9GameSVG is IC9GameSVG {
     string constant SVG_HDR = ''
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="100%" height="100%" style="font-family: \'Poppins\', sans-serif; font-weight:bold; fill:#333; padding:05;">'
+        '<svg class="c9O" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="100%" height="100%">'
+        '<style>'
+        '.c9O {font-family: "Poppins", sans-serif; font-weight:bold; fill:#333;}'
+        '.c9I {filter: sepia(000%) saturate(100%);}'
+        '.c9gE {font-size:34px; fill:#ee8;}'
+        '.c9gT {font-size:14px; fill:#ded;}'
+        '.c9gS {font-size:7px; fill:#ded;}'
+        '</style>'
+        '<svg class="c9I" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">'
         '<defs>'
         '<linearGradient id="c9gbg">'
         '<stop offset="0" stop-color="#C76CD7" />'
         '<stop offset="1" stop-color="#3123AE" />'
         '</linearGradient>'
-        '<filter id="c9GS">'
-        '<feColorMatrix type="saturate" values="1.0"/>'
-        '</filter>'
         '</defs>'
-        '<style>'
-        '.c9gE {font-size:34px; fill:red;}'
-        '.c9gT {font-size:14px; fill:#ded;}'
-        '.c9gS {font-size:7px; fill:#ded;}'
-        '</style>'
-        '<g filter="url(#c9GS)">'
         '<rect width="100%" height="100%" rx="8%" fill="url(#c9gbg)" />'
-        '<text x="120" y="16" class="c9gT" text-anchor="middle">coLLect9 coNNectX </text>'
-        '<text x="22" y="228" class="c9gS">Token ID = 0     </text>'
+        '<text x="120" y="15" class="c9gT" text-anchor="middle">coLLect9 coNNectX</text>'
+        '<text x="22" y="229" class="c9gS">Token ID = 0     </text>'
         '<text x="22" y="237" class="c9gS">View = XxX</text>'
-        '<text x="120" y="228" class="c9gS" text-anchor="middle">View Max Win</text>'
+        '<text x="120" y="229" class="c9gS" text-anchor="middle">View Max Win</text>'
         '<text x="120" y="237" class="c9gS" text-anchor="middle">ETH =  0.000</text>'
-        '<text x="218" y="228" class="c9gS" text-anchor="end">Token rID = 0     </text>'
+        '<text x="218" y="229" class="c9gS" text-anchor="end">Token rID = 0     </text>'
         '<text x="218" y="237" class="c9gS" text-anchor="end">Current rID = 0     </text>'
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-005 -005 060 060" width="100%" height="100%">'
         '<defs>'
@@ -53,9 +52,9 @@ contract C9GameSVG is IC9GameSVG {
         '<use href="#a"/>'
         '<use href="#a" transform="translate(0 9.3) rotate(240 125 138)"/>'
         '<use href="#a" transform="translate(9 4) rotate(120 125 138)"/>'
-        '</svg></svg>'
-        '</g>'
+        '</svg></svg></svg>'
         '<text x="50%" y="55%" class="c9gE" text-anchor="middle">       </text>'
+        '<text x="50%" y="57%" class="c9gS" text-anchor="middle">                                          </text>'
         '</svg>';
 
     mapping(uint256 => string) viewBoxMin;
@@ -136,16 +135,13 @@ contract C9GameSVG is IC9GameSVG {
         return bytes6(bTokenId);
     }
 
-    function _setHDR(uint256 tokenId, uint256 gameSize, uint256 tokenRoundId, uint256 currentRoundId, bool expired)
+    function _setHDR(bytes6 _tokenId, uint256 gameSize, bytes6 _tokenRoundId, bytes6 _currentRoundId, bool expired, uint256 priorWinner)
     private view
     returns (string memory) {
         string memory hdr = SVG_HDR;
         bytes1 _gameSize = bytes1(Helpers.uintToBytes(gameSize));
         bytes3 _viewBoxMin = bytes3(bytes(viewBoxMin[gameSize]));
         bytes3 _viewBoxMax = bytes3(bytes(viewBoxMax[gameSize]));
-        bytes6 _tokenId = _sTokenId(tokenId);
-        bytes6 _currentRoundId = _sTokenId(currentRoundId);
-        bytes6 _tokenRoundId = _sTokenId(tokenRoundId);
         bytes6 _gamePot = _viewPot(IC9Game(contractGame).currentPot(gameSize));
         assembly {
             let dst := add(hdr, 740)
@@ -171,14 +167,20 @@ contract C9GameSVG is IC9GameSVG {
         }
         if (expired) {
             assembly {
-                let dst := add(hdr, 393)
+                let dst := add(hdr, 231)
+                mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "1"))
+                dst := add(hdr, 246)
                 mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "0"))
             }
         }
-
-        
-        
-
+        if (priorWinner == 1) {
+            assembly {
+                let dst := add(hdr, 231)
+                mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "1"))
+                dst := add(hdr, 246)
+                mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "3"))
+            }
+        }
         return hdr;   
     }
 
@@ -362,14 +364,25 @@ contract C9GameSVG is IC9GameSVG {
     function svgImage(uint256 tokenId, uint256 gameSize)
     external view override
     returns (string memory output) {
-        uint256 _currentRoundId = IC9Game(contractGame).currentRoundId();
-        uint256 _tokenRoundId = IC9Game(contractGame).tokenRoundId(tokenId);
-        bool _expired = _tokenRoundId < _currentRoundId ? true : false;
+        uint256 currentRoundId = IC9Game(contractGame).currentRoundId();
+        (, uint256 priorWinner, uint256 tokenRoundId,) = IC9Game(contractGame).tokenData(tokenId);
+        bool expired = tokenRoundId < currentRoundId ? true : false;
 
-        string memory hdr = _setHDR(tokenId, gameSize, _tokenRoundId, _currentRoundId, _expired);
+        bytes6 _tokenId = _sTokenId(tokenId);
+        bytes6 _currentRoundId = _sTokenId(currentRoundId);
+        bytes6 _tokenRoundId = _sTokenId(tokenRoundId);
+
+        string memory hdr = _setHDR(
+            _tokenId,
+            gameSize,
+            _tokenRoundId,
+            _currentRoundId,
+            expired,
+            priorWinner
+        );
         string memory rects = _buildRects(tokenId, gameSize);
         string memory middle = _middleLabel(gameSize);
-        string memory ftr = _setFTR(gameSize, _expired);
+        string memory ftr = _setFTR(gameSize, expired);
         return string.concat(
             hdr,
             rects,

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
 
-// Winning Board is forever locked
-// Expired boards can be reactivated for a higher buy-in fee
+// Winning Board is forever locked - can enforce by setting tokenRoundId = 0
+// Expired boards with non-zero tokenRoundId can be reactivated for a higher buy-in fee
 // Buy-in fee increases with time
 
 import "./utils/Helpers.sol";
@@ -19,21 +19,28 @@ import "./abstract/C9Errors.sol";
 uint256 constant MAX_MINT_BATCH_SIZE = 50;
 
 contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
+    bool private _freezerEnabled = true;
     /*
     _owners Non-Enumerable:
-    0-160: owner
-    176-192: roundID (u16)
-    192-256: randomSeed (u64)
-
-    _owners Enumerable:
-    0-160: owner
-    160-176: owned token index (u16)
-    176-192: roundID (u16)
-    192-256: randomSeed (u64)
+    key: tokenId
+    0-160: owner (u160)
+    160-176: roundID (u16)
+    176-256: randomSeed (u80)
     */
+    mapping(uint256 => uint256) private _priorWinners;
+    /*
+    priorWinners
+    key: tokenId
+    0-160: winner (u160), since the prior won token can be traded around
+    160-176: winnerNumber (u16)
+    176-184: gameSize (u8)
+    184-256: winningIndices (max u8x9)
+    */
+
+    // Struct for pool of minters
     struct MintAddressPool {
         address to;
-        uint8 N;
+        uint96 N;
     }
 
     // Tracking of contract balance with fees
@@ -45,6 +52,7 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     // Current round parameters
     uint256 private _roundId;
     uint256 private _modulus;
+    uint256 private _winnerCounter;
 
     // Connecting contracts
     address private contractPricer;
@@ -55,18 +63,11 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     uint48[2] private _payoutSplit;
     mapping(uint256 => uint256) private _payoutTiers;
 
-    // Event for winner owns the C9Ts
+    // Event to emit upon win
     event Winner(
-        address indexed winner,
-        uint256 indexed tokenId,
-        uint256 indexed winnings
-    );
-
-    // Event for winner does not own the C9Ts
-    event WinnerSplit(
-        address indexed winner,
-        uint256 indexed tokenId,
-        uint256 indexed winnings
+        address indexed winner1,
+        address indexed winner2,
+        uint256 indexed tokenId
     );
 
     /*
@@ -86,7 +87,7 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
         C9ERC721("Collect9 ConnectX NFT", "C9X")
         C9RandomSeed(_vrfCoordinator)
     {
-        // Fee params
+        // Default fee params
         _mintingFee = 5;
         _c9PortionFee = 25;
         _payoutSplit = [uint48(25), 75];
@@ -94,7 +95,7 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
         _payoutTiers[7] = 70;
         _payoutTiers[9] = 100;
         
-        // Round params
+        // Starting round params
         _roundId = 1;
         _modulus = IC9Token(_contractToken).totalSupply();
         
@@ -110,48 +111,57 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
         _;
     }
 
-    modifier validRoundId(uint256 tokenId) {
-        uint256 _tokenRoundId = uint256(uint8(_owners[tokenId]>>POS_ROUND_ID));
-        if (_tokenRoundId < _roundId) {
-            revert ExpiredToken(tokenId, _tokenRoundId, _roundId);
-        }
-        _;
-    }
-
     /**
      * @dev Required overrides from imported contracts.
      * This one checks to make sure the token is not locked 
      * due to being expired or that the contract is not 
-     * frozen.
+     * frozen. Tokens that have won in the past may be
+     * traded, but may not win again.
      */
     function _beforeTokenTransfer(address from, address to, uint256 tokenId, uint256 batchSize)
         internal
         override
-        notFrozen()
-        validRoundId(tokenId) {
+        notFrozen() {
+            // 1. Get the token's saved roundId at mint 
+            uint256 _tokenRoundId = uint256(uint16(_owners[tokenId]>>POS_ROUND_ID));
+            // 2. Check if that roundId is expired
+            if (_tokenRoundId < _roundId) {
+                // 3. If expired but not a prior winning board, then revert
+                if (_priorWinners[tokenId] == 0) {
+                    revert ExpiredToken(tokenId, _tokenRoundId, _roundId);
+                }
+            }
             super._beforeTokenTransfer(from, to, tokenId, batchSize);
     }
 
     /*
-     * @dev This is a batch function that
-     * sets the game boards for the last N tokens minted.
-     * _tokenCounter, a state variable, is the last tokenID 
-     * minted. It, along with _seed are copied to memory to 
-     * nreduce gas costs in the loop.
+     * @dev Sets the game board a single _tokenId.
+     */
+    function _setTokenGameBoard(uint256 _tokenId, uint256 _randomSeed)
+        private {
+            uint256 _packedToken = _owners[_tokenId];
+            _packedToken |= _roundId<<POS_ROUND_ID;
+            _packedToken |= _randomSeed<<POS_SEED;
+            _owners[_tokenId] = _packedToken;
+    }
+
+    /*
+     * @dev Sets the game boards for _tokenId plus 
+     * any additional tokens as part of its minting batch.
      */
     function _setTokenGameBoards(uint256 _tokenId, uint256 N, uint256 _randomSeed)
         private {
-            uint256 _packedToken;
-            uint256 _currentRoundId = _roundId;
-            uint256 _tokenIdMax = _tokenId+N;
+            uint256 _tokenData;
+            uint256 _tokenIdMax = _tokenId+N-1;
+            uint256 _currentRoundId = _roundId; // Read from storage one time
             for (_tokenId; _tokenId<_tokenIdMax;) {
-                _packedToken = _owners[_tokenId];
-                _packedToken |= _currentRoundId<<POS_ROUND_ID;
-                _packedToken |= _randomSeed<<POS_SEED;
-                _owners[_tokenId] = _packedToken;
+                _tokenData = _owners[_tokenId];
+                _tokenData |= _currentRoundId<<POS_ROUND_ID;
+                _tokenData |= _randomSeed<<POS_SEED;
+                _owners[_tokenId] = _tokenData;
                 /*
-                Unchecked because don't care if _randomSeed overflows 
-                and warps around since it is still random and useful.
+                Unchecked below because don't care if _randomSeed overflows 
+                and warps around since it will still be random and useful.
                 */
                 unchecked {
                     _randomSeed += uint256(
@@ -164,10 +174,44 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
                     ++_tokenId;
                 }
             }
+            /*
+            The last token is done outside of the loop to avoid doing an additional 
+            and unnecessary _randomSeed += operation. This matters more the smaller 
+            the batch sizes are. 
+            */
+            _tokenData = _owners[_tokenIdMax];
+            _tokenData |= _currentRoundId<<POS_ROUND_ID;
+            _tokenData |= _randomSeed<<POS_SEED;
+            _owners[_tokenIdMax] = _tokenData;
     }
 
     /*
-     * @dev Returns contract balances.
+     * @dev Store data for the winners. The data is used 
+     * for display purposes as well as enforced allowing 
+     * exchange of prior won tokens.
+     */
+    function _storeWinner(uint256 tokenId, address winner, uint256 _gameSize, uint256[] memory _sortedIndices)
+        private {
+            // 1. Increment winner count
+            unchecked {++_winnerCounter;} 
+            // 2. Create winning data
+            uint256 _winnerData;
+            _winnerData |= uint256(uint160(winner));
+            _winnerData |= _winnerCounter<<WPOS_WINNING_ID;
+            _winnerData |= _gameSize<<WPOS_GAMESIZE;
+            uint256 _offset = WPOS_INDICES;
+            for (uint256 i; i<_gameSize;) {
+                _winnerData |= _sortedIndices[i]<<_offset;
+                unchecked {_offset += 8;}
+            }
+            // 3. Store winning data
+            _priorWinners[tokenId] = _winnerData;
+    }
+
+    /*
+     * @dev Returns contract balances. The balance is returned 
+     * as well for quick ease of comparison to make sure the 
+     * other two balances are tracking properly.
      */
     function balances()
         external view
@@ -178,37 +222,46 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             c9Fees = _c9Fees;
     }
 
-    // Indices supplied from front end. The reason is in case multiple valid 
-    // rows are present, the winner can manually choose the row.
-    // Maybe add non-entrancy guard for this
+    /*
+     * @dev Function to check if the tokenId is a winner. 
+     * A series of checks are done to ensure the token is valid.
+     */
     function checkWinner(uint256 tokenId, uint256[] calldata indices)
         external {
-            // Validate token exists
+            // V1. Validate tokenId exists
             if (!_exists(tokenId)) {
                 revert InvalidToken(tokenId);
             }
-            // Validate msg.sender is owner
+            // V2. If it exists, validate the msg.sender is the tokenId owner
             if (ownerOf(tokenId) != msg.sender) {
                 revert CallerNotOwnerOrApproved();
             }
-            // Validate the tokenId
-            uint256 _tokenRoundId = uint256(uint16(_owners[tokenId]>>POS_ROUND_ID));
+            // V3. Validate the tokenId is not expired
+            uint256 _tokenData = _owners[tokenId];
+            uint256 _tokenRoundId = uint256(uint16(_tokenData>>POS_ROUND_ID));
             if (_tokenRoundId < _roundId) {
                 revert ExpiredToken(tokenId, _tokenRoundId, _roundId);
             }
-            // Validate the gameSize
+            // V4. Validate the gameSize based on calldata indices length
             uint256 _gameSize = indices.length;
             if (_gameSize != 5 && _gameSize != 7 && _gameSize != 9) {
                 revert GameSizeError(_gameSize);
             }
-            // Validate the indices are a row, col, or diag
+            // V5. Validate calldata indices are a valid row, column, or diagnol
             uint256[] memory _sortedIndices = Helpers.quickSort(indices);
             if (!validIndices(_sortedIndices)) {
                 revert InvalidIndices();
             }
-            // Get the C9T tokenIds from the gameboard
+
+            // All checks have passed up to this point!
+
+            // C1. Get the C9T tokenIds from calldata indices
             uint256[] memory _c9TokenIds = viewIndicesTokenIds(tokenId, _sortedIndices);
-            // Validate all owners of c9TokenIds match
+            /*
+            C2. To check if we have a winner, the ownerOf each _c9TokenIds 
+            must match. Since the middle board index is free, it is ignored 
+            if it shows up in the calldata indices.
+            */
             uint256 middleIdx = (_gameSize*_gameSize)/2;
             address _tokenOwner = IC9Token(contractToken).ownerOf(_c9TokenIds[0]);
             for (uint256 i=1; i<_gameSize;) {
@@ -220,52 +273,53 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
                 unchecked {++i;}
             }
 
-            // If we make it here, we have a winner!
+            // If make it here, we have a winner!!!
 
-            // 1. Get the payout balance
+            // W1. Store winning data
+            _storeWinner(tokenId, msg.sender, _gameSize, _sortedIndices);
+            
+            // W2. Get the payout amount based on winning _gameSize
             (uint256 split0, uint256 split1) = currentPotSplit(_gameSize);
             uint256 _winningPayoutsFull = split0 + split1;
             
-            // 2. Update the remaining balances/pot for the next round.
+            // W3. Update the balances and contract params for the next round
             _balance -= _winningPayoutsFull;
-
-            // 3. Set the contract params for next round
-            unchecked {++_roundId;}
             _modulus = IC9Token(contractToken).totalSupply();
+            unchecked {++_roundId;}
 
-            // 4. Freeze contract (will be unfrozen to start next round)
-            _frozen = true;
+            /*
+            W4: Freeze contract for the next around. The first few 
+            are intended to be frozen to ensure the game is working 
+            properly. After a while, the freezer can be disabled 
+            so the next rounds start automatically.
+            */
+            if (_freezerEnabled) {
+                _frozen = true;
+            }
             
-            // 5. Process payout
-            if (msg.sender == _tokenOwner) {
-                // 5a. Payout 100% of _winningPayoutsFull to msg.sender
-                (bool success,) = payable(msg.sender).call{value: _winningPayoutsFull}("");
-                if(!success) {
-                    revert PaymentFailure(address(this), msg.sender, _winningPayoutsFull);
-                }
-                emit Winner(msg.sender, tokenId, _winningPayoutsFull);
+            /*
+            W5. Process the payouts. If the owner of tokenId (msg.sender) 
+            is the same as _tokenOwner of the winning indices, then the 
+            owner of tokenId (msg.sender) will get both payouts since 
+            msg.sender will equal _tokenOwner.
+            */
+            (bool success,) = payable(msg.sender).call{value: split1}("");
+            if(!success) {
+                revert SplitPaymentFailure(
+                    address(this),
+                    msg.sender,
+                    split1
+                );
             }
-            else {
-                // 5b. Payout (75%, 25%) of _winningPayoutsFull to (msg.sender, _tokenOwner)
-                (bool success,) = payable(msg.sender).call{value: split1}("");
-                if(!success) {
-                    revert SplitPaymentFailure(
-                        address(this),
-                        msg.sender,
-                        split1
-                    );
-                }
-                (success,) = payable(_tokenOwner).call{value: split0}("");
-                if(!success) {
-                    revert SplitPaymentFailure(
-                        address(this),
-                        _tokenOwner,
-                        split0
-                    );
-                }
-                emit WinnerSplit(msg.sender, tokenId, split1);
-                emit WinnerSplit(_tokenOwner, tokenId, split0);
+            (success,) = payable(_tokenOwner).call{value: split0}("");
+            if(!success) {
+                revert SplitPaymentFailure(
+                    address(this),
+                    _tokenOwner,
+                    split0
+                );
             }
+            emit Winner(msg.sender, _tokenOwner, tokenId);
     }
 
     /**
@@ -334,7 +388,12 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             uint256 _statusRequest = statusRequests[_requestId];
             uint256 tokenId = uint256(uint24(_statusRequest));
             uint256 N = uint256(uint8(_statusRequest>>24));
-            _setTokenGameBoards(tokenId, N, _randomWords[0]);
+            if (N > 1) {
+                _setTokenGameBoards(tokenId, N, _randomWords[0]);
+            }
+            else {
+                _setTokenGameBoard(tokenId, _randomWords[0]);
+            }
     }
 
     /**
@@ -409,6 +468,30 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             }
     }
 
+    function reactivate(uint256[] calldata tokenIds)
+        external payable {
+            uint256 N = tokenIds.length;
+            if (N > 0) {
+                uint256 _updatedRoundId = _roundId;
+                uint256 reactivateFeeWei;
+                for (uint256 i; i<N;) {
+                    // Get last round Id, get fee from it
+                    _owners[tokenIds[i]] = _setTokenParam(
+                        _owners[tokenIds[i]],
+                        POS_ROUND_ID,
+                        _updatedRoundId,
+                        type(uint16).max
+                    );
+                }
+                if (msg.value != reactivateFeeWei) {
+                    revert InvalidPaymentAmount(reactivateFeeWei, msg.value);
+                }
+            }
+            else {
+                revert ZeroMintError();
+            }
+    }
+
     /**
      * @dev Sets/updates the pricer contract 
      * address if ever needed.
@@ -429,6 +512,12 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
             contractSVG = _address;
+    }
+
+    function setFreezer(bool _val)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            _freezerEnabled = _val;
     }
 
     function setMintingFee(uint256 fee)
@@ -465,12 +554,34 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             }
     }
 
-    function tokenRoundId(uint256 tokenId)
-        external view
-        returns (uint256) {
-            return uint256(uint16(_owners[tokenId]>>POS_ROUND_ID));
+    function tokenData(uint256 tokenId)
+        external view override
+        returns (address tokenOwner, uint256 tokenRoundId, uint256 randomSeed) {
+            uint256 _tokenData = _owners[tokenId];
+            tokenOwner = address(uint160(_tokenData));
+            tokenRoundId = uint256(uint16(_tokenData>>POS_ROUND_ID));
+            randomSeed = uint256(uint72(_tokenData>>POS_SEED));
     }
 
+    function priorWinnerData(uint256 tokenId)
+        external view
+        returns (address priorWinner, uint256 winningNumber, uint256[] memory _indices) {
+            uint256 _priorWinnerData = _priorWinners[tokenId];
+            if (_priorWinnerData != 0) {
+                priorWinner = address(uint160(_priorWinnerData));
+                winningNumber = uint256(uint16(_priorWinnerData>>WPOS_WINNING_ID));
+                uint256 _gameSize = uint256(uint8(_priorWinnerData>>WPOS_GAMESIZE));
+                _indices = new uint256[](_gameSize);
+                uint256 _offset = WPOS_INDICES;
+                for (uint256 i; i<_gameSize;) {
+                    _indices[i] = uint256(uint8(_priorWinnerData>>_offset));
+                    unchecked {
+                        ++i;
+                        _offset += 8;
+                    }
+                }
+            }
+    }
 
     /**
      * @dev View function to see the numbers generated 
