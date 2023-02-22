@@ -12,13 +12,17 @@ uint256 constant WPOS_INDICES = 184;
 
 interface IC9Game is IC9ERC721Base {
 
-    function currentPot(uint256 _gameSize)
+    function currentPotSplit(uint256 _gameSize)
     external view
-    returns(uint256);
+    returns(uint256 payout0, uint256 payout1);
 
     function currentRoundId()
     external view
     returns (uint256);
+
+    function priorWinnerData(uint256 tokenId)
+    external view
+    returns (address priorWinner, uint256 winningNumber, uint256[] memory _indices);
 
     function tokenData(uint256 tokenId)
     external view

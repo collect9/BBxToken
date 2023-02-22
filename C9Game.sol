@@ -323,38 +323,22 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     }
 
     /**
-     * @dev Returns the current game pot in Wei.
-     * This is the full winning for when the winner 
-     * also owns the C9T NFTs that formed the winning array.
-     */
-    function currentPot(uint256 _gameSize)
-        public view override
-        returns(uint256) {
-            return _balance*_payoutTiers[_gameSize]/100;
-    }
-
-    /**
-     * @dev Returns split-win information.
-     * This is the winning when the winner does not 
-     * own the C9Ts that formed the winning array. The winner 
-     * gets payout[1] and the owner of the C9Ts that formed the 
-     * winning arrays gets payout[0].
-     * The sum of the return is the full winning for when the winner 
+     * @dev Returns game pot information based on _gameSize.
+     * The winner gets payout[1] and the owner of the C9Ts 
+     * that forms the winning array gets payout[0].
+     * The sum of the return is the full payout for when the winner 
      * also owns the C9T NFTs that formed the winning array.
      */
     function currentPotSplit(uint256 _gameSize)
-        public view
+        public view override
         returns(uint256 payout0, uint256 payout1) {
-            uint256 _winningPayouts = currentPot(_gameSize);
+            uint256 _winningPayouts = _balance*_payoutTiers[_gameSize]/100;
             payout0 = _payoutSplit[0]*_winningPayouts/100;
             payout1 = _payoutSplit[1]*_winningPayouts/100;
     }
 
     /**
-     * @dev The minimum tokenID that is valid for the current 
-     * playing round. All tokenIDs that are less than this tokenID 
-     * are no longer valid / expired, and are locked to the holder's 
-     * account to prevent users from trying to sell expired game boards. 
+     * @dev Returns the current active roundId of the game.
      */
     function currentRoundId()
         external view
@@ -364,9 +348,11 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     }
 
     /**
-     * @dev Returns split-win information.
-     * Deposit function if needed for the next round in case the last winner 
-     * is of a 9x9 board that cleans out the pot.
+     * @dev A deposit function if/when needed for the 
+     * next round. For example, the first round will 
+     * require an initial deposit by the contract owner to get 
+     * the game going. The owner of the contract may also 
+     * mint NFTs to start up the pot.
      */
     function deposit()
         external payable
@@ -377,17 +363,20 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     /**
      * @dev Second part of the minting.
      * Once the random number request has been fulfilled, the 
-     * contract will mint the NFTs to the requester, who has 
+     * contract will mint the NFTs to the requester who has 
      * already paid the minting fee.
-     * Potential problem here if VRF fulfills recent before older.
-     * Fix: harcode the round ID into the gameBoard and base expiry on that.
+     * The tokenId is number of mints is stored in the 
+     * statusRequests struct.
      */
     function fulfillRandomWords(uint256 _requestId, uint256[] memory _randomWords)
         internal override {
+            // 1. Makes sure the requestId exists and emits event
             super.fulfillRandomWords(_requestId, _randomWords);
+            // 2. The requestId exists, get the tokenId and number of mints for this request
             uint256 _statusRequest = statusRequests[_requestId];
             uint256 tokenId = uint256(uint24(_statusRequest));
             uint256 N = uint256(uint8(_statusRequest>>24));
+            // 3. Finish minting with VRF data
             if (N > 1) {
                 _setTokenGameBoards(tokenId, N, _randomWords[0]);
             }
@@ -416,79 +405,128 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             return IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_mintingFee*N);
     }
 
+    /**
+     * @dev Minting requirements called in mint() and mintPool().
+     */
+    function _mintReqs(address _msgSender, uint256 _msgValue, uint256 N)
+        private {
+            // 1. Make sure N > 0
+            if (N == 0) {
+                revert ZeroMintError();
+            }
+            // 2. Validate batch size (to prevent VRF from failing)
+            if (N > MAX_MINT_BATCH_SIZE) {
+                revert BatchSizeTooLarge(MAX_MINT_BATCH_SIZE, N);
+            }
+            // 3. Make sure paid amount equals the minting fee
+            uint256 mintingFeeWei = getMintingFee(N);
+            if (_msgValue != mintingFeeWei) {
+                revert InvalidPaymentAmount(mintingFeeWei, _msgValue);
+            }
+            // 4. Update contract balances
+            _balance += ((100-_c9PortionFee) * _msgValue/100);
+            _c9Fees += (_c9PortionFee*_msgValue/100);
+            // 5. Request random data from the VRF for this batch of tokens
+            requestRandomWords(_msgSender, _tokenCounter, N);
+    }
+
+    /**
+     * @dev Mint function. This function alone does not finalize the token 
+     * mints. Although tokens are minted, they still need their data to be 
+     * filled in with random data by the VRF. The tokens are not in play 
+     * until the VRF returns the random data because the token's roundId 
+     * will be set to zero until then.
+     */
     function mint(uint256 N)
         external payable
         notFrozen() {
-            if (N > 0) {
-                if (N > MAX_MINT_BATCH_SIZE) {
-                    revert BatchSizeTooLarge(MAX_MINT_BATCH_SIZE, N);
-                }
-                uint256 mintingFeeWei = getMintingFee(N);
-                if (msg.value != mintingFeeWei) {
-                    revert InvalidPaymentAmount(mintingFeeWei, msg.value);
-                }
-                _balance += ((100-_c9PortionFee)*msg.value/100);
-                _c9Fees += (_c9PortionFee*msg.value/100);
-                requestRandomWords(msg.sender, _tokenCounter, N);
-                _safeMint(msg.sender, N);
-            }
-            else {
-                revert ZeroMintError();
-            }
+            // 1-5. Check minting requirements  are met
+            _mintReqs(msg.sender, msg.value, N);
+            // 6. Mint the tokens (allocate space) with blank data
+            _safeMint(msg.sender, N);
     }
 
+    /**
+     * @dev Pool mint function. This allows users to "pool" funds 
+     * together in a single mint batch. Batch minting has much lower gas 
+     * fees per token as the users all share the same overhead 
+     * from the VRF and game contract call.
+     * 
+     * The format of the input is MintAddressPool or an array of:
+     * [to (address): the address to mint, N (uint96): the numer of tokens to mint to to]
+     *
+     * It is up to msg.sender to pay the full fee for all minters, 
+     * thus such a pool should either be arranged between trusted 
+     * individuals only, or an external smart contract that will call 
+     * this method when a certain threshold (such as number of mints) 
+     * has been reached.
+     */
     function mintPool(MintAddressPool[] calldata addressPool)
         external payable
         notFrozen() {
+            // 1. Get the total number of mints of the pool
             uint256 _poolSize = addressPool.length;
             uint256 N;
             for (uint256 i; i<_poolSize;) {
                 N += addressPool[i].N;
                 unchecked {++i;}
             }
-
-            if (N > 0) {
-                if (N > MAX_MINT_BATCH_SIZE) {
-                    revert BatchSizeTooLarge(MAX_MINT_BATCH_SIZE, N);
-                }
-                uint256 mintingFeeWei = getMintingFee(N);
-                if (msg.value != mintingFeeWei) {
-                    revert InvalidPaymentAmount(mintingFeeWei, msg.value);
-                }
-                _balance += ((100-_c9PortionFee)*msg.value/100);
-                _c9Fees += (_c9PortionFee*msg.value/100);
-                requestRandomWords(msg.sender, _tokenCounter, N);
-                for (uint256 i; i<_poolSize;) {
-                    _safeMint(addressPool[i].to, addressPool[i].N);
-                    unchecked {++i;}
-                }
-            }
-            else {
-                revert ZeroMintError();
+            // 1-5. Check minting requirements  are met
+            _mintReqs(msg.sender, msg.value, N);
+            // 6. Mint the tokens (allocate space) with blank data to pool
+            for (uint256 i; i<_poolSize;) {
+                _safeMint(addressPool[i].to, addressPool[i].N);
+                unchecked {++i;}
             }
     }
 
+    /**
+     * @dev Allows user to reactivate an expired token. This allows 
+     * users to continue board progression, albeit at a fees.
+     * The fees are used to sustain the game. To prevent 
+     * users from continuing to playing with deactivated boards
+     * and then only reactivating upon reaching a win, the 
+     * reactivation fee is proportional to the number of rounds 
+     * that have completed since reactivating the board. This 
+     * ensures that new minters are not a huge disadvantage.
+     */
     function reactivate(uint256[] calldata tokenIds)
         external payable {
             uint256 N = tokenIds.length;
-            if (N > 0) {
-                uint256 _updatedRoundId = _roundId;
-                uint256 reactivateFeeWei;
-                for (uint256 i; i<N;) {
-                    // Get last round Id, get fee from it
-                    _owners[tokenIds[i]] = _setTokenParam(
-                        _owners[tokenIds[i]],
-                        POS_ROUND_ID,
-                        _updatedRoundId,
-                        type(uint16).max
-                    );
-                }
-                if (msg.value != reactivateFeeWei) {
-                    revert InvalidPaymentAmount(reactivateFeeWei, msg.value);
-                }
-            }
-            else {
+            if (N == 0) {
                 revert ZeroMintError();
+            }
+            // Copy from storage once
+            uint256 _currentRoundId = _roundId;
+            uint256 _currentMintingFee = _mintingFee;
+            // Batch parameters
+            uint256 _reactivateFeeUSD;
+            uint256 _tokenData;
+            address _tokenOwner;
+            uint256 _tokenDataRoundId;
+            for (uint256 i; i<N;) {
+                _tokenData = _owners[tokenIds[i]];
+                _tokenOwner = address(uint160(_tokenData));
+                if (msg.sender != _tokenOwner) {
+                    revert CallerNotOwnerOrApproved();
+                }
+                // 1. Get the reactivation fee for this token
+                _tokenDataRoundId = uint256(uint16(_tokenData>>POS_ROUND_ID));
+                _reactivateFeeUSD += ((_currentRoundId-_tokenDataRoundId) * _currentMintingFee);
+                // 2. Update the token's roundId to the current one
+                _tokenData = _setTokenParam(
+                    _tokenData,
+                    POS_ROUND_ID,
+                    _currentRoundId,
+                    type(uint16).max
+                );
+                // 3. Copy to storage
+                _owners[tokenIds[i]] = _tokenData;
+            }
+            // 3. Check the paymount value is correct
+            uint256 reactivateFeeWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_reactivateFeeUSD);
+            if (msg.value != reactivateFeeWei) {
+                revert InvalidPaymentAmount(reactivateFeeWei, msg.value);
             }
     }
 
@@ -507,6 +545,7 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
 
     /**
      * @dev Sets the SVG display contract address.
+     * This allows SVG display to be updated.
      */
     function setContractSVG(address _address)
         external
@@ -514,24 +553,40 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             contractSVG = _address;
     }
 
+    /**
+     * @dev Enables or disables the automatic
+     * contract freezer.
+     */
     function setFreezer(bool _val)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
             _freezerEnabled = _val;
     }
 
+    /**
+     * @dev Sets the token minting fee in USD.
+     */
     function setMintingFee(uint256 fee)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
             _mintingFee = fee;
     }
 
+    /**
+     * @dev Sets the winning payout splits between 
+     * the winner, and the tokenOwner of the winning indices.
+     */
     function setPayoutSplit(uint256 winnerAmt, uint256 tokenOwnerAmt)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
             _payoutSplit = [uint48(winnerAmt), uint48(tokenOwnerAmt)];
     }
 
+    /**
+     * @dev Sets the different payout tiers for gameboard 
+     * sizes. Since a 5x5 board is much easier to win than a 9x9 
+     * board, the amount is smaller.
+     */
     function setPayoutTier(uint256 tier, uint256 amount)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -539,9 +594,8 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     }
 
     /**
-     * @dev Returns the base64 representation of the SVG string. 
-     * This is desired when including the string in json data which 
-     * does not allow special characters found in hmtl/xml code.
+     * @dev Returns the SVG image as a string. This is called 
+     * in the tokenURI override in b64 format.
      */
     function svgImage(uint256 tokenId, uint256 gameSize)
         external view
@@ -554,17 +608,27 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             }
     }
 
+    /**
+     * @dev Returns the unpacked data of tokenId. If it does not exist, 
+     * then this will return all zeros.
+     */
     function tokenData(uint256 tokenId)
         external view override
         returns (address tokenOwner, uint256 tokenRoundId, uint256 randomSeed) {
             uint256 _tokenData = _owners[tokenId];
-            tokenOwner = address(uint160(_tokenData));
-            tokenRoundId = uint256(uint16(_tokenData>>POS_ROUND_ID));
-            randomSeed = uint256(uint72(_tokenData>>POS_SEED));
+            if (_tokenData != 0) {
+                tokenOwner = address(uint160(_tokenData));
+                tokenRoundId = uint256(uint16(_tokenData>>POS_ROUND_ID));
+                randomSeed = uint256(uint72(_tokenData>>POS_SEED));
+            }
     }
 
+    /**
+     * @dev Returns the unpacked data of priorWinner tokenId. If it does not exist, 
+     * then this will return all zeros.
+     */
     function priorWinnerData(uint256 tokenId)
-        external view
+        external view override
         returns (address priorWinner, uint256 winningNumber, uint256[] memory _indices) {
             uint256 _priorWinnerData = _priorWinners[tokenId];
             if (_priorWinnerData != 0) {
@@ -584,22 +648,25 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     }
 
     /**
-     * @dev View function to see the numbers generated 
-     * in the game board. This is essentially the base 
-     * of the playing board.
+     * @dev View function to see the IDs generated 
+     * in the tokenId game board. This is essentially the base 
+     * of the playing board from which further information like 
+     * the tokenOwners are derived from.
      */
     function viewGameBoard(uint256 tokenId, uint256 _gameSize)
         external view
         override
-        validGameSize(_gameSize)
         returns (uint256[] memory) {
+            // 1. Get the size of the board
             uint256 _boardSize = _gameSize*_gameSize;
+            // 2. Get the tokenId's random VRF information
             uint256 _randomExpanded = uint256(
                 keccak256(
                     abi.encodePacked(uint64(_owners[tokenId]>>POS_SEED))
                 )
             );
-            uint256 __modulus = _modulus;
+            // 3. Convert VRF information to IDs
+            uint256 __modulus = _modulus; // Copy from storage one time
             uint256[] memory _c9TokenIdEnums = new uint256[](_boardSize);
             for (uint256 i; i<_boardSize;) {
                 unchecked {
@@ -610,8 +677,9 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             return _c9TokenIdEnums;
     }
 
-    /*
-     * @dev View function to convert indices of the game board into C9T tokenIds.
+    /**
+     * @dev View function that converts the base playing 
+     * board to Collect9 (C9T) NFT token IDs.
      */
     function viewIndicesTokenIds(uint256 tokenId, uint256[] memory _sortedIndices)
         public view
@@ -635,6 +703,10 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             return _c9TokenIdEnums;
     }
 
+    /**
+     * @dev Checks if the supplied indices are a valid 
+     * row, column, or diagnol based on the gameSize.
+     */
     function validIndices(uint256[] memory _sortedIndices)
         public pure 
         returns (bool) {
