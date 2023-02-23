@@ -76,10 +76,11 @@ error ZeroValue(); //0x7c946ed7
 error ZeroTokenId(); //0x1fed7fc5
 
 // C9Game
-error ExpiredToken(uint256 tokenId, uint256 tokenRoundId, uint256 roundId); //0x3f25aa3c
+error ExpiredToken(uint256 tokenId, uint256 tokenRoundId, uint256 roundId); //0x978db200
 error GameSizeError(uint256 received); //0x93ebcd38
 error InvalidIndices(); //0x2cd4dad3
 error NotAWinner(uint256 tokenId); //0x3b9052cf
-error SplitPaymentFailure(address from, address to, uint256 amount);
+error SplitPaymentFailure(address from, address to, uint256 amount); //0x52126288
+error TokenAlreadyWon(uint256 tokenId, uint256 tokenRoundId, uint256 roundId); //0x792cb3ce
 error ZeroMintError(); //0x7b1936e9
 

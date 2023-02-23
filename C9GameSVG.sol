@@ -7,6 +7,8 @@ import "./interfaces/IC9Token.sol";
 import "./abstract/C9Errors.sol";
 import "./utils/Helpers.sol";
 
+// Need to show PENDING for pending mints
+
 contract C9GameSVG is IC9GameSVG {
     string constant SVG_HDR = ''
         '<svg class="c9O" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="100%" height="100%">'
@@ -135,34 +137,35 @@ contract C9GameSVG is IC9GameSVG {
         return bytes6(bTokenId);
     }
 
-    function _setHDR(bytes6 _tokenId, uint256 gameSize, bytes6 _tokenRoundId, bytes6 _currentRoundId, bool expired, uint256 priorWinner)
+    function _setHDR(bytes6 _tokenId, uint256 gameSize, bytes6 _tokenRoundId, bytes6 _currentRoundId, bool expired, bool priorWinner)
     private view
     returns (string memory) {
         string memory hdr = SVG_HDR;
         bytes1 _gameSize = bytes1(Helpers.uintToBytes(gameSize));
         bytes3 _viewBoxMin = bytes3(bytes(viewBoxMin[gameSize]));
         bytes3 _viewBoxMax = bytes3(bytes(viewBoxMax[gameSize]));
-        bytes6 _gamePot = _viewPot(IC9Game(contractGame).currentPot(gameSize));
+        (uint256 _pot1, uint256 _pot2) = IC9Game(contractGame).currentPotSplit(gameSize);
+        bytes6 _gamePot = _viewPot((_pot1+_pot2));
         assembly {
-            let dst := add(hdr, 740)
+            let dst := add(hdr, 764)
             mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _tokenId))
-            dst := add(hdr, 794)
+            dst := add(hdr, 818)
             mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), _gameSize))
-            dst := add(hdr, 796)
+            dst := add(hdr, 820)
             mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), _gameSize))
-            dst := add(hdr, 941)
+            dst := add(hdr, 965)
             mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _gamePot))
-            dst := add(hdr, 1019)
+            dst := add(hdr, 1043)
             mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _tokenRoundId))
-            dst := add(hdr, 1099)
+            dst := add(hdr, 1123)
             mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _currentRoundId))
-            dst := add(hdr, 1162)
+            dst := add(hdr, 1186)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMin))
-            dst := add(hdr, 1167)
+            dst := add(hdr, 1191)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMin))
-            dst := add(hdr, 1171)
+            dst := add(hdr, 1195)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMax))
-            dst := add(hdr, 1175)
+            dst := add(hdr, 1199)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _viewBoxMax))
         }
         if (expired) {
@@ -173,7 +176,7 @@ contract C9GameSVG is IC9GameSVG {
                 mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "0"))
             }
         }
-        if (priorWinner == 1) {
+        if (priorWinner) {
             assembly {
                 let dst := add(hdr, 231)
                 mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "1"))
@@ -219,7 +222,7 @@ contract C9GameSVG is IC9GameSVG {
         return bytes6(_sViewPot);
     }
 
-    function _setFTR(uint256 gameSize, bool expired)
+    function _setFTR(uint256 gameSize, bool expired, address priorWinner)
     private view
     returns (string memory) {
         string memory ftr = SVG_FTR;
@@ -248,8 +251,21 @@ contract C9GameSVG is IC9GameSVG {
         }
         if (expired) {
             assembly {
-                let dst := add(ftr, 687)
+                let dst := add(ftr, 689)
                 mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), "EXPIRED"))
+            }
+        }
+        if (priorWinner != address(0)) {
+            (bytes32 _a1, bytes8 _a2) = Helpers.addressToB32B8(priorWinner);
+            assembly {
+                let dst := add(ftr, 651)
+                mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "3"))
+                dst := add(ftr, 689)
+                mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), "WINNER "))
+                dst := add(ftr, 759)
+                mstore(dst, _a1)
+                dst := add(ftr, 791)
+                mstore(dst, or(and(mload(dst), not(shl(192, 0xFFFFFFFFFFFFFFFF))), _a2))
             }
         }
 
@@ -365,8 +381,11 @@ contract C9GameSVG is IC9GameSVG {
     external view override
     returns (string memory output) {
         uint256 currentRoundId = IC9Game(contractGame).currentRoundId();
-        (, uint256 priorWinner, uint256 tokenRoundId,) = IC9Game(contractGame).tokenData(tokenId);
+        (,uint256 tokenRoundId,) = IC9Game(contractGame).tokenData(tokenId);
+        (address _priorWinner,,) = IC9Game(contractGame).priorWinnerData(tokenId);
+
         bool expired = tokenRoundId < currentRoundId ? true : false;
+        bool priorWinner = _priorWinner == address(0) ? false : true;
 
         bytes6 _tokenId = _sTokenId(tokenId);
         bytes6 _currentRoundId = _sTokenId(currentRoundId);
@@ -382,7 +401,7 @@ contract C9GameSVG is IC9GameSVG {
         );
         string memory rects = _buildRects(tokenId, gameSize);
         string memory middle = _middleLabel(gameSize);
-        string memory ftr = _setFTR(gameSize, expired);
+        string memory ftr = _setFTR(gameSize, expired, _priorWinner);
         return string.concat(
             hdr,
             rects,

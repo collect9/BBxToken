@@ -16,7 +16,7 @@ import "./interfaces/IC9Token.sol";
 import "./utils/interfaces/IC9EthPriceFeed.sol";
 import "./abstract/C9Errors.sol";
 
-uint256 constant MAX_MINT_BATCH_SIZE = 50;
+uint256 constant MAX_MINT_BATCH_SIZE = 100;
 
 contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     bool private _freezerEnabled = true;
@@ -202,7 +202,10 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             uint256 _offset = WPOS_INDICES;
             for (uint256 i; i<_gameSize;) {
                 _winnerData |= _sortedIndices[i]<<_offset;
-                unchecked {_offset += 8;}
+                unchecked {
+                    _offset += 8;
+                    ++i;
+                }
             }
             // 3. Store winning data
             _priorWinners[tokenId] = _winnerData;
@@ -261,6 +264,9 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             C2. To check if we have a winner, the ownerOf each _c9TokenIds 
             must match. Since the middle board index is free, it is ignored 
             if it shows up in the calldata indices.
+            More rules can be added in the future to allow for more ways to 
+            win aside from tokenOwner. This will have to be done via separate 
+            contract.
             */
             uint256 middleIdx = (_gameSize*_gameSize)/2;
             address _tokenOwner = IC9Token(contractToken).ownerOf(_c9TokenIds[0]);
@@ -619,7 +625,7 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             if (_tokenData != 0) {
                 tokenOwner = address(uint160(_tokenData));
                 tokenRoundId = uint256(uint16(_tokenData>>POS_ROUND_ID));
-                randomSeed = uint256(uint72(_tokenData>>POS_SEED));
+                randomSeed = uint256(uint80(_tokenData>>POS_SEED));
             }
     }
 
@@ -662,7 +668,7 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             // 2. Get the tokenId's random VRF information
             uint256 _randomExpanded = uint256(
                 keccak256(
-                    abi.encodePacked(uint64(_owners[tokenId]>>POS_SEED))
+                    abi.encodePacked(uint80(_owners[tokenId]>>POS_SEED))
                 )
             );
             // 3. Convert VRF information to IDs
@@ -670,7 +676,7 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             uint256[] memory _c9TokenIdEnums = new uint256[](_boardSize);
             for (uint256 i; i<_boardSize;) {
                 unchecked {
-                    _c9TokenIdEnums[i] = uint256(_randomExpanded>>i) % __modulus;
+                    _c9TokenIdEnums[i] = uint256(_randomExpanded>>(3*i)) % __modulus;
                     ++i;
                 }
             }
@@ -682,20 +688,23 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
      * board to Collect9 (C9T) NFT token IDs.
      */
     function viewIndicesTokenIds(uint256 tokenId, uint256[] memory _sortedIndices)
-        public view
+        public view override
         returns (uint256[] memory) {
+            // 1. Get the game size
             uint256 _gameSize = _sortedIndices.length;
+            // 2. Get the tokenId's random VRF information
             uint256 _randomExpanded = uint256(
                 keccak256(
-                    abi.encodePacked(_owners[tokenId]>>POS_SEED)
+                    abi.encodePacked(uint80(_owners[tokenId]>>POS_SEED))
                 )
             );
-            uint256 __modulus = _modulus;
+            // 3. Convert VRF information to IDs
+            uint256 __modulus = _modulus; // Copy from storage one time
             uint256 _c9EnumIndex;
             uint256[] memory _c9TokenIdEnums = new uint256[](_gameSize);
             for (uint256 i; i<_gameSize;) {
                 unchecked {
-                    _c9EnumIndex = uint256(_randomExpanded>>_sortedIndices[i]) % __modulus;
+                    _c9EnumIndex = uint256(_randomExpanded>>(3*_sortedIndices[i])) % __modulus;
                     _c9TokenIdEnums[i] = IC9Token(contractToken).tokenByIndex(_c9EnumIndex);
                     ++i;
                 }
@@ -713,7 +722,6 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             uint256 _gameSize = _sortedIndices.length;
             uint256 _loopSize = _gameSize-1;
             uint256 index0 = _sortedIndices[0];
-
             // 1. Check if the arrangement is a valid column
             if (index0 < _gameSize) {
                 for (uint256 i=_loopSize; i>0;) {
@@ -726,7 +734,6 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
                     }
                 }
             }
-
             // 2. Check if the arrangement is a valid row
             if (index0 % _gameSize == 0) {
                 for (uint256 i=_loopSize; i>0;) {
@@ -739,7 +746,6 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
                     }
                 }
             }
-
             // 3. Check if the arrangement is a valid lower diag
             uint256 _lDx = _gameSize + 1;
             if (index0 == 0) {
@@ -753,7 +759,6 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
                     }
                 }
             }
-
             // 4. Check if the arrangement is a valid upper diag
             _lDx = _gameSize - 1;
             if (index0 == _gameSize-1) {
@@ -767,49 +772,44 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
                     }
                 }
             }
-
             // 5. No valid arrangements found
             return false;
     }
 
     /*
-     * @dev Removes the full balance.
-     * This is only to be used as a fail-safe incase the 
-     * contract isn't functional, so funds do not get
-     * stuck and thus lost.
+     * @dev Fail-safe mechanism that allows contract 
+     * owner to remove full balance.
      */
     function withdraw(uint256 amount, bool confirm)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (confirm) {
-                if (amount == 0) {
-                    payable(owner).transfer(address(this).balance);
-                    _balance = 0;
-                }
-                else {
-                    payable(owner).transfer(amount);
-                    _balance -= amount;
-                }
+            if (!confirm) {
+                revert ActionNotConfirmed();
+            }
+            if (amount == 0) {
+                payable(owner).transfer(address(this).balance);
+                _balance = 0;
+                _c9Fees = 0;
             }
             else {
-                revert ActionNotConfirmed();
+                payable(owner).transfer(amount);
+                _balance -= amount;
             }
     }
 
     /*
-     * @dev Removes the fee balance that accumulates 
-     * after the completion of rounds.
+     * @dev Removes only the fee balance that 
+     * accumulates after the completion of a 
+     * round.
      */
     function withdrawFees(bool confirm)
         external
         onlyRole(DEFAULT_ADMIN_ROLE) {
-            if (confirm) {
-                payable(owner).transfer(_c9Fees);
-                _balance -= _c9Fees;
-                _c9Fees = 0;
-            }
-            else {
+            if (!confirm) {
                 revert ActionNotConfirmed();
             }
+            payable(owner).transfer(_c9Fees);
+            _balance -= _c9Fees;
+            _c9Fees = 0;
     }
 }

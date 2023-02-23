@@ -24,6 +24,10 @@ interface IC9Game is IC9ERC721Base {
     external view
     returns (address priorWinner, uint256 winningNumber, uint256[] memory _indices);
 
+    function viewIndicesTokenIds(uint256 tokenId, uint256[] memory _sortedIndices)
+    external view
+    returns (uint256[] memory);
+
     function tokenData(uint256 tokenId)
     external view
     returns (address tokenOwner, uint256 tokenRoundId, uint256 randomSeed);
