@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
-import "@openzeppelin/contracts/interfaces/IERC2981.sol";
 import "./../utils/interfaces/IC9ERC721Base.sol";
 
 uint256 constant POS_ROUND_ID = 160;

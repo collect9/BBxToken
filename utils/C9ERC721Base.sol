@@ -53,12 +53,18 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
     // Mapping from owner to operator approvals
     mapping(address => mapping(address => bool)) private _operatorApprovals;
 
+    // Royalties info
+    address _royaltyReceiver;
+    uint96 private _royalty;
+
     /**
      * @dev Initializes the contract by setting a `name` and a `symbol` to the token collection.
      */
-    constructor(string memory name_, string memory symbol_) {
+    constructor(string memory name_, string memory symbol_, uint96 royalty_) {
         name = name_;
         symbol = symbol_;
+        _royalty = royalty_;
+        _royaltyReceiver = owner;
     }
 
     /**
@@ -563,6 +569,16 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
     }
 
     /**
+     * @dev See {IERC2981-royaltyInfo}.
+     */
+    function royaltyInfo(uint256 /*tokenId*/, uint256 salePrice)
+        external view virtual override
+        returns (address receiver, uint256 royaltyAmount) {
+            receiver = owner;
+            royaltyAmount = (salePrice * _royalty) / 10000;
+    }
+
+    /**
      * @dev See {IERC721-safeTransferFrom}.
      */
     function safeTransferFrom(address from, address to, uint256 tokenId)
@@ -625,6 +641,31 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
     }
 
     /**
+     * @dev Allows contract to have a separate royalties receiver 
+     * address from owner. The default receiver is owner.
+     */
+    function setRoyaltyReceiver(address _address)
+        external virtual
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            if (_address == address(0)) {
+                revert ZeroAddressInvalid();
+            }
+            _royaltyReceiver = _address;
+    }
+
+    /**
+     * @dev Sets the default royalties amount.
+     */
+    function setRoyalty(uint96 _fraction)
+        external virtual
+        onlyRole(DEFAULT_ADMIN_ROLE) {
+            if (_royalty == _fraction) {
+                revert ValueAlreadySet();
+            }
+            _royalty = _fraction;
+    }
+
+    /**
      * @dev See {IERC165-supportsInterface}.
      */
     function supportsInterface(bytes4 interfaceId)
@@ -634,6 +675,7 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
         return
             interfaceId == type(IERC721).interfaceId ||
             interfaceId == type(IERC721Metadata).interfaceId ||
+            interfaceId == type(IERC2981).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 

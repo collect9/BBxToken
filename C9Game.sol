@@ -7,7 +7,6 @@ pragma solidity >=0.8.17;
 
 import "./utils/Helpers.sol";
 import "./utils/C9ERC721Base.sol";
-//import "./utils/C9ERC721BaseEnum.sol";
 import "./utils/C9VRF3.sol";
 
 import "./interfaces/IC9Game.sol";
@@ -19,7 +18,6 @@ import "./abstract/C9Errors.sol";
 uint256 constant MAX_MINT_BATCH_SIZE = 100;
 
 contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
-    bool private _freezerEnabled = true;
     /*
     _owners Non-Enumerable:
     key: tokenId
@@ -27,6 +25,12 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     160-176: roundID (u16)
     176-256: randomSeed (u80)
     */
+    bool private _freezerEnabled = true;
+    struct MintAddressPool {
+        address to;
+        uint96 N;
+    }
+
     mapping(uint256 => uint256) private _priorWinners;
     /*
     priorWinners
@@ -37,12 +41,10 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     184-256: winningIndices (max u8x9)
     */
 
-    // Struct for pool of minters
-    struct MintAddressPool {
-        address to;
-        uint96 N;
-    }
-
+    /*
+    Packing the state variables below isn't really worth it. 
+    So they're sticking with mostly the solidity defaults.
+    */
     // Tracking of contract balance with fees
     uint256 private _balance;
     uint256 private _c9Fees;
@@ -84,7 +86,7 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
         address _contractPriceFeed,
         address _vrfCoordinator
         )
-        C9ERC721("Collect9 ConnectX NFT", "C9X")
+        C9ERC721("Collect9 ConnectX NFT", "C9X", 3333)
         C9RandomSeed(_vrfCoordinator)
     {
         // Default fee params
@@ -94,6 +96,10 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
         _payoutTiers[5] = 40;
         _payoutTiers[7] = 70;
         _payoutTiers[9] = 100;
+
+        // Default balance params
+        _balance = 0;
+        _c9Fees = 0;
         
         // Starting round params
         _roundId = 1;
@@ -137,12 +143,10 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     /*
      * @dev Sets the game board a single _tokenId.
      */
-    function _setTokenGameBoard(uint256 _tokenId, uint256 _randomSeed)
+    function _setTokenGameBoard(uint256 _tokenId, uint256 _currentRoundId, uint256 _randomSeed)
         private {
-            uint256 _packedToken = _owners[_tokenId];
-            _packedToken |= _roundId<<POS_ROUND_ID;
-            _packedToken |= _randomSeed<<POS_SEED;
-            _owners[_tokenId] = _packedToken;
+            _owners[_tokenId] |= _currentRoundId<<POS_ROUND_ID;
+            _owners[_tokenId] |= _randomSeed<<POS_SEED;
     }
 
     /*
@@ -151,14 +155,10 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
      */
     function _setTokenGameBoards(uint256 _tokenId, uint256 N, uint256 _randomSeed)
         private {
-            uint256 _tokenData;
-            uint256 _tokenIdMax = _tokenId+N-1;
             uint256 _currentRoundId = _roundId; // Read from storage one time
+            uint256 _tokenIdMax = _tokenId+N-1;
             for (_tokenId; _tokenId<_tokenIdMax;) {
-                _tokenData = _owners[_tokenId];
-                _tokenData |= _currentRoundId<<POS_ROUND_ID;
-                _tokenData |= _randomSeed<<POS_SEED;
-                _owners[_tokenId] = _tokenData;
+                _setTokenGameBoard(_tokenId, _currentRoundId, _randomSeed);
                 /*
                 Unchecked below because don't care if _randomSeed overflows 
                 and warps around since it will still be random and useful.
@@ -176,13 +176,9 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             }
             /*
             The last token is done outside of the loop to avoid doing an additional 
-            and unnecessary _randomSeed += operation. This matters more the smaller 
-            the batch sizes are. 
+            and unnecessary _randomSeed += operation.
             */
-            _tokenData = _owners[_tokenIdMax];
-            _tokenData |= _currentRoundId<<POS_ROUND_ID;
-            _tokenData |= _randomSeed<<POS_SEED;
-            _owners[_tokenIdMax] = _tokenData;
+            _setTokenGameBoard(_tokenIdMax, _currentRoundId, _randomSeed);
     }
 
     /*
@@ -195,8 +191,7 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             // 1. Increment winner count
             unchecked {++_winnerCounter;} 
             // 2. Create winning data
-            uint256 _winnerData;
-            _winnerData |= uint256(uint160(winner));
+            uint256 _winnerData = uint256(uint160(winner));
             _winnerData |= _winnerCounter<<WPOS_WINNING_ID;
             _winnerData |= _gameSize<<WPOS_GAMESIZE;
             uint256 _offset = WPOS_INDICES;
@@ -381,14 +376,9 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             // 2. The requestId exists, get the tokenId and number of mints for this request
             uint256 _statusRequest = statusRequests[_requestId];
             uint256 tokenId = uint256(uint24(_statusRequest));
-            uint256 N = uint256(uint8(_statusRequest>>24));
+            uint256 N = _statusRequest>>24;
             // 3. Finish minting with VRF data
-            if (N > 1) {
-                _setTokenGameBoards(tokenId, N, _randomWords[0]);
-            }
-            else {
-                _setTokenGameBoard(tokenId, _randomWords[0]);
-            }
+            _setTokenGameBoards(tokenId, N, _randomWords[0]);
     }
 
     /**
