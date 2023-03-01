@@ -21,12 +21,14 @@ contract C9RandomSeed is VRFConsumerBaseV2 {
     mapping(uint256 => uint256) internal statusRequests;
 
     // Your subscription ID.
-    uint64 constant SUB_ID = 39;
+    //uint64 constant SUB_ID = 39;
+    uint64 constant SUB_ID = 10415;
 
     // The gas lane to use, which specifies the maximum gas price to bump to.
     // For a list of available gas lanes on each network,
     // see https://docs.chain.link/docs/vrf/v2/subscription/supported-networks/#configurations
-    bytes32 constant KEY_HASH = 0x474e34a077df58807dbe9c96d3c009b23b3c6d0cce433e59bbf5b34f823bc56c;
+    // bytes32 constant KEY_HASH = 0x474e34a077df58807dbe9c96d3c009b23b3c6d0cce433e59bbf5b34f823bc56c;
+    bytes32 constant KEY_HASH = 0x79d3d8832d904592c0bf9818b621522c988bb8b0c05cdc3b15aea1b6e8db0c15;
 
     // The default is 3, but you can set this higher.
     uint16 constant REQ_CONFIRMATIONS = 3;

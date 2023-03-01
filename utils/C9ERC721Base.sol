@@ -5,16 +5,15 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
-import "@openzeppelin/contracts/utils/Context.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
+import "@openzeppelin/contracts/interfaces/IERC2981.sol";
+
 import "./interfaces/IC9ERC721Base.sol";
+import "./interfaces/IERC4906.sol";
 
 import "./../C9OwnerControl.sol";
 import "./../abstract/C9Errors.sol";
-
-// Need a fulfilled true/false in case any get stuck
-// Admin override can set game boards with external random, and then set it to fulfilled so it request words ever comes back it reverts
 
 uint256 constant MAX_TRANSFER_BATCH_SIZE = 128;
 
@@ -23,7 +22,7 @@ uint256 constant MAX_TRANSFER_BATCH_SIZE = 128;
  * the Metadata extension, but not including the Enumerable extension, which is available separately as
  * {ERC721Enumerable}.
  */
-contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
+contract ERC721 is Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9OwnerControl {
     using Address for address;
     using Strings for uint256;
 
@@ -34,7 +33,7 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
     string public symbol;
 
     // Total supply
-    uint256 public totalSupply;
+    uint256 internal _totalSupply;
 
     // Token counter
     uint256 internal _tokenCounter;
@@ -65,6 +64,23 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
         symbol = symbol_;
         _royalty = royalty_;
         _royaltyReceiver = owner;
+    }
+
+    /**
+     * @dev Reverts if the `tokenId` has not been minted yet.
+     */
+    modifier requireMinted(uint256 tokenId) {
+        if (!_exists(tokenId)) {
+            revert InvalidToken(tokenId);
+        }
+        _;
+    }
+
+    modifier validTo(address to) {
+        if (to == address(0)) {
+            revert ZeroAddressInvalid();
+        }
+        _;
     }
 
     /**
@@ -128,17 +144,19 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
     function _beforeTokenTransfer(address from, address /*to*/, uint256 tokenId, uint256 /*batchSize*/)
     internal virtual {
         // Make sure owner is from
-        address _owner = _ownerOf(tokenId);
-        if (_owner != from) {
-            revert TransferFromIncorrectOwner(_owner, from);
+        address tokenOwner = ownerOf(tokenId);
+        if (tokenOwner != from) {
+            revert TransferFromIncorrectOwner(tokenOwner, from);
         }
-        // Clear approvals from the previous owner
-        uint256 __tokenApprovals = _tokenApprovals[tokenId];
-        if (uint160(__tokenApprovals) != 0) {
-            __tokenApprovals = _setTokenParam(
-                __tokenApprovals, 0, 0, type(uint160).max
+        /*
+        Clear approvals from the previous owner.
+        We restrict reading and writing to the first 160 bits only in case the remaining 
+        96 bits are used for storage.
+        */
+        if (uint256(uint160(_tokenApprovals[tokenId])) != 0) {
+            _tokenApprovals[tokenId] = _setTokenParam(
+                _tokenApprovals[tokenId], 0, 0, type(uint160).max
             );
-            _tokenApprovals[tokenId] = __tokenApprovals;
         }
     }
 
@@ -155,9 +173,9 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
      */
     function _burn(uint256 tokenId)
     internal virtual {
+        emit Transfer(_ownerOf(tokenId), address(0), tokenId);
         delete _tokenApprovals[tokenId];
         delete _owners[tokenId];
-        emit Transfer(_ownerOf(tokenId), address(0), tokenId);
     }
 
     /**
@@ -215,47 +233,43 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
     function _isApprovedOrOwner(address spender, uint256 tokenId)
     internal view virtual
     returns (bool) {
-        address tokenOwner = _ownerOf(tokenId);
+        address tokenOwner = ownerOf(tokenId);
         return (spender == tokenOwner || isApprovedForAll(tokenOwner, spender) || getApproved(tokenId) == spender);
     }
 
-    function _mint(address to, uint256 N)
+    function _mint(address to, uint256 batchSize)
     internal virtual {
-        uint160 _to = uint160(to);
+        uint256 _to = uint256(uint160(to));
         uint256 _tokenId = _tokenCounter;
-        uint256 _tokenIdN = _tokenId+N;
-        address _zero = address(0);
-        for (_tokenId; _tokenId<_tokenIdN;) {
+        uint256 _tokenIdMax = _tokenId+batchSize;
+        for (_tokenId; _tokenId<_tokenIdMax;) {
             _owners[_tokenId] = _to;
-            emit Transfer(_zero, to, _tokenId);
+            emit Transfer(address(0), to, _tokenId);
             unchecked {
                 ++_tokenId;
             }
         }
         unchecked {
-            _balances[to] += N; 
-            totalSupply += N;  
+            _balances[to] += batchSize; 
+            _totalSupply += batchSize;  
         }
         _tokenCounter = _tokenId;
     }
 
-    function _mint(address[] calldata to, uint256 N)
+    function _mint(address[] calldata to, uint256 batchSize)
     internal virtual {
         uint256 _tokenId = _tokenCounter;
-        uint160 _to;
-        address _zero = address(0);
-        for (uint256 i; i<N;) {
-            _to = uint160(to[i]);
-            _owners[_tokenId] = _to;
+        for (uint256 i; i<batchSize;) {
+            _owners[_tokenId] = uint256(uint160(to[i]));
             ++_balances[to[i]]; 
-            emit Transfer(_zero, to[i], _tokenId);
+            emit Transfer(address(0), to[i], _tokenId);
             unchecked {
                 ++_tokenId;
                 ++i;
             }
         }
         unchecked {
-            totalSupply += N;  
+            _totalSupply += batchSize;  
         }
         _tokenCounter = _tokenId;
     }
@@ -270,16 +284,6 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
     }
 
     /**
-     * @dev Reverts if the `tokenId` has not been minted yet.
-     */
-    function _requireMinted(uint256 tokenId)
-    internal view virtual {
-        if (!_exists(tokenId)) {
-            revert InvalidToken(tokenId);
-        }
-    }
-
-    /**
      * @dev Safely mints `tokenId` and transfers it to `to`.
      *
      * Requirements:
@@ -289,40 +293,21 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
      *
      * Emits a {Transfer} event.
      */
-    function _safeMint(address to, uint256 N)
+    function _safeMint(address to, uint256 batchsize)
     internal virtual {
-        _safeMint(to, N, "");
+        _safeMint(to, batchsize, "");
     }
-
-    function _safeMint(address[] calldata to, uint256 N)
-    internal virtual {
-        _safeMint(to, N, "");
-    }
-
+    
     /**
      * @dev Same as {xref-ERC721-_safeMint-address-uint256-}[`_safeMint`], with an additional `data` parameter which is
      * forwarded in {IERC721Receiver-onERC721Received} to contract recipients.
      */
-    function _safeMint(address to, uint256 N, bytes memory data)
+    function _safeMint(address to, uint256 batchsize, bytes memory data)
     internal virtual {
-        _mint(to, N);
+        _mint(to, batchsize);
         uint256 _lastTokenId = _tokenCounter-1;
         if (!_checkOnERC721Received(address(0), to, _lastTokenId, data)) {
             revert NonERC721Receiver();
-        }
-    }
-
-    function _safeMint(address[] calldata to, uint256 N, bytes memory data)
-    internal virtual {
-        _mint(to, N);
-        uint256 _firstTokenId = _tokenCounter-N;
-        for (uint256 i; i<N;) {
-            if (!_checkOnERC721Received(address(0), to[i], _firstTokenId, data)) {
-                revert NonERC721Receiver();
-            }
-            unchecked {
-                ++_firstTokenId;
-            }
         }
     }
 
@@ -357,13 +342,13 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
      *
      * Emits an {ApprovalForAll} event.
      */
-    function _setApprovalForAll(address owner, address operator, bool approved)
+    function _setApprovalForAll(address tokenOwner, address operator, bool approved)
     internal virtual {
-        if (operator == owner) {
+        if (operator == tokenOwner) {
             revert ApproveToCaller();
         }
-        _operatorApprovals[owner][operator] = approved;
-        emit ApprovalForAll(owner, operator, approved);
+        _operatorApprovals[tokenOwner][operator] = approved;
+        emit ApprovalForAll(tokenOwner, operator, approved);
     }
 
     function _setTokenParam(uint256 packedToken, uint256 pos, uint256 val, uint256 mask)
@@ -376,7 +361,7 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
 
     /**
      * @dev Transfers `tokenId` from `from` to `to`.
-     *  As opposed to {transferFrom}, this imposes no restrictions on msg.sender.
+     *  As opposed to {transferFrom}, this imposes no restrictions on _msgSender().
      *
      * Requirements:
      *
@@ -386,45 +371,55 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
      * Emits a {Transfer} event.
      */
     function _transfer(address from, address to, uint256 tokenId)
-    internal virtual {
-        if (to == address(0)) {
-            revert ZeroAddressInvalid();
-        }
+    internal virtual
+    validTo(to) {
+        // Before transfer checks
         _beforeTokenTransfer(from, to, tokenId, 1);
-        
         // Set new owner
         _owners[tokenId] = _setTokenParam(
-            _owners[tokenId], 0, uint160(to), type(uint160).max
+            _owners[tokenId],
+            0,
+            uint256(uint160(to)),
+            type(uint160).max
         );
+        // Emit event
+        emit Transfer(from, to, tokenId);
         // Update balances
         unchecked {
             --_balances[from];
             ++_balances[to];
         }
-        emit Transfer(from, to, tokenId);
     }
 
+    /**
+     * @dev We have a separate function here because we don't want to read/write 
+     * to balances for every token. One time update at the end only.
+     */
     function _transfer(address from, address to, uint256[] calldata tokenIds)
-    internal virtual {
-        if (to == address(0)) {
-            revert ZeroAddressInvalid();
-        }
-        uint256 _batchSize = tokenIds.length;
+    internal virtual
+    validTo(to) {
         uint256 tokenId;
-        uint160 _to = uint160(to);
-        for (uint256 i; i<_batchSize;) {
+        uint256 _to = uint256(uint160(to)); // Convert one time
+        uint256 batchSize = tokenIds.length;
+        for (uint256 i; i<batchSize;) {
             tokenId = tokenIds[i];
+            // Before transfer checks
             _beforeTokenTransfer(from, to, tokenId, 1);
             // Set new owner
             _owners[tokenId] = _setTokenParam(
-                _owners[tokenId], 0, _to, type(uint160).max
+                _owners[tokenId],
+                0,
+                _to,
+                type(uint160).max
             );
-            unchecked {++i;}
+            // Emit event
             emit Transfer(from, to, tokenId);
+            unchecked {++i;}
         }
+        // Update balances one time
         unchecked {
-            _balances[from] -= _batchSize;
-            _balances[to] += _batchSize;
+            _balances[from] -= batchSize;
+            _balances[to] += batchSize;
         }
     }
 
@@ -434,7 +429,7 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
     function approve(address to, uint256 tokenId)
     public virtual
     override {
-        address tokenOwner = _ownerOf(tokenId);
+        address tokenOwner = ownerOf(tokenId);
         if (to == tokenOwner) {
             revert OwnerAlreadyApproved();
         }
@@ -460,7 +455,7 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
         uint256 tokenId;
         for (uint256 i; i<_batchSize;) {
             tokenId = tokenIds[i];
-            tokenOwner = _ownerOf(tokenId);
+            tokenOwner = ownerOf(tokenId);
             if (to[i] == tokenOwner) {
                 revert OwnerAlreadyApproved();
             }
@@ -492,30 +487,31 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
      */
     function burn(uint256 tokenId)
     public virtual {
-        address _owner = _ownerOf(tokenId);
+        address tokenOwner = ownerOf(tokenId);
         unchecked {
-            --_balances[_owner];
-            --totalSupply;
+            --_balances[tokenOwner];
+            --_totalSupply;
         }
-        if (msg.sender != _owner) {
+        if (!_isApprovedOrOwner(_msgSender(), tokenId)) {
             revert CallerNotOwnerOrApproved();
         }
         _burn(tokenId);
     }
 
     /**
-     * @dev Batch burn function for convenience.
+     * @dev Batch burn function for convenience and
+     * gas savings per burn.
      */
     function burn(uint256[] calldata tokenIds)
     external virtual {
         uint256 _batchSize = tokenIds.length;
-        address _owner = _ownerOf(tokenIds[0]);
+        address tokenOwner = ownerOf(tokenIds[0]);
         unchecked {
-            _balances[_owner] -= _batchSize;
-            totalSupply -= _batchSize;
+            _balances[tokenOwner] -= _batchSize;
+            _totalSupply -= _batchSize;
         }
         for (uint256 i; i<_batchSize;) {
-            if (msg.sender != _ownerOf(tokenIds[i])) {
+            if (!_isApprovedOrOwner(_msgSender(), tokenIds[i])) {
                 revert CallerNotOwnerOrApproved();
             }
             _burn(tokenIds[i]);
@@ -524,7 +520,9 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
     }
 
     /**
-     * @dev Should be possible to clear (in an obvious way) this without having to transfer.
+     * @dev It's not obvious how to clear this in the original contract.
+     * User can just set address zero, or call this method.
+     * Should be possible to clear (in an obvious way) this without having to transfer.
      */
     function clearApproved(uint256 tokenId) external {
         if (!_isApprovedOrOwner(_msgSender(), tokenId)) {
@@ -534,24 +532,37 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
     }
 
     /**
+     * @dev Batch version of clear approved.
+     */
+    function clearApproved(uint256[] calldata tokenIds) external {
+        uint256 _batchSize = tokenIds.length;
+        for (uint256 i; i<_batchSize;) {
+            if (!_isApprovedOrOwner(_msgSender(), tokenIds[i])) {
+                revert CallerNotOwnerOrApproved();
+            }
+            delete _tokenApprovals[tokenIds[i]];
+        }
+    }
+
+    /**
      * @dev See {IERC721-getApproved}.
      */
     function getApproved(uint256 tokenId)
     public view virtual
     override
+    requireMinted(tokenId)
     returns (address) {
-        _requireMinted(tokenId);
         return address(uint160(_tokenApprovals[tokenId]));
     }
 
     /**
      * @dev See {IERC721-isApprovedForAll}.
      */
-    function isApprovedForAll(address owner, address operator)
+    function isApprovedForAll(address tokenOwner, address operator)
     public view virtual
     override
     returns (bool) {
-        return _operatorApprovals[owner][operator];
+        return _operatorApprovals[tokenOwner][operator];
     }
 
     /**
@@ -676,6 +687,7 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
             interfaceId == type(IERC721).interfaceId ||
             interfaceId == type(IERC721Metadata).interfaceId ||
             interfaceId == type(IERC2981).interfaceId ||
+            interfaceId == type(IERC4906).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 
@@ -685,10 +697,16 @@ contract C9ERC721 is Context, ERC165, IC9ERC721Base, C9OwnerControl {
     function tokenURI(uint256 tokenId)
     public view virtual
     override
+    requireMinted(tokenId)
     returns (string memory) {
-        _requireMinted(tokenId);
         string memory baseURI = _baseURI();
         return bytes(baseURI).length > 0 ? string(abi.encodePacked(baseURI, tokenId.toString())) : "";
+    }
+
+    function totalSupply()
+    public view virtual 
+    returns (uint256) {
+        return _totalSupply;
     }
 
     /**

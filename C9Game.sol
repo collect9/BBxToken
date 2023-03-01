@@ -5,6 +5,9 @@ pragma solidity >=0.8.17;
 // Expired boards with non-zero tokenRoundId can be reactivated for a higher buy-in fee
 // Buy-in fee increases with time
 
+// Give 7x7 3 free squares that change based on day
+// Give 9x9 5 free squares that change based on day
+
 import "./utils/Base64.sol";
 import "./utils/Helpers.sol";
 import "./utils/C9ERC721Base.sol";
@@ -19,7 +22,7 @@ import "./abstract/C9Errors.sol";
 
 uint256 constant MAX_MINT_BATCH_SIZE = 100;
 
-contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
+contract C9Game is IC9Game, ERC721, C9RandomSeed {
     /*
     _owners Non-Enumerable:
     key: tokenId
@@ -54,14 +57,18 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     uint256 private _c9PortionFee;
 
     // Current round parameters
-    uint256 private _reactivationThreshold;
     uint256 private _roundId;
     uint256 private _modulus;
     uint256 private _winnerCounter;
 
+    // Adjustable round parametersa
+    mapping(uint256 => uint256) _nFreeSquares;
+    uint256 public freeSquaresTimer;
+    uint256 private _reactivationThreshold;
+
     // Connecting contracts
-    address private contractPricer;
     address private contractMeta;
+    address private contractPricer;
     address private contractSVG;
     address private immutable contractToken;
 
@@ -71,7 +78,9 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
 
     /*
      * Network: Mainnet
-     * VRF: 
+     * VRF:
+     * Network: Goerli
+     * VRF: 0x2ca8e0c643bde4c2e08ab1fa0da3401adad7734d
      * Network: Sepolia
      * VRF: 0x8103B0A8A00be2DDC778e6e7eaa21791Cd364625
      *
@@ -79,12 +88,11 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
      * isn't known at deployment.
      */
     constructor(
-        address _contractMeta,
         address _contractPriceFeed,
         address _contractToken,
         address _vrfCoordinator
         )
-        C9ERC721("Collect9 ConnectX NFT", "C9X", 3333)
+        ERC721("Collect9 ConnectX NFT", "C9X", 3333)
         C9RandomSeed(_vrfCoordinator)
     {
         // Default fee params
@@ -104,6 +112,11 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
         _reactivationThreshold = 3;
         _roundId = 1;
         _modulus = IC9Token(_contractToken).totalSupply();
+        _nFreeSquares[5] = 0;
+        _nFreeSquares[7] = 3;
+        _nFreeSquares[9] = 5;
+        freeSquaresTimer = 60; // Tester
+        //freeSquaresTimer = 604800;
         
         // Linked contracts
         contractPricer = _contractPriceFeed;
@@ -117,6 +130,13 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     modifier addressNotSame(address _old, address _new) {
         if (_old == _new) {
             revert AddressAlreadySet();
+        }
+        _;
+    }
+
+    modifier uIntNotSame(uint256 _old, uint256 _new) {
+        if (_old == _new) {
+            revert ValueAlreadySet();
         }
         _;
     }
@@ -144,7 +164,6 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             super._beforeTokenTransfer(from, to, tokenId, batchSize);
     }
 
-    
     /**
      * @dev Minting requirements called in mint() and mintPool().
      */
@@ -247,7 +266,7 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
                 revert InvalidToken(tokenId);
             }
             // V2. If it exists, validate the _msgSender() is the tokenId owner
-            if (ownerOf(tokenId) != _msgSender()) {
+            if (!_isApprovedOrOwner(_msgSender(), tokenId)) {
                 revert CallerNotOwnerOrApproved();
             }
             // V3. Validate the tokenId is not expired
@@ -275,15 +294,22 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             C2. To check if we have a winner, the ownerOf each _c9TokenIds 
             must match. Since the middle board index is free, it is ignored 
             if it shows up in the calldata indices.
-            More rules can be added in the future to allow for more ways to 
-            win aside from tokenOwner. This will have to be done via separate 
-            contract.
             */
-            uint256 middleIdx = (_gameSize*_gameSize)/2;
-            address _tokenOwner = IC9Token(contractToken).ownerOf(_c9TokenIds[0]);
+            bool _freeSquare;
+            uint256[] memory _freeSquares = freeSquares(_gameSize, tokenId);
+            uint256 _numberOfFreeSquares = _freeSquares.length;
+            address _tokenOwner0 = IC9Token(contractToken).ownerOf(_c9TokenIds[0]);
             for (uint256 i=1; i<_gameSize;) {
-                if (IC9Token(contractToken).ownerOf(_c9TokenIds[i]) != _tokenOwner) {
-                    if (_sortedIndices[i] != middleIdx) {
+                if (IC9Token(contractToken).ownerOf(_c9TokenIds[i]) != _tokenOwner0) {
+                    _freeSquare = false;
+                    for (uint256 j; j<_numberOfFreeSquares;) {
+                        if (_sortedIndices[i] == _freeSquares[j]) {
+                            _freeSquare = true;
+                            break;
+                        }
+                        unchecked {++j;}
+                    }
+                    if (!_freeSquare) {
                         revert NotAWinner(tokenId);
                     }
                 }
@@ -321,27 +347,35 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             
             /*
             W5. Process the payouts. If the owner of tokenId (_msgSender()) 
-            is the same as _tokenOwner of the winning indices, then the 
+            is the same as _tokenOwner0 of the winning indices, then the 
             owner of tokenId (_msgSender()) will get both payouts since 
-            _msgSender() will equal _tokenOwner.
+            _msgSender() will equal _tokenOwner0.
             */
-            (bool success,) = payable(_msgSender()).call{value: split1}("");
+            _payout(tokenId, split1, _msgSender(), split0, _tokenOwner0);
+    }
+
+    // Double check here, stack was too deep
+    function _payout(uint256 tokenId, uint256 split1, address caller, uint256 split0, address tokenOwner0)
+        private {
+            address tokenOwner = ownerOf(tokenId);
+            (bool success,) = payable(tokenOwner).call{value: split1}("");
             if(!success) {
                 revert SplitPaymentFailure(
                     address(this),
-                    _msgSender(),
+                    caller,
                     split1
                 );
             }
-            (success,) = payable(_tokenOwner).call{value: split0}("");
+            (success,) = payable(tokenOwner0).call{value: split0}("");
             if(!success) {
                 revert SplitPaymentFailure(
                     address(this),
-                    _msgSender(),
+                    tokenOwner,
                     split0
                 );
             }
-            emit Winner(_msgSender(), _tokenOwner, tokenId);
+            emit Winner(tokenOwner, tokenOwner0, tokenId);
+            emit BatchMetadataUpdate(0, _tokenCounter);
     }
 
     /**
@@ -383,6 +417,42 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     }
 
     /**
+     * @dev Returns an array of the game board's free square
+     * indices based on input gameSize.
+     */
+    function freeSquares(uint256 gameSize, uint256 tokenId)
+        public view
+        returns (uint256[] memory) {
+            uint256 _boardSize = (gameSize * gameSize) - 1;
+            uint256 _numSquares = _nFreeSquares[gameSize] + 1;
+            uint256[] memory output = new uint256[](_numSquares);
+            output[0] = (gameSize * gameSize) / 2;
+            uint256 seed = uint256(uint80(_owners[tokenId]>>POS_SEED));
+            for (uint256 i=1; i<_numSquares;) {
+                while (true) {
+                    unchecked {
+                        seed += uint256(keccak256(
+                            abi.encodePacked(
+                                block.timestamp / freeSquaresTimer,
+                                seed+i
+                            )
+                        ));
+                        output[i] = seed % _boardSize;
+                    }
+                    for (uint256 j; j<i;) {
+                        if (output[j] == output[i]) {
+                            continue;
+                        }
+                        unchecked {++j;}
+                    }
+                    break;
+                }
+                unchecked {++i;}
+            }
+            return output;
+    }
+
+    /**
      * @dev Second part of the minting.
      * Once the random number request has been fulfilled, the 
      * contract will mint the NFTs to the requester who has 
@@ -412,7 +482,8 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
      */
     function getContracts()
         external view
-        returns(address pricerContract, address svgContract, address tokenContract) {
+        returns(address metaContract, address pricerContract, address svgContract, address tokenContract) {
+            metaContract = contractMeta;
             pricerContract = contractPricer;
             svgContract = contractSVG;
             tokenContract = contractToken;
@@ -598,10 +669,11 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
     /**
      * @dev Sets the C9 fee fraction.
      */
-    function setFeeFraction(uint256 _fraction)
+    function setFeeFraction(uint256 fraction)
         external
-        onlyRole(DEFAULT_ADMIN_ROLE) {
-            _c9PortionFee = _fraction;
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        uIntNotSame(_c9PortionFee, fraction) {
+            _c9PortionFee = fraction;
     }
 
     /**
@@ -619,7 +691,8 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
      */
     function setMintingFee(uint256 fee)
         external
-        onlyRole(DEFAULT_ADMIN_ROLE) {
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        uIntNotSame(_mintingFee, fee) {
             _mintingFee = fee;
     }
 
@@ -640,8 +713,19 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
      */
     function setPayoutTier(uint256 tier, uint256 amount)
         external
-        onlyRole(DEFAULT_ADMIN_ROLE) {
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        uIntNotSame(_payoutTiers[tier], amount) {
             _payoutTiers[tier] = amount;
+    }
+
+    /**
+     * @dev Sets the period of the free squares.
+     */
+    function setSquaresTimer(uint256 period)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        uIntNotSame(freeSquaresTimer, period) {
+            freeSquaresTimer = period;
     }
 
     /**
@@ -674,7 +758,7 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
             }
     }
 
-        /**
+    /**
      * @dev Required override that returns fully onchain constructed 
      * json output that includes the SVG image. If a baseURI is set and 
      * the token has been upgraded and the svgOnly flag is false, call 
@@ -684,8 +768,9 @@ contract C9Game is IC9Game, C9ERC721, C9RandomSeed {
      * It seems like if the baseURI method fails after upgrade, OpenSea
      * still displays the cached on-chain version.
      */
+     // Add free squares as part of meta?
     function tokenURI(uint256 _tokenId)
-        public view override(C9ERC721, IERC721Metadata)
+        public view override(ERC721, IERC721Metadata)
         returns (string memory) {
             bytes memory image = abi.encodePacked(
                 ',"image":"data:image/svg+xml;base64,',

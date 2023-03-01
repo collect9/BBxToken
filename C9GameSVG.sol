@@ -117,26 +117,6 @@ contract C9GameSVG is IC9GameSVG {
         }
     }
 
-    /*
-     * @dev Convert tokenId to a 6-length string 
-     * with spaces. Note, SVG ignores spaces so 
-     * '1' and '  1   ' display the same.
-     */
-    function _sTokenId(uint256 tokenId)
-    private pure
-    returns (bytes6) {
-        bytes32 b32TokenId = Helpers.uintToBytes(tokenId);
-        bytes memory bTokenId = "      ";
-        for(uint256 i; i<6;) {
-            if (b32TokenId[i] == 0x00) {
-                break;
-            }
-            bTokenId[i] = b32TokenId[i];
-            unchecked {++i;}
-        }
-        return bytes6(bTokenId);
-    }
-
     function _setHDR(bytes6 _tokenId, uint256 gameSize, bytes6 _tokenRoundId, bytes6 _currentRoundId, bool expired, bool priorWinner)
     private view
     returns (string memory) {
@@ -193,8 +173,8 @@ contract C9GameSVG is IC9GameSVG {
         bytes memory _sViewPot = " 0.000";
         uint256 _leadingDecimal = pot / 10**18;
         uint256 _trailingDecimal = (pot / 10**15) % 1000;
-        bytes2 _bLeadingDecimal = bytes2(_sTokenId(_leadingDecimal));
-        bytes3 _bTrailingDecimal = bytes3(_sTokenId(_trailingDecimal));
+        bytes2 _bLeadingDecimal = bytes2(Helpers.sTokenId(_leadingDecimal));
+        bytes3 _bTrailingDecimal = bytes3(Helpers.sTokenId(_trailingDecimal));
 
         assembly {
             let dst := add(_sViewPot, 33)
@@ -307,7 +287,7 @@ contract C9GameSVG is IC9GameSVG {
         _rgb(output, b, 79);
 
         //TokenId window open link to NFT landing page
-        bytes6 _tokenId = _sTokenId(tokenId);
+        bytes6 _tokenId = Helpers.sTokenId(tokenId);
         assembly {
             let dst := add(output, 121)
             mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _tokenId))
@@ -387,9 +367,9 @@ contract C9GameSVG is IC9GameSVG {
         bool expired = tokenRoundId < currentRoundId ? true : false;
         bool priorWinner = _priorWinner == address(0) ? false : true;
 
-        bytes6 _tokenId = _sTokenId(tokenId);
-        bytes6 _currentRoundId = _sTokenId(currentRoundId);
-        bytes6 _tokenRoundId = _sTokenId(tokenRoundId);
+        bytes6 _tokenId = Helpers.sTokenId(tokenId);
+        bytes6 _currentRoundId = Helpers.sTokenId(currentRoundId);
+        bytes6 _tokenRoundId = Helpers.sTokenId(tokenRoundId);
 
         string memory hdr = _setHDR(
             _tokenId,

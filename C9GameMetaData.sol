@@ -6,7 +6,7 @@ import "./utils/Helpers.sol";
 
 contract C9GameMetaData is IC9GameMetaData {
 
-    bytes constant DESC = ""
+    string constant DESC = ""
     "Each NFT in this collection is a playing board for the Collect9 ConnectX game. "
 
     "ConnectX is a game inspired by both Bingo and Connect4(TM). Playing boards are randomly "
@@ -39,7 +39,7 @@ contract C9GameMetaData is IC9GameMetaData {
     "Such a mechanism will prevent users from progressing on expired game boards before reactivating them. "
 
     "NFTs with active game boards are otherwise free to be exchanged through EIP-2981 or other royalties "
-    "supporting marketplaces. ";
+    "supporting marketplaces.";
 
     address public immutable contractGame;
     constructor(address _contractGame) {
@@ -52,20 +52,20 @@ contract C9GameMetaData is IC9GameMetaData {
      */
     function metaNameDesc(uint256 tokenId)
         external pure override
-        returns(bytes memory) {
-            bytes6 _id = Helpers.tokenIdToBytes(tokenId);
-            bytes memory _datap1 = '{'
+        returns(string memory) {
+            bytes6 _id = Helpers.sTokenId(tokenId);
+            string memory _datap1 = '{'
                 '"external_url":"https://collect9.io/connectX",'
                 '"name":"Collect9 ConnectX NFT #      ",'
-                '"description":';
+                '"description":"';
             assembly {
                 let dst := add(_datap1, 110)
                 mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _id))
             }
-            return bytes.concat(
+            return string.concat(
                 _datap1,
                 DESC,
-                '"}'
+                '"'
             );
     }
 
@@ -96,5 +96,10 @@ contract C9GameMetaData is IC9GameMetaData {
             dst := add(b, 163)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), priorWinner))
         }
+    }
+
+    function __destroy()
+    external {
+        selfdestruct(payable(msg.sender));
     }
 }

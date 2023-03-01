@@ -9,14 +9,12 @@ import "./C9ERC721Base.sol";
  * the Metadata extension, but not including the Enumerable extension, which is available separately as
  * {ERC721Enumerable}.
  */
-abstract contract C9ERC721Enumerable is C9ERC721 {
+abstract contract ERC721OwnerEnumerable is ERC721 {
     mapping(address => uint24[]) internal _ownedTokens;
 
     function _burn(uint256 tokenId) internal virtual override {
+        super._burn(tokenId);
         _removeTokenFromOwnerEnumeration(ownerOf(tokenId), tokenId);
-        delete _tokenApprovals[tokenId];
-        delete _owners[tokenId];
-        emit Transfer(_ownerOf(tokenId), address(0), tokenId);
     }
 
     /**
@@ -76,22 +74,21 @@ abstract contract C9ERC721Enumerable is C9ERC721 {
         _ownedTokens[to].push(uint24(tokenId));
     }
 
-    function _mint(address to, uint256 N)
+    function _mint(address to, uint256 batchSize)
     internal virtual override {
         uint256 _to = uint256(uint160(to));
         uint256 _tokenId = _tokenCounter;
-        uint256 _tokenIdN = _tokenId+N;
-        address _zero = address(0);
+        uint256 _tokenIdN = _tokenId+batchSize;
         for (_tokenId; _tokenId<_tokenIdN;) {
             _owners[_tokenId] = _to;
             _ownedTokens[to].push(uint24(_tokenId));
-            emit Transfer(_zero, to, _tokenId);
+            emit Transfer(address(0), to, _tokenId);
             unchecked {
                 ++_tokenId;
             }
         }
         unchecked {
-            totalSupply += N;  
+            _totalSupply += batchSize;  
         }
         _tokenCounter = _tokenId;
     }
@@ -137,38 +134,6 @@ abstract contract C9ERC721Enumerable is C9ERC721 {
             );
             unchecked {++i;}
             emit Transfer(from, to, tokenId);
-        }
-    }
-
-    /**
-     * @dev Token burn.
-     */
-    function burn(uint256 tokenId)
-    public virtual override {
-        if (msg.sender != _ownerOf(tokenId)) {
-            revert CallerNotOwnerOrApproved();
-        }
-        _burn(tokenId);
-        unchecked {
-            --totalSupply;
-        }
-    }
-
-    /**
-     * @dev Batch burn function for convenience.
-     */
-    function burn(uint256[] calldata tokenIds)
-    external virtual override {
-        uint256 _batchSize = tokenIds.length;
-        for (uint256 i; i<_batchSize;) {
-            if (msg.sender != _ownerOf(tokenIds[i])) {
-                revert CallerNotOwnerOrApproved();
-            }
-            _burn(tokenIds[i]);
-            unchecked {++i;}
-        }
-        unchecked {
-            totalSupply -= _batchSize;
         }
     }
 }
