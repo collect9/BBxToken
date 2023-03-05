@@ -4,7 +4,8 @@ pragma solidity >=0.8.17;
 // C9ERC721
 error ApproveToCaller(); //0xb06307db
 error BatchSizeTooLarge(uint256 maxSize, uint256 received); //0x01df19f6
-error CallerNotOwnerOrApproved(); //0x8c11f105
+//error CallerNotOwnerOrApproved(); //0x8c11f105
+error CallerNotOwnerOrApproved(uint256 tokenId, address owner, address from);
 error InvalidToken(uint256 tokenId); //0x925d6b18
 error NonERC721Receiver(); //0x80526d0c
 error OwnerAlreadyApproved(); //0x08fb3828
@@ -79,7 +80,9 @@ error ZeroTokenId(); //0x1fed7fc5
 error ExpiredToken(uint256 tokenId, uint256 tokenRoundId, uint256 roundId); //0x978db200
 error GameSizeError(uint256 received); //0x93ebcd38
 error InvalidIndices(); //0x2cd4dad3
+error MintingPaused();
 error NotAWinner(uint256 tokenId); //0x3b9052cf
+error PoolNotLargeEnough(uint256 _poolSize);
 error SplitPaymentFailure(address from, address to, uint256 amount); //0x52126288
 error TokenAlreadyWon(uint256 tokenId, uint256 tokenRoundId, uint256 roundId); //0x792cb3ce
 error ZeroMintError(); //0x7b1936e9
