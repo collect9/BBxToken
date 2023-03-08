@@ -17,6 +17,7 @@ import "./interfaces/IC9ERC721Base.sol";
 import "./C9Context.sol";
 import "./../C9OwnerControl.sol";
 import "./../abstract/C9Errors.sol";
+import "./../abstract/C9Struct3.sol";
 
 uint256 constant MAX_TRANSFER_BATCH_SIZE = 128;
 
@@ -39,7 +40,7 @@ uint256 constant MAX_TRANSFER_BATCH_SIZE = 128;
  *    royalties are the same, and the receiver is the contract deployer.
  * 5. Enhanced ownership control via C9OwnerControl.
  */
-contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9OwnerControl {
+contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9OwnerControl, C9Struct {
     using Address for address;
     using Strings for uint256;
 
@@ -120,10 +121,10 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
         uint256 balancesTo = _balances[to];
 
         // Parameters to update
-        uint256 balanceFrom = uint256(uint24(balancesFrom));
-        uint256 xfersFrom = balancesFrom>>24;
-        uint256 balanceTo = uint256(uint24(balancesTo));
-        uint256 xfersTo = balancesTo>>24;
+        uint256 balanceFrom = uint256(uint64(balancesFrom));
+        uint256 xfersFrom = balancesFrom>>192;
+        uint256 balanceTo = uint256(uint64(balancesTo));
+        uint256 xfersTo = balancesTo>>192;
 
         // Update balances and transfer counter
         unchecked {
@@ -138,26 +139,26 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
             balancesFrom,
             0,
             balanceFrom,
-            type(uint24).max
+            type(uint64).max
         );
         balancesFrom = _setTokenParam(
             balancesFrom,
-            128,
+            192,
             xfersFrom,
-            type(uint232).max
+            type(uint64).max
         );
 
         balancesTo = _setTokenParam(
             balancesTo,
             0,
             balanceTo,
-            type(uint24).max
+            type(uint64).max
         );
         balancesTo = _setTokenParam(
             balancesTo,
-            128,
+            192,
             xfersTo,
-            type(uint232).max
+            type(uint64).max
         );
 
         // Copy back to storage
@@ -418,18 +419,39 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
      *
      * Emits a {Transfer} event.
      */
+
+    function __transfer(uint256 to, uint256 tokenId)
+    internal virtual {
+        uint256 tokenData = _owners[tokenId];
+        uint256 tokenTransferCount = uint256(uint24(tokenData>>MPOS_XFER_COUNTER));
+        unchecked {++tokenTransferCount;}
+
+        // Set new owner
+        tokenData = _setTokenParam(
+            tokenData,
+            0,
+            to,
+            type(uint160).max
+        );
+        // Update transfer count
+        tokenData = _setTokenParam(
+            tokenData,
+            MPOS_XFER_COUNTER,
+            tokenTransferCount,
+            type(uint24).max
+        );
+
+        // Copy back to storage
+        _owners[tokenId] = tokenData;
+    }
+
     function _transfer(address from, address to, uint256 tokenId)
     internal virtual
     validTo(to) {
         // Before transfer checks
         _beforeTokenTransfer(from, to, tokenId, 1);
         // Set new owner
-        _owners[tokenId] = _setTokenParam(
-            _owners[tokenId],
-            0,
-            uint256(uint160(to)),
-            type(uint160).max
-        );
+        __transfer(uint256(uint160(to)), tokenId);
         // Emit event
         emit Transfer(from, to, tokenId);
         // Update balances
@@ -451,12 +473,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
             // Before transfer checks
             _beforeTokenTransfer(from, to, tokenId, 1);
             // Set new owner
-            _owners[tokenId] = _setTokenParam(
-                _owners[tokenId],
-                0,
-                _to,
-                type(uint160).max
-            );
+            __transfer(_to, tokenId);
             // Emit event
             emit Transfer(from, to, tokenId);
             unchecked {++i;}
@@ -518,8 +535,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     public view virtual
     override
     validTo(tokenOwner)
-    returns (uint256) {
-        return uint256(uint128(_balances[tokenOwner]));
+    returns (uint256 balance) {
+        (balance,,) = ownerDataOf(tokenOwner);
     }
 
     /**
@@ -716,11 +733,20 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
         return _totalSupply;
     }
 
-    function transferCountOf(address tokenOwner)
+    function transfersOf(address tokenOwner)
     public view virtual
     validTo(tokenOwner)
-    returns (uint256) {
-        return uint256(_balances[tokenOwner]>>128);
+    returns (uint256 transfers) {
+        (,transfers,) = ownerDataOf(tokenOwner);
+    }
+
+    function ownerDataOf(address tokenOwner)
+    public view virtual
+    returns (uint256 balance, uint256 transfers, uint256 redemptions) {
+        uint256 ownerData = _balances[tokenOwner];
+        balance = uint256(uint64(ownerData));
+        transfers = uint256(ownerData>>192);
+        redemptions = uint256(uint128(ownerData>>64));
     }
 
     /**
