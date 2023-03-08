@@ -15,7 +15,7 @@ error TokenEnumIndexOOB(uint256 maxIndex, uint256 received); //0x25601f6d
 error TransferFromToSame(); //0x2f2bdfd9
 error TransferFromIncorrectOwner(address expected, address received); //0xc0eeaa61
 error TransferSizeMismatch(uint256 addressBookSize, uint256 batchSize); //0x9156a5f1
-error ZeroAddressInvalid(); //0x14c880ca
+error ZeroAddressError();
 
 // C9OwnerControl
 error ActionNotConfirmed(); //0xacdb9fab
@@ -53,17 +53,19 @@ error PriceFeedDated(uint256 maxDelay, uint256 received); //0xb8875fad
 // Token
 error AddressAlreadySet(); //0xf62c2d82
 error CallerNotContract(); //0xa85366a7
+error C9TokenNotBurnable(uint256 tokenId, uint256 validity);
 error EditionOverflow(uint256 received); //0x5723b5d1
 error IncorrectTokenValidity(uint256 expected, uint256 received); //0xe8c07318
 error Input2SizeMismatch(uint256 inputSize1, uint256 inputSize2); //0xa9d63c10
 error InvalidVId(uint256 received); //0xcf8cffb0
 error NoOwnerSupply(address sender); //0x973d81af
 error PeriodTooLong(uint256 maxPeriod, uint256 received); //0xd36b55de
+error ReservedSpaceNotOpen();
 error RoyaltiesAlreadySet(); //0xe258016d
 error RoyaltyTooHigh(); //0xc2b03beb
-error ValueAlreadySet(); //0x30a4fcdc
 error URIAlreadySet(); //0x82ccdaca
 error URIMissingEndSlash(); //0x21edfe88
+error ValueAlreadySet(); //0x30a4fcdc
 error TokenAlreadyUpgraded(uint256 tokenId); //0xb4aab4a3
 error TokenIsDead(uint256 tokenId); //0xf87e5785
 error TokenIsLocked(uint256 tokenId); //0xdc8fb341
@@ -73,7 +75,7 @@ error TokenPreRedeemable(uint256 tokenId); //0x04df46e6
 error Unauthorized(); //0x82b42900
 error ZeroEdition(); //0x2c0dcd39
 error ZeroMintId(); //0x1ed046c6
-error ZeroValue(); //0x7c946ed7
+error ZeroValueError(); //0x7c946ed7
 error ZeroTokenId(); //0x1fed7fc5
 
 // C9Game

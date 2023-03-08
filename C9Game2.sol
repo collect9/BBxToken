@@ -100,18 +100,18 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
         // Default fee params
         _mintingFee = 5;
         _c9PortionFee = 25;
-        _payoutTiers[5] = 40;
-        _payoutTiers[7] = 70;
-        _payoutTiers[9] = 100;
+        _payoutTiers[5] = 40; //30%
+        _payoutTiers[7] = 70; // 52%
+        _payoutTiers[9] = 100; // 75%
         _payoutSplit = [uint48(25), 75];
+        _reactivationThreshold = 3;
         
         // Starting round params
-        _reactivationThreshold = 3;
-        _roundId = 1;
         _modulus = IC9Token(_contractToken).totalSupply();
         _nFreeSquares[5] = 0;
         _nFreeSquares[7] = 3;
         _nFreeSquares[9] = 5;
+        _roundId = 1;
         freeSquaresTimer = 60; // Tester
         //freeSquaresTimer = 604800;
         
@@ -119,7 +119,7 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
         contractPricer = _contractPriceFeed;
         contractToken = _contractToken;
 
-        // Genesis mint to allocate any memory space
+        // Genesis mint
         _safeMint(_msgSender(), 0, 1);
     }
 
@@ -174,9 +174,9 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
     /**
      * @dev Minting requirements called in mint() and mintPool().
      */
-    function _mintReqs(address _caller, uint256 _msgValue, uint256 batchSize)
+    function _mintReqs(address _caller, uint256 msgValue, uint256 batchSize)
         private {
-            // 1. Make sure N > 0
+            // 1. Make sure batchSize > 0
             if (batchSize == 0) {
                 revert ZeroMintError();
             }
@@ -184,10 +184,10 @@ contract C9Game is IC9Game, ERC721, C9RandomSeed {
             if (batchSize > MAX_MINT_BATCH_SIZE) {
                 revert BatchSizeTooLarge(MAX_MINT_BATCH_SIZE, batchSize);
             }
-            // // 3. Make sure paid amount equals the minting fee (~29K gas cost per call)
+            // 3. Make sure paid amount equals the minting fee (~29K gas cost per call)
             uint256 mintingFeeWei = getMintingFee(batchSize);
-            if (_msgValue != mintingFeeWei) {
-                revert InvalidPaymentAmount(mintingFeeWei, _msgValue);
+            if (msgValue != mintingFeeWei) {
+                revert InvalidPaymentAmount(mintingFeeWei, msgValue);
             }
             // 5. Request random data from the VRF for this batch of tokens
             preRequestRandomWords(_caller, batchSize);

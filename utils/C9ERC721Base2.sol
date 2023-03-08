@@ -57,8 +57,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     mapping(uint256 => uint256) internal _owners;
 
     // Mapping owner address to token count
-    /* Theoretically this could be updated to be packed freeing up a lot of storage space, but 
-       can't really think of a good use case yet. */
+    /* Updated to be packed freeing storage for any address mapping information. Balance
+       doesn't need to be any larger than the maxTokenId type can possibly reach. */
     mapping(address => uint256) internal _balances;
 
     // Mapping from token ID to approved address
@@ -110,14 +110,59 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
      * - `batchSize` is non-zero.
      *
      * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
+     *
+     * This has been updated to add an on-chain transfer counter which adds around ~700 gas per transfer.
      */
     function _afterTokenTransfer(address from, address to, uint256 /*firstTokenId*/, uint256 batchSize)
     internal virtual {
-        // Update balances
+        // Copy from storage first
+        uint256 balancesFrom = _balances[from];
+        uint256 balancesTo = _balances[to];
+
+        // Parameters to update
+        uint256 balanceFrom = uint256(uint24(balancesFrom));
+        uint256 xfersFrom = balancesFrom>>24;
+        uint256 balanceTo = uint256(uint24(balancesTo));
+        uint256 xfersTo = balancesTo>>24;
+
+        // Update balances and transfer counter
         unchecked {
-            _balances[from] -= batchSize;
-            _balances[to] += batchSize;
+            balanceFrom -= batchSize;
+            xfersFrom += batchSize;
+            balanceTo += batchSize;
+            xfersTo += batchSize;
         }
+
+        // Set packed values in memory
+        balancesFrom = _setTokenParam(
+            balancesFrom,
+            0,
+            balanceFrom,
+            type(uint24).max
+        );
+        balancesFrom = _setTokenParam(
+            balancesFrom,
+            128,
+            xfersFrom,
+            type(uint232).max
+        );
+
+        balancesTo = _setTokenParam(
+            balancesTo,
+            0,
+            balanceTo,
+            type(uint24).max
+        );
+        balancesTo = _setTokenParam(
+            balancesTo,
+            128,
+            xfersTo,
+            type(uint232).max
+        );
+
+        // Copy back to storage
+        _balances[from] = balancesFrom;
+        _balances[to] = balancesTo;
     }
 
     /**
@@ -474,7 +519,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     override
     validTo(tokenOwner)
     returns (uint256) {
-        return _balances[tokenOwner];
+        return uint256(uint128(_balances[tokenOwner]));
     }
 
     /**
@@ -669,6 +714,13 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     public view virtual 
     returns (uint256) {
         return _totalSupply;
+    }
+
+    function transferCountOf(address tokenOwner)
+    public view virtual
+    validTo(tokenOwner)
+    returns (uint256) {
+        return uint256(_balances[tokenOwner]>>128);
     }
 
     /**
