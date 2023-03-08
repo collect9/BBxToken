@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
 import "@openzeppelin/contracts/access/AccessControl.sol";
-
+import "./utils/C9ERC2771Context.sol";
 import "./abstract/C9Errors.sol";
 
 /**
@@ -25,7 +25,7 @@ import "./abstract/C9Errors.sol";
 * they cannot revoke owner. Only owner can renounce itself.
 */
 
-abstract contract C9OwnerControl is AccessControl {
+abstract contract C9OwnerControl is AccessControl, ERC2771Context {
     address public owner;
     address public pendingOwner;
     bool _frozen = false;
@@ -43,15 +43,53 @@ abstract contract C9OwnerControl is AccessControl {
     );
 
     constructor() {
-        owner = msg.sender;
+        owner = _msgSender();
         _grantRole(DEFAULT_ADMIN_ROLE, owner);
     }
 
+    /*
+     * @dev Checks if address is the same before update. There are 
+     * a few functions that update addresses where this is used.
+     */ 
+    modifier addressNotSame(address old, address _new) {
+        if (old == _new) {
+            revert AddressAlreadySet();
+        }
+        _;
+    }
+
+    /*
+     * @dev Check to see if contract is frozen.
+     */ 
     modifier notFrozen() { 
         if (_frozen) {
             revert ContractFrozen();
         }
         _;
+    }
+
+    /*
+     * @dev Checks to see set addres is not the zero address.
+     */ 
+    modifier validTo(address to) {
+        if (to == address(0)) {
+            revert ZeroAddressError();
+        }
+        _;
+    }
+
+    function _msgSender()
+    internal view
+    override(ERC2771Context, Context)
+    returns (address sender) {
+        return super._msgSender();
+    }
+
+    function _msgData()
+    internal view
+    override(ERC2771Context, Context)
+    returns (bytes calldata) {
+        return super._msgData();
     }
 
     /**
@@ -63,7 +101,7 @@ abstract contract C9OwnerControl is AccessControl {
      */
     function renounceRole(bytes32 role, address account)
         public override {
-            if (account != msg.sender) revert C9Unauthorized();
+            if (account != _msgSender()) revert C9Unauthorized();
             if (!hasRole(role, account)) revert NoRoleOnAccount();
             _revokeRole(role, account);
     }
@@ -105,8 +143,8 @@ abstract contract C9OwnerControl is AccessControl {
     function transferOwnership(address _newOwner)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
+        validTo(_newOwner)
         notFrozen() {
-            if (_newOwner == address(0)) revert C9ZeroAddressInvalid();
             pendingOwner = _newOwner;
             emit OwnershipTransferInit(owner, _newOwner);
     }
@@ -119,9 +157,9 @@ abstract contract C9OwnerControl is AccessControl {
     function acceptOwnership()
         external
         notFrozen() {
-            if (pendingOwner != msg.sender) revert C9Unauthorized();
+            if (pendingOwner != _msgSender()) revert C9Unauthorized();
             if (pendingOwner == address(0)) revert NoTransferPending();
-            _transferOwnership(msg.sender);
+            _transferOwnership(pendingOwner);
     }
 
     /**
@@ -134,6 +172,16 @@ abstract contract C9OwnerControl is AccessControl {
             if (pendingOwner == address(0)) revert NoTransferPending();
             delete pendingOwner;
             emit OwnershipTransferCancel(owner);
+    }
+
+    /**
+     * @dev Set the trusted forwarder of the contract.
+     */
+    function setTrustedForwarder(address forwarder)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        addressNotSame(_trustedForwarder, forwarder) {
+            _trustedForwarder = forwarder;
     }
 
     /**
