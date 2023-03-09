@@ -394,6 +394,15 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
         }
     }
 
+    function _safeTransfer(address from, address to, uint256[] calldata tokenIds, bytes memory data)
+    internal virtual {
+        _transfer(from, to, tokenIds);
+        // Only check the first token
+        if (!_checkOnERC721Received(from, to, tokenIds[0], data)) {
+            revert NonERC721Receiver();
+        }
+    }
+
     /**
      * @dev Approve `operator` to operate on all of `owner` tokens
      *
@@ -645,7 +654,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
      * safe transfer version to prevent accidents of sending to a 
      * non-ERC721 receiver.
      */
-    function safeTransferFrom(address from, address[] calldata to, uint256[] calldata tokenIds)
+    function safeTransferFrom(address from, address[] calldata to, uint256[][] calldata tokenIds)
     external {
         uint256 _batchSize = tokenIds.length;
         if (_batchSize > MAX_TRANSFER_BATCH_SIZE) {

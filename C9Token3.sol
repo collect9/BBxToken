@@ -50,7 +50,7 @@ contract C9Token is ERC721IdEnumBasic {
      * redeemed.
      */
     uint256 constant MAX_PERIOD = 63113852; //2 years
-    uint256 private _burnableDs;
+    uint256 public burnableDs;
     uint256 private _preRedeemablePeriod; //seconds
 
     /**
@@ -111,7 +111,7 @@ contract C9Token is ERC721IdEnumBasic {
      */
     constructor()
     ERC721("Collect9 Physically Redeemable NFTs", "C9T", 500) {
-        _burnableDs = 15778463; // 6 months
+        burnableDs = 15778463; // 6 months
         _contractURI = "collect9.io/metadata/C9T";
         _preRedeemablePeriod = 31556926; // 1 year
         svgOnly = true;
@@ -577,10 +577,10 @@ contract C9Token is ERC721IdEnumBasic {
             if (validity < REDEEMED) {
                 revert C9TokenNotBurnable(tokenId, validity);
             }
-            // 2. Check the token has been dead for at least _burnableDs
+            // 2. Check the token has been dead for at least burnableDs
             uint256 _validityStamp = uint256(uint40(_tokenData>>MPOS_VALIDITYSTAMP));
             uint256 _ds = block.timestamp - _validityStamp;
-            if (_ds < _burnableDs) {
+            if (_ds < burnableDs) {
                 revert C9TokenNotBurnable(tokenId, validity);
             }
             
@@ -864,10 +864,10 @@ contract C9Token is ERC721IdEnumBasic {
         if (period > MAX_PERIOD) {
             revert PeriodTooLong(MAX_PERIOD, period);
         }
-        if (_burnableDs == period) {
+        if (burnableDs == period) {
             revert ValueAlreadySet();
         }
-        _burnableDs = period;
+        burnableDs = period;
     }
 
     /**
