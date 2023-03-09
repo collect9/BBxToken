@@ -120,7 +120,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
         uint256 balancesFrom = _balances[from];
         uint256 balancesTo = _balances[to];
 
-        // Parameters to update
+        // Parameters to update, token owners balances and transfer counts
         uint256 balanceFrom = uint256(uint64(balancesFrom));
         uint256 xfersFrom = balancesFrom>>192;
         uint256 balanceTo = uint256(uint64(balancesTo));

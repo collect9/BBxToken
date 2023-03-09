@@ -34,18 +34,6 @@ abstract contract ERC721IdEnumBasic is ERC721 {
     }
 
     /**
-     * @dev See {IERC165-supportsInterface}.
-     */
-    function supportsInterface(bytes4 interfaceId)
-    public view virtual
-    override
-    returns (bool) {
-        return
-            interfaceId == type(IERC721Enumerable).interfaceId ||
-            super.supportsInterface(interfaceId);
-    }
-
-    /**
      * @dev See {IERC721Enumerable-tokenByIndex}.
      * @dev Collect9: copied from ERC721Enumerable
      */

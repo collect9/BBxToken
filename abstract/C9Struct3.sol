@@ -10,6 +10,7 @@ abstract contract C9Struct {
     uint256 constant INACTIVE = 2;
     uint256 constant OTHER = 3;
     uint256 constant REDEEMED = 4;
+    uint256 constant BURNED = 5;
 
     // Upgraded
     uint256 constant UPGRADED = 1;
@@ -63,21 +64,21 @@ abstract contract C9Struct {
     uint256 constant MPOS_LOCKED = 230; // 1 bit, max 1
     uint256 constant MPOS_INSURANCE = 231; // 24 bits, max 16777215
 
-    // _uTokenData -> immutable
-    uint256 constant UPOS_GLOBAL_MINT_ID = 0; // 24 bits
-    uint256 constant UPOS_MINTSTAMP = 24; // 40 bits
-    uint256 constant UPOS_EDITION = 64; // 7 bits, max 127
-    uint256 constant UPOS_EDITION_MINT_ID = 71; // 16 bits, max 65535
-    uint256 constant UPOS_CNTRYTAG = 87; // 4 bits, max 15
-    uint256 constant UPOS_CNTRYTUSH = 91; // 4 bits, max 15
-    uint256 constant UPOS_GENTAG = 95; // 6 bits, max 63
-    uint256 constant UPOS_GENTUSH = 101; // 6 bits, max 63
-    uint256 constant UPOS_MARKERTUSH = 107; // 4 bits, max 15
-    uint256 constant UPOS_SPECIAL = 111; // 4 bits, max 15
-    uint256 constant UPOS_RARITYTIER = 115; // 4 bits, max 15
-    uint256 constant UPOS_ROYALTY = 119; // 10 bits, max 1023
-    uint256 constant UPOS_ROYALTIES_DUE = 129; // 15 bits, max 32767
-    uint256 constant UPOS_RESERVED = 144; // 112 bits
+    // _uTokenData -> mostly immutable
+    uint256 constant UPOS_GLOBAL_MINT_ID = 0; // 16 bits
+    uint256 constant UPOS_MINTSTAMP = 16; // 40 bits
+    uint256 constant UPOS_EDITION = 56; // 7 bits, max 127
+    uint256 constant UPOS_EDITION_MINT_ID = 63; // 16 bits, max 65535
+    uint256 constant UPOS_CNTRYTAG = 79; // 4 bits, max 15
+    uint256 constant UPOS_CNTRYTUSH = 83; // 4 bits, max 15
+    uint256 constant UPOS_GENTAG = 87; // 6 bits, max 63
+    uint256 constant UPOS_GENTUSH = 93; // 6 bits, max 63
+    uint256 constant UPOS_MARKERTUSH = 99; // 4 bits, max 15
+    uint256 constant UPOS_SPECIAL = 103; // 4 bits, max 15
+    uint256 constant UPOS_RARITYTIER = 107; // 4 bits, max 15
+    uint256 constant UPOS_ROYALTY = 111; // 10 bits, max 1023
+    uint256 constant UPOS_ROYALTIES_DUE = 121; // 15 bits, max 32767
+    uint256 constant UPOS_RESERVED = 136; // 120 bits
 
     uint256 constant MSZ_VALIDITY = 4;
     uint256 constant USZ_EDITION = 7;
