@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
-import "./abstract/C9Struct3.sol";
+import "./abstract/C9Struct4.sol";
 import "./interfaces/IC9MetaData.sol";
 import "./interfaces/IC9SVG.sol";
 import "./interfaces/IC9Redeemer24.sol";
@@ -49,7 +49,6 @@ contract C9Token is ERC721IdEnumBasic {
      * defines how long a token must exist before it can be 
      * redeemed.
      */
-    uint256 constant MAX_PERIOD = 63113852; //2 years
     uint256 public burnableDs;
     uint256 private _preRedeemablePeriod; //seconds
 
@@ -57,27 +56,6 @@ contract C9Token is ERC721IdEnumBasic {
      * @dev Flag to enable or disable reserved space storage.
      */
     bool private _reservedOpen;
-    
-    event RedemptionAdd(
-        address indexed tokenOwner,
-        uint256[] tokenId
-    );
-    event RedemptionCancel(
-        address indexed tokenOwner,
-        uint256 batchSize
-    );
-    event RedemptionFinish(
-        address indexed tokenOwner,
-        uint256 batchSize
-    );
-    event RedemptionRemove(
-        address indexed tokenOwner,
-        uint256[] tokenId
-    );
-    event RedemptionStart(
-        address indexed tokenOwner,
-        uint256[] tokenId
-    );
     
     /**
      * @dev Mappings that hold all of the token info required to 
@@ -354,8 +332,9 @@ contract C9Token is ERC721IdEnumBasic {
      * attributes required to construct the SVG in the tightly packed 
      * `TokenData` structure.
      */
-    function _setTokenData(TokenData[] calldata input)
-    private {
+    function _setTokenData(TokenData[32] calldata input)
+    private
+    returns (uint256 votes) {
         uint256 timestamp = block.timestamp;
         uint256 batchSize = input.length;
         TokenData calldata _input;
@@ -364,7 +343,9 @@ contract C9Token is ERC721IdEnumBasic {
         uint256 edition;
         uint256 editionMintId;
         uint256 tokenId;
-        uint256 globalMintId = totalSupply()-batchSize;
+        uint256 globalMintId = totalSupply();
+        address to = _msgSender();
+        uint256 _to = uint256(uint160(to));
 
         for (uint256 i; i<batchSize;) {
             _input = input[i];
@@ -399,6 +380,9 @@ contract C9Token is ERC721IdEnumBasic {
             if (tokenId == 0) {
                 revert ZeroTokenId();
             }
+            if (_exists(tokenId)) {
+                revert TokenAlreadyMinted(tokenId);
+            }
             if (edition == 0) {
                 revert ZeroEdition();
             }
@@ -409,19 +393,23 @@ contract C9Token is ERC721IdEnumBasic {
                 revert ZeroMintId();
             }
 
+            // Add to all tokens list
+            _allTokens.push(uint24(tokenId));
+
             /* None of the values are big enough to overflow into the 
             next packed storage space, so the |= operation is fine when 
             done sequentially. */
 
             // _owners eXtended storage
-            uint256 packedToken = _owners[tokenId];
+            uint256 packedToken = _to;
             packedToken |= timestamp<<MPOS_VALIDITYSTAMP;
             packedToken |= _input.validity<<MPOS_VALIDITY;
             packedToken |= _input.upgraded<<MPOS_UPGRADED;
             packedToken |= _input.display<<MPOS_DISPLAY;
             packedToken |= _input.locked<<MPOS_LOCKED;
             packedToken |= _input.insurance<<MPOS_INSURANCE;
-            _owners[tokenId] = packedToken;
+            packedToken |= _input.votes<<MPOS_VOTES;
+            _owners[tokenId] = packedToken; // Officially minted
 
             // Additional storage in _uTokenData
             unchecked {++globalMintId;}
@@ -443,27 +431,41 @@ contract C9Token is ERC721IdEnumBasic {
             // Store token string data for SVG
             _sTokenData[tokenId] = _input.sData;
 
-            unchecked {++i;}
+            //emit Transfer(address(0), to, tokenId);
+
+            unchecked {
+                ++i;
+                votes += _input.votes;
+            }
         }
+        return votes;
     }
 
-    function mint(uint256[] calldata tokenIds, TokenData[] calldata input)
+    function mint(TokenData[32] calldata input)
     external
     onlyRole(DEFAULT_ADMIN_ROLE) {
-        _mint(_msgSender(), tokenIds);
-        _setTokenData(input);
+        uint256 votes = _setTokenData(input);
 
         // Update minter balance
-        uint256 minterBalance = balanceOf(_msgSender());
+        (uint256 minterBalance, uint256 minterVotes,,) = ownerDataOf(_msgSender());
         unchecked {
-            minterBalance += tokenIds.length;
+            minterBalance += input.length;
+            minterVotes += votes;
         }
-        _balances[_msgSender()] = _setTokenParam(
-            _balances[_msgSender()],
+        uint256 balances = _balances[_msgSender()];
+        balances = _setTokenParam(
+            balances,
             0,
             minterBalance,
             type(uint64).max
         );
+        balances = _setTokenParam(
+            balances,
+            64,
+            minterVotes,
+            type(uint64).max
+        );
+         _balances[_msgSender()] = balances;
     }
 
     /**
@@ -757,7 +759,6 @@ contract C9Token is ERC721IdEnumBasic {
         _redeemLockTokens(_tokenIds);
         address tokenOwner = _ownerOf(_tokenIds[0]);
         IC9Redeemer(contractRedeemer).add(tokenOwner, _tokenIds);
-        emit RedemptionAdd(_msgSender(), _tokenIds);
     }
 
     /**
@@ -780,7 +781,6 @@ contract C9Token is ERC721IdEnumBasic {
                 ++i;
             }
         }
-        emit RedemptionCancel(_msgSender(), _batchSize);
     }
 
     /**
@@ -814,7 +814,6 @@ contract C9Token is ERC721IdEnumBasic {
             type(uint64).max
         );
         _balances[tokenOwner] = ownerData;
-        emit RedemptionFinish(tokenOwner, _batchSize);
     }
 
     /**
@@ -838,7 +837,6 @@ contract C9Token is ERC721IdEnumBasic {
             unchecked {++i;}
         }
         IC9Redeemer(contractRedeemer).remove(_tokenOwner, tokenIds);
-        emit RedemptionRemove(_msgSender(), tokenIds);
     }
 
     /**
@@ -851,7 +849,6 @@ contract C9Token is ERC721IdEnumBasic {
         _redeemLockTokens(tokenIds);
         address tokenOwner = _ownerOf(tokenIds[0]);
         IC9Redeemer(contractRedeemer).start(tokenOwner, tokenIds);
-        emit RedemptionStart(_msgSender(), tokenIds);
     }
 
     /**
@@ -1030,7 +1027,7 @@ contract C9Token is ERC721IdEnumBasic {
     function setTokenValidity(uint256 tokenId, uint256 vId)
     external
     onlyRole(VALIDITY_ROLE)
-    isContract()
+    //isContract()
     requireMinted(tokenId) {
         if (vId >= REDEEMED) {
             revert TokenIsDead(tokenId);
@@ -1047,7 +1044,7 @@ contract C9Token is ERC721IdEnumBasic {
     function setTokenUpgraded(uint256 tokenId)
     external
     onlyRole(UPGRADER_ROLE)
-    isContract()
+    //isContract()
     requireMinted(tokenId)
     notDead(tokenId) {
         uint256 _tokenData = _owners[tokenId];
