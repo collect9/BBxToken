@@ -131,7 +131,7 @@ contract C9Token is ERC721IdEnumBasic {
      * locked.
      */
     modifier notDead(uint256 tokenId) {
-        if (_currentVId(_uTokenData[tokenId]) >= REDEEMED) {
+        if (_currentVId(_owners[tokenId]) >= REDEEMED) {
             revert TokenIsDead(tokenId);
         }
         _;
@@ -253,15 +253,16 @@ contract C9Token is ERC721IdEnumBasic {
     function setRoyaltiesDue(uint256 tokenId, uint256 amount)
     external
     onlyRole(DEFAULT_ADMIN_ROLE)
-    requireMinted(tokenId) {
+    requireMinted(tokenId)
+    notDead(tokenId) {
         if (amount == 0) {
             revert ZeroValueError();
         }
-        uint256 _tokenData = _uTokenData[tokenId];
-        uint256 _tokenValidity = _currentVId(_tokenData);
+        uint256 _tokenValidity = _currentVId(_owners[tokenId]);
         if (_tokenValidity != ROYALTIES) {
             revert IncorrectTokenValidity(ROYALTIES, _tokenValidity);
         }
+        uint256 _tokenData = _uTokenData[tokenId];
         if (_viewPackedData(_tokenData, UPOS_ROYALTIES_DUE, USZ_ROYALTIES_DUE) == amount) {
             revert RoyaltiesAlreadySet();
         }
@@ -269,7 +270,7 @@ contract C9Token is ERC721IdEnumBasic {
             _tokenData,
             UPOS_ROYALTIES_DUE,
             amount,
-            ROYALTIES_DUE_MASK
+            MASK_ROYALTIES_DUE
         );
     }
 
@@ -300,6 +301,27 @@ contract C9Token is ERC721IdEnumBasic {
      * Note that if the token is burned, the edition cannot be replaced but 
      * instead will keep incrementing.
      */
+    function _physicalHashDescriptor(
+        uint256 edition, uint256 cntrytag, uint256 cntrytush,
+        uint256 gentag, uint256 gentush, uint256 markertush, 
+        uint256 special, string calldata name
+    )
+    private pure
+    returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(
+                edition,
+                cntrytag,
+                cntrytush,
+                gentag,
+                gentush,
+                markertush,
+                special,
+                name
+            )
+        );
+    }
+
     function _getPhysicalHash(TokenData calldata input, uint256 edition)
     private pure
     returns (bytes32) {
@@ -311,17 +333,15 @@ contract C9Token is ERC721IdEnumBasic {
             }
             unchecked {++_splitIndex;}
         }
-        return keccak256(
-            abi.encodePacked(
-                edition,
-                input.cntrytag,
-                input.cntrytush,
-                input.gentag,
-                input.gentush,
-                input.markertush,
-                input.special,
-                input.sData[:_splitIndex]
-            )
+        return _physicalHashDescriptor(
+            edition,
+            input.cntrytag,
+            input.cntrytush,
+            input.gentag,
+            input.gentush,
+            input.markertush,
+            input.special,
+            input.sData[:_splitIndex]
         );
     }
 
@@ -332,7 +352,7 @@ contract C9Token is ERC721IdEnumBasic {
      * attributes required to construct the SVG in the tightly packed 
      * `TokenData` structure.
      */
-    function _setTokenData(TokenData[32] calldata input)
+    function _setTokenData(TokenData[] calldata input)
     private
     returns (uint256 votes) {
         uint256 timestamp = block.timestamp;
@@ -441,7 +461,7 @@ contract C9Token is ERC721IdEnumBasic {
         return votes;
     }
 
-    function mint(TokenData[32] calldata input)
+    function mint(TokenData[] calldata input)
     external
     onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 votes = _setTokenData(input);
@@ -613,10 +633,23 @@ contract C9Token is ERC721IdEnumBasic {
      * Only returns true/false and not the details of 
      * any tokenId.
      */
-    function comboExists(TokenData calldata input)
+    function comboExists(
+        uint256 cntrytag, uint256 cntrytush, uint256 gentag, 
+        uint256 gentush, uint256 markertush, uint256 special, 
+        string calldata name
+    )
     external view
     returns (bool) {
-        bytes32 _data = _getPhysicalHash(input, 0);
+        bytes32 _data = _physicalHashDescriptor(
+            1,
+            cntrytag,
+            cntrytush,
+            gentag,
+            gentush,
+            markertush,
+            special,
+            name
+        );
         return _tokenComboExists[_data];
     }
 
@@ -652,7 +685,7 @@ contract C9Token is ERC721IdEnumBasic {
      */
     function getTokenParams(uint256 tokenId)
     external view
-    returns(uint256[20] memory xParams) {
+    returns(uint256[21] memory xParams) {
         // Data stored in owners
         uint256 data = _owners[tokenId];
         xParams[0] = uint256(uint24(data>>MPOS_XFER_COUNTER));
@@ -661,22 +694,23 @@ contract C9Token is ERC721IdEnumBasic {
         xParams[3] = data>>MPOS_UPGRADED & BOOL_MASK;
         xParams[4] = data>>MPOS_DISPLAY & BOOL_MASK;
         xParams[5] = data>>MPOS_LOCKED & BOOL_MASK;
-        xParams[6] = uint256(uint24(data>>MPOS_INSURANCE));
+        xParams[6] = _viewPackedData(data, MPOS_INSURANCE, MSZ_INSURANCE);
+        xParams[7] = _viewPackedData(data, MPOS_VOTES, MSZ_VOTES);
         // Data stored in uTokenData
         data = _uTokenData[tokenId];
-        xParams[7] = uint256(uint16(data)); // Global Mint Id
-        xParams[8] = uint256(uint40(data>>UPOS_MINTSTAMP));
-        xParams[9] = _viewPackedData(data, UPOS_EDITION, USZ_EDITION);
-        xParams[10] = uint256(uint16(data>>UPOS_EDITION_MINT_ID));
-        xParams[11] = _viewPackedData(data, UPOS_CNTRYTAG, USZ_CNTRYTAG);
-        xParams[12] = _viewPackedData(data, UPOS_CNTRYTUSH, USZ_CNTRYTUSH);
-        xParams[13] = _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG);
-        xParams[14] = _viewPackedData(data, UPOS_GENTUSH, USZ_GENTUSH);
-        xParams[15] = _viewPackedData(data, UPOS_MARKERTUSH, USZ_MARKERTUSH);
-        xParams[16] = _viewPackedData(data, UPOS_SPECIAL, USZ_SPECIAL);
-        xParams[17] = _viewPackedData(data, UPOS_RARITYTIER, USZ_RARITYTIER);
-        xParams[18] = _viewPackedData(data, UPOS_ROYALTY, USZ_ROYALTY);
-        xParams[19] = _viewPackedData(data, UPOS_ROYALTIES_DUE, USZ_ROYALTIES_DUE);
+        xParams[8] = uint256(uint16(data)); // Global Mint Id
+        xParams[9] = uint256(uint40(data>>UPOS_MINTSTAMP));
+        xParams[10] = _viewPackedData(data, UPOS_EDITION, USZ_EDITION);
+        xParams[11] = uint256(uint16(data>>UPOS_EDITION_MINT_ID));
+        xParams[12] = _viewPackedData(data, UPOS_CNTRYTAG, USZ_CNTRYTAG);
+        xParams[13] = _viewPackedData(data, UPOS_CNTRYTUSH, USZ_CNTRYTUSH);
+        xParams[14] = _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG);
+        xParams[15] = _viewPackedData(data, UPOS_GENTUSH, USZ_GENTUSH);
+        xParams[16] = _viewPackedData(data, UPOS_MARKERTUSH, USZ_MARKERTUSH);
+        xParams[17] = _viewPackedData(data, UPOS_SPECIAL, USZ_SPECIAL);
+        xParams[18] = _viewPackedData(data, UPOS_RARITYTIER, USZ_RARITYTIER);
+        xParams[19] = _viewPackedData(data, UPOS_ROYALTY, USZ_ROYALTY);
+        xParams[20] = _viewPackedData(data, UPOS_ROYALTIES_DUE, USZ_ROYALTIES_DUE);
     }
 
     //>>>>>>> REDEEMER FUNCTIONS START
@@ -1026,13 +1060,13 @@ contract C9Token is ERC721IdEnumBasic {
      */
     function setTokenValidity(uint256 tokenId, uint256 vId)
     external
-    onlyRole(VALIDITY_ROLE)
+    //onlyRole(VALIDITY_ROLE)
     //isContract()
     requireMinted(tokenId) {
         if (vId >= REDEEMED) {
             revert TokenIsDead(tokenId);
         }
-        if (vId == _currentVId(_uTokenData[tokenId])) {
+        if (vId == _currentVId(_owners[tokenId])) {
             revert ValueAlreadySet();
         }
         _setTokenValidity(tokenId, vId);
@@ -1043,7 +1077,7 @@ contract C9Token is ERC721IdEnumBasic {
      */
     function setTokenUpgraded(uint256 tokenId)
     external
-    onlyRole(UPGRADER_ROLE)
+    //onlyRole(UPGRADER_ROLE)
     //isContract()
     requireMinted(tokenId)
     notDead(tokenId) {
@@ -1182,7 +1216,7 @@ contract C9Token is ERC721IdEnumBasic {
             _uTokenData[tokenId],
             UPOS_RESERVED,
             data,
-            type(uint112).max
+            type(uint120).max
         );
     }
 
