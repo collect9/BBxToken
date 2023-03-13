@@ -3,17 +3,14 @@
 
 pragma solidity ^0.8.0;
 
-
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
 
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
-//import "@openzeppelin/contracts/interfaces/IERC2309.sol";
 import "@openzeppelin/contracts/interfaces/IERC2981.sol";
 import "./interfaces/IERC4906.sol";
 import "./interfaces/IC9ERC721Base.sol";
-
 
 import "./C9Context.sol";
 import "./../C9OwnerControl.sol";
@@ -44,6 +41,16 @@ uint256 constant MAX_TRANSFER_BATCH_SIZE = 128;
 contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9OwnerControl, C9Struct {
     using Address for address;
     using Strings for uint256;
+
+    uint256 constant APOS_BALANCE = 0;
+    uint256 constant APOS_VOTES = 16;
+    uint256 constant APOS_REDEMPTIONS = 40;
+    uint256 constant APOS_LOCKED = 56;
+    uint256 constant APOS_LOCKSTAMP = 64;
+    uint256 constant APOS_LOCKPERIOD = 104;
+    uint256 constant APOS_RESERVED = 128;
+    uint256 constant APOS_TRANSFERS = 232;
+    uint256 constant MAX_LOCK_PERIOD = 1209600; // 14 days
 
     // Token name
     string public name;
@@ -78,6 +85,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
        if all tokens will have the same royalty.*/
     address internal _royaltyReceiver;
     uint96 internal _royalty;
+
+    bool private _reservedBalanceSpaceOpen;
 
     /**
      * @dev Initializes the contract by setting a `name` and a `symbol` to the token collection.
@@ -122,13 +131,18 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
         uint256 balancesFrom = _balances[from];
         uint256 balancesTo = _balances[to];
 
+        // Check that the from account did not have an active lock
+        if (uint256(uint8(balancesFrom>>APOS_LOCKED)) == 1) {
+            revert AddressLocked(from);
+        }
+
         // Parameters to update, token owners balances and transfer counts
-        uint256 balanceFrom = uint256(uint64(balancesFrom));
-        uint256 votesFrom = uint256(uint64(balancesFrom>>64));
-        uint256 xfersFrom = balancesFrom>>192;
-        uint256 balanceTo = uint256(uint64(balancesTo));
-        uint256 votesTo = uint256(uint64(balancesTo>>64));
-        uint256 xfersTo = balancesTo>>192;
+        uint256 balanceFrom = uint256(uint16(balancesFrom));
+        uint256 votesFrom = uint256(uint24(balancesFrom>>APOS_VOTES));
+        uint256 xfersFrom = balancesFrom>>APOS_TRANSFERS;
+        uint256 balanceTo = uint256(uint16(balancesTo));
+        uint256 votesTo = uint256(uint24(balancesTo>>APOS_VOTES));
+        uint256 xfersTo = balancesTo>>APOS_TRANSFERS;
 
         // Update balances and transfer counter
         unchecked {
@@ -143,40 +157,40 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
         // Set packed values in memory
         balancesFrom = _setTokenParam(
             balancesFrom,
-            0,
+            APOS_BALANCE,
             balanceFrom,
-            type(uint64).max
+            type(uint16).max
         );
         balancesFrom = _setTokenParam(
             balancesFrom,
-            64,
+            APOS_VOTES,
             votesFrom,
-            type(uint64).max
+            type(uint24).max
         );
         balancesFrom = _setTokenParam(
             balancesFrom,
-            192,
+            APOS_TRANSFERS,
             xfersFrom,
-            type(uint64).max
+            type(uint24).max
         );
 
         balancesTo = _setTokenParam(
             balancesTo,
-            0,
+            APOS_BALANCE,
             balanceTo,
-            type(uint64).max
+            type(uint16).max
         );
         balancesTo = _setTokenParam(
             balancesTo,
-            64,
+            APOS_VOTES,
             votesTo,
-            type(uint64).max
+            type(uint24).max
         );
         balancesTo = _setTokenParam(
             balancesTo,
-            192,
+            APOS_TRANSFERS,
             xfersTo,
-            type(uint64).max
+            type(uint24).max
         );
 
         // Copy back to storage
@@ -209,6 +223,24 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     internal view virtual
     returns (string memory) {
         return "";
+    }
+
+    /**
+     * @dev Updates the addresse's redemptions count.
+     */
+    function _addRedemptions(address from, uint256 batchSize)
+    internal view virtual {
+        uint256 balancesFrom = _balances[from];
+        uint256 redemptions = uint256(uint16(balancesFrom>>APOS_REDEMPTIONS));
+        unchecked {
+            redemptions += batchSize;
+        }
+        balancesFrom = _setTokenParam(
+            balancesFrom,
+            APOS_REDEMPTIONS,
+            redemptions,
+            type(uint16).max
+        );
     }
 
     /**
@@ -464,7 +496,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
             to,
             type(uint160).max
         );
-        // Update transfer count
+        // Update token transfer count
         tokenData = _setTokenParam(
             tokenData,
             MPOS_XFER_COUNTER,
@@ -595,6 +627,17 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     }
 
     /**
+     * @dev The cost to set/update should be comparable 
+     * to updating insured values.
+     */
+    function getReservedBalanceSpace(address account)
+    external view
+    returns (uint256) {
+        uint256 balanceData = _balances[account];
+        return uint256(uint104(balanceData>>APOS_RESERVED));
+    }
+
+    /**
      * @dev See {IERC721-isApprovedForAll}.
      */
     function isApprovedForAll(address tokenOwner, address operator)
@@ -613,14 +656,29 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
         emit BatchMetadataUpdate(0, totalSupply());
     }
 
+    /**
+     * @dev View function to see owner balances data.
+     */
     function ownerDataOf(address tokenOwner)
     public view virtual
     returns (uint256 balance, uint256 votes, uint256 redemptions, uint256 transfers) {
         uint256 ownerData = _balances[tokenOwner];
-        balance = uint256(uint64(ownerData));
-        votes = uint256(uint64(ownerData>>64));
-        redemptions = uint256(uint64(ownerData>>128));
-        transfers = uint256(ownerData>>192);
+        balance = uint256(uint16(ownerData));
+        votes = uint256(uint24(ownerData>>APOS_VOTES));
+        redemptions = uint256(uint16(ownerData>>APOS_REDEMPTIONS));
+        transfers = uint256(ownerData>>APOS_TRANSFERS);
+    }
+
+    /**
+     * @dev View function to see owner lock status.
+     */
+    function ownerLocked(address tokenOwner)
+    public view virtual
+    returns (bool locked, uint256 lockStamp) {
+        uint256 ownerData = _balances[tokenOwner];
+        uint256 _locked = uint256(uint8(ownerData>>APOS_LOCKED));
+        locked = _locked == 1 ? true : false;
+        lockStamp = uint256(uint40(ownerData>>APOS_LOCKSTAMP));
     }
 
     /**
@@ -716,6 +774,28 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     }
 
     /**
+     * @dev Sets the data for the reserved (unused balance) 
+     * space. Since this storage is already paid for, it may
+     * be used for expansion features that may be available 
+     * later. Such features will only be available to 
+     * external contracts, as this contract will have no
+     * built-in parsing.
+     * 104 bits remain in the reserved storage space.
+     */
+    function setReservedBalanceSpace(uint256 data)
+    external {
+        if (!_reservedBalanceSpaceOpen) {
+            revert ReservedSpaceNotOpen();
+        }
+        _balances[_msgSender()] = _setTokenParam(
+            _balances[_msgSender()],
+            APOS_RESERVED,
+            data,
+            type(uint104).max
+        );
+    }
+
+    /**
      * @dev Allows contract to have a separate royalties receiver 
      * address from owner. The default receiver is owner.
      */
@@ -749,16 +829,23 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
         return
             interfaceId == type(IERC721).interfaceId ||
             interfaceId == type(IERC721Metadata).interfaceId ||
-            //interfaceId == type(IERC2309).interfaceId ||
             interfaceId == type(IERC2981).interfaceId ||
             interfaceId == type(IERC4906).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 
-    function tokenCounter() 
-    internal view virtual
-    returns (uint256) {
-        return _totalSupply;
+    /**
+     * @dev Flag that sets global toggle to freeze redemption. 
+     * Users may still cancel redemption and unlock their 
+     * token if in the process.
+     */
+    function toggleReservedBalanceSpace(bool toggle)
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_reservedBalanceSpaceOpen == toggle) {
+            revert BoolAlreadySet();
+        }
+        _reservedBalanceSpaceOpen = toggle;
     }
 
     /**
@@ -789,8 +876,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
      * @dev See {IERC721-transferFrom}.
      */
     function transferFrom(address from, address to, uint256 tokenId)
-    public virtual
-    override {
+    public virtual {
         _transfer(from, to, tokenId);
     }
 
@@ -799,8 +885,80 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
      * between two addresses. Max batch size is 64.
      */
     function transferFrom(address from, address to, uint256[] calldata tokenIds)
-    external virtual {
+    external virtual
+    override {
         _transfer(from, to, tokenIds);
+    }
+
+    /**
+     * @dev Allows user to temporarily lock all tokens from being
+     * transferred.
+     */
+    function userLockAddress(uint256 lockPeriod)
+    external virtual {
+        if (lockPeriod == 0) {
+            revert ZeroValueError();
+        }
+        if (lockPeriod > MAX_LOCK_PERIOD) {
+            revert PeriodTooLong(MAX_LOCK_PERIOD, lockPeriod);
+        }
+        // Check that the from account does not already have an active lock
+        uint256 addressInfo = _balances[_msgSender()];
+        if (uint256(uint8(addressInfo>>APOS_LOCKED)) == 1) {
+            revert AddressLocked(_msgSender());
+        }
+        // Set the account lock
+        addressInfo = _setTokenParam(
+            addressInfo,
+            APOS_LOCKED,
+            1,
+            type(uint8).max
+        );
+        // Set the account lock timestamp
+        addressInfo = _setTokenParam(
+            addressInfo,
+            APOS_LOCKSTAMP,
+            block.timestamp,
+            type(uint40).max
+        );
+        // Set the account lock period timestamp
+        addressInfo = _setTokenParam(
+            addressInfo,
+            APOS_LOCKPERIOD,
+            lockPeriod,
+            type(uint24).max
+        );
+        // Write back to storage
+        _balances[_msgSender()] = addressInfo;
+    }
+
+    /**
+     * @dev Allows user to unlock all tokens (if locked, and 
+     * if lock period has expired).
+     */
+    function userUnlockAddress()
+    external virtual {
+        uint256 addressInfo = _balances[_msgSender()];
+        // Check that the from account does not already have an active lock
+        if (uint256(uint8(addressInfo>>APOS_LOCKED)) == 0) {
+            revert AddressNotLocked();
+        }
+        // Check the lock period has expired
+        uint256 _userLockPeriod =  uint256(uint24(addressInfo>>APOS_LOCKPERIOD));
+        uint256 _sinceLocked = uint256(uint40(addressInfo>>APOS_LOCKSTAMP)) - block.timestamp;
+        if (_sinceLocked < _userLockPeriod) {
+            revert LockPeriodNotFinished(_userLockPeriod, _sinceLocked);
+        }
+        // Set the account unlocked
+        addressInfo = _setTokenParam(
+            addressInfo,
+            APOS_LOCKED,
+            0,
+            type(uint8).max
+        );
+        // No need to update lock timestamp
+        // Write back to storage
+        _balances[_msgSender()] = addressInfo;
     }
 
     function votesOf(address tokenOwner)

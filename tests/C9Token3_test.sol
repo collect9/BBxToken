@@ -396,5 +396,42 @@ contract testSuite is C9Struct {
     }
 
     /* @dev 12. Testing some additional setters.
-     */ 
+     */
+    function checkSetters()
+    public {
+        // Base URI testing
+        string memory baseURI0 = "testbaseuri/uri0/";
+        string memory baseURI1 = "testbaseuri/uri1/"; 
+        c9t.setBaseUri(baseURI0, 0);
+        c9t.setBaseUri(baseURI1, 1);
+        Assert.equal(baseURI0, c9t.baseURIArray(0), "Invalid baseURI0");
+        Assert.equal(baseURI1, c9t.baseURIArray(1), "Invalid baseURI1");
+
+        // Contract URI testing
+        string memory contractURI = "somecontract/uri";
+        c9t.setContractURI(contractURI);
+        Assert.equal(string.concat("https://", contractURI, ".json"), c9t.contractURI(), "Invalid contractURI");
+
+    }
+
+    /* @dev 13. Check account lockers.
+     */
+    function checkAccountLockers()
+    public {
+        c9t.userLockAddress(86400);
+        
+        // Check the account locked and lockStamp is correct
+        (bool locked, uint256 lockStamp) = c9t.ownerLocked(c9tOwner);
+        Assert.equal(locked, true, "Invalid account lock");
+        Assert.equal(lockStamp, block.timestamp, "Invalid account lock timestamp");
+
+        // // Check the user can unlock
+        // c9t.userUnlockAddress();
+        // (locked, lockStamp) = c9t.ownerLocked(c9tOwner);
+        // Assert.equal(locked, false, "Invalid account lock");
+        // Assert.equal(lockStamp, block.timestamp, "Invalid account lock timestamp");
+    }
+
+
 }
+    

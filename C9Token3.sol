@@ -35,8 +35,8 @@ contract C9Token is ERC721IdEnumBasic {
      * is a string[2]: index 0 is active and index 1 is 
      * for inactive.
      */
-    bool public svgOnly;
-    string[2] public _baseURI;
+    bool private _svgOnly;
+    string[2] public _baseURIArray;
 
     /**
      * @dev Contract-level meta data for OpenSea.
@@ -49,7 +49,7 @@ contract C9Token is ERC721IdEnumBasic {
      * defines how long a token must exist before it can be 
      * redeemed.
      */
-    uint256 public burnableDs;
+    uint256 private _burnableDs;
     uint256 private _preRedeemablePeriod; //seconds
 
     /**
@@ -89,10 +89,10 @@ contract C9Token is ERC721IdEnumBasic {
      */
     constructor()
     ERC721("Collect9 Physically Redeemable NFTs", "C9T", 500) {
-        burnableDs = 15778463; // 6 months
+        _burnableDs = 15778463; // 6 months
         _contractURI = "collect9.io/metadata/C9T";
         _preRedeemablePeriod = 31556926; // 1 year
-        svgOnly = true;
+        _svgOnly = true;
     }
 
     /*
@@ -413,7 +413,7 @@ contract C9Token is ERC721IdEnumBasic {
             // Store token string data for SVG
             _sTokenData[tokenId] = _input.sData;
 
-            //emit Transfer(address(0), to, tokenId);
+            emit Transfer(address(0), to, tokenId);
 
             unchecked {
                 ++i;
@@ -510,97 +510,6 @@ contract C9Token is ERC721IdEnumBasic {
         _owners[_tokenId] = _tokenData;
     }
 
-    //>>>>>>> CUSTOM ERC2981 START
-
-    /**
-     * @dev Resets royalty information for the token id back to the 
-     * global defaults.
-     */
-    function resetTokenRoyalty(uint256 tokenId)
-    onlyRole(DEFAULT_ADMIN_ROLE)
-    requireMinted(tokenId)
-    notDead(tokenId)
-    external {
-        _setTokenRoyalty(tokenId, _royaltyReceiver, _royalty);
-    }
-
-    /**
-     * @dev Custom EIP-2981. First this checks to see if the 
-     * token has a royalty receiver and fraction assigned to it.
-     * If not then it defaults to the contract wide values.
-     */
-    function royaltyInfo(uint256 tokenId, uint256 salePrice)
-    public view
-    override
-    returns (address, uint256) {
-        address receiver = _rTokenData[tokenId];
-        if (receiver == address(0)) {
-            receiver = _royaltyReceiver;
-        }
-        uint256 _fraction = _royalty;
-        if (_exists(tokenId)) {
-            _fraction = _viewPackedData(
-                _uTokenData[tokenId],
-                UPOS_ROYALTY,
-                USZ_ROYALTY
-            );
-        }
-        uint256 royaltyAmount = (salePrice * _fraction) / 10000;
-        return (receiver, royaltyAmount);
-    }
-
-    /**
-     * @dev Set royalties due if token validity status 
-     * is ROYALTIES. This is admin role instead of VALIDITY_ROLE 
-     * to reduce gas costs from using a proxy contract.
-     * VALIDITY_ROLE will still need to set 
-     * validity status ROYALTIES beforehand.
-     */
-    function setRoyaltiesDue(uint256 tokenId, uint256 amount)
-    external
-    onlyRole(DEFAULT_ADMIN_ROLE)
-    requireMinted(tokenId)
-    notDead(tokenId) {
-        if (amount == 0) {
-            revert ZeroValueError();
-        }
-        uint256 _tokenValidity = _currentVId(_owners[tokenId]);
-        if (_tokenValidity != ROYALTIES) {
-            revert IncorrectTokenValidity(ROYALTIES, _tokenValidity);
-        }
-        uint256 _tokenData = _uTokenData[tokenId];
-        if (_viewPackedData(_tokenData, UPOS_ROYALTIES_DUE, USZ_ROYALTIES_DUE) == amount) {
-            revert RoyaltiesAlreadySet();
-        }
-        _uTokenData[tokenId] = _setTokenParam(
-            _tokenData,
-            UPOS_ROYALTIES_DUE,
-            amount,
-            MASK_ROYALTIES_DUE
-        );
-    }
-
-    /**
-     * @dev Allows the contract owner to set royalties 
-     * on a per token basis, within limits.
-     * Note: set _receiver address to the null address 
-     * to ignore it and use the already default set royalty address.
-     * Note: Updating the receiver the first time is nearly as
-     * expensive as updating both together the first time.
-     */
-    function setTokenRoyalty(uint256 tokenId, uint256 royalty, address receiver)
-    external
-    onlyRole(DEFAULT_ADMIN_ROLE)
-    requireMinted(tokenId)
-    notDead(tokenId) {
-        if (royalty > 999) {
-            revert RoyaltyTooHigh();
-        }
-        _setTokenRoyalty(tokenId, receiver, royalty);
-    }
-
-    //>>>>>>> CUSTOM ERC2981 END
-
     /**
      * @dev Fail-safe function that can unlock an active token.
      * This is for any edge cases that may have been missed 
@@ -608,12 +517,21 @@ contract C9Token is ERC721IdEnumBasic {
      * possible to unlock, though they may be transferred to the 
      * contract owner where they may only be burned.
      */
-    function adminUnlock(uint256 _tokenId)
+    function adminUnlock(uint256 tokenId)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
-        requireMinted(_tokenId)
-        notDead(_tokenId) {
-            _unlockToken(_tokenId);
+        requireMinted(tokenId)
+        notDead(tokenId) {
+            _unlockToken(tokenId);
+    }
+
+    /**
+      Temp function testing only.
+      */
+    function baseURIArray(uint256 index)
+        external view
+        returns (string memory) {
+            return _baseURIArray[index];
     }
 
     /**
@@ -635,7 +553,7 @@ contract C9Token is ERC721IdEnumBasic {
             // 2. Check the token has been dead for at least burnableDs
             uint256 _validityStamp = uint256(uint40(_tokenData>>MPOS_VALIDITYSTAMP));
             uint256 _ds = block.timestamp - _validityStamp;
-            if (_ds < burnableDs) {
+            if (_ds < _burnableDs) {
                 revert C9TokenNotBurnable(tokenId, validity);
             }
             
@@ -757,15 +675,15 @@ contract C9Token is ERC721IdEnumBasic {
         uint256 balances = _balances[_msgSender()];
         balances = _setTokenParam(
             balances,
-            0,
+            APOS_BALANCE,
             minterBalance,
-            type(uint64).max
+            type(uint16).max
         );
         balances = _setTokenParam(
             balances,
-            64,
+            APOS_VOTES,
             minterVotes,
-            type(uint64).max
+            type(uint24).max
         );
          _balances[_msgSender()] = balances;
     }
@@ -839,17 +757,7 @@ contract C9Token is ERC721IdEnumBasic {
             }
         }
         // Update the redeemer's redemption count
-        address tokenOwner = ownerOf(_tokenId);
-        uint256 ownerData = _balances[tokenOwner];
-        uint256 ownerRedemptions = uint256(uint128(ownerData>>64));
-        unchecked {ownerRedemptions += _batchSize;}
-        ownerData = _setTokenParam(
-            ownerData,
-            64,
-            ownerRedemptions,
-            type(uint64).max
-        );
-        _balances[tokenOwner] = ownerData;
+        _addRedemptions(ownerOf(_tokenId), _batchSize);
     }
 
     /**
@@ -886,7 +794,45 @@ contract C9Token is ERC721IdEnumBasic {
         address tokenOwner = _ownerOf(tokenIds[0]);
         IC9Redeemer(contractRedeemer).start(tokenOwner, tokenIds);
     }
+
     //>>>>>>> REDEEMER FUNCTIONS END
+
+    /**
+     * @dev Resets royalty information for the token id back to the 
+     * global defaults.
+     */
+    function resetTokenRoyalty(uint256 tokenId)
+    onlyRole(DEFAULT_ADMIN_ROLE)
+    requireMinted(tokenId)
+    notDead(tokenId)
+    external {
+        _setTokenRoyalty(tokenId, _royaltyReceiver, _royalty);
+    }
+
+    /**
+     * @dev Custom EIP-2981. First this checks to see if the 
+     * token has a royalty receiver and fraction assigned to it.
+     * If not then it defaults to the contract wide values.
+     */
+    function royaltyInfo(uint256 tokenId, uint256 salePrice)
+    public view
+    override
+    returns (address, uint256) {
+        address receiver = _rTokenData[tokenId];
+        if (receiver == address(0)) {
+            receiver = _royaltyReceiver;
+        }
+        uint256 _fraction = _royalty;
+        if (_exists(tokenId)) {
+            _fraction = _viewPackedData(
+                _uTokenData[tokenId],
+                UPOS_ROYALTY,
+                USZ_ROYALTY
+            );
+        }
+        uint256 royaltyAmount = (salePrice * _fraction) / 10000;
+        return (receiver, royaltyAmount);
+    }
 
     //>>>>>>> SETTER FUNCTIONS START
 
@@ -899,7 +845,7 @@ contract C9Token is ERC721IdEnumBasic {
     function setBaseUri(string calldata _newBaseURI, uint256 _idx)
     external
     onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (Helpers.stringEqual(_baseURI[_idx], _newBaseURI)) {
+        if (Helpers.stringEqual(_baseURIArray[_idx], _newBaseURI)) {
             revert URIAlreadySet();
         }
         bytes calldata _bBaseURI = bytes(_newBaseURI);
@@ -907,7 +853,7 @@ contract C9Token is ERC721IdEnumBasic {
         if (bytes1(_bBaseURI[len-1]) != 0x2f) {
             revert URIMissingEndSlash();
         }
-        _baseURI[_idx] = _newBaseURI;
+        _baseURIArray[_idx] = _newBaseURI;
     }
 
     /**
@@ -920,10 +866,10 @@ contract C9Token is ERC721IdEnumBasic {
         if (period > MAX_PERIOD) {
             revert PeriodTooLong(MAX_PERIOD, period);
         }
-        if (burnableDs == period) {
+        if (_burnableDs == period) {
             revert ValueAlreadySet();
         }
-        burnableDs = period;
+        _burnableDs = period;
     }
 
     /**
@@ -1008,6 +954,37 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
+     * @dev Set royalties due if token validity status 
+     * is ROYALTIES. This is admin role instead of VALIDITY_ROLE 
+     * to reduce gas costs from using a proxy contract.
+     * VALIDITY_ROLE will still need to set 
+     * validity status ROYALTIES beforehand.
+     */
+    function setRoyaltiesDue(uint256 tokenId, uint256 amount)
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE)
+    requireMinted(tokenId)
+    notDead(tokenId) {
+        if (amount == 0) {
+            revert ZeroValueError();
+        }
+        uint256 _tokenValidity = _currentVId(_owners[tokenId]);
+        if (_tokenValidity != ROYALTIES) {
+            revert IncorrectTokenValidity(ROYALTIES, _tokenValidity);
+        }
+        uint256 _tokenData = _uTokenData[tokenId];
+        if (_viewPackedData(_tokenData, UPOS_ROYALTIES_DUE, USZ_ROYALTIES_DUE) == amount) {
+            revert RoyaltiesAlreadySet();
+        }
+        _uTokenData[tokenId] = _setTokenParam(
+            _tokenData,
+            UPOS_ROYALTIES_DUE,
+            amount,
+            MASK_ROYALTIES_DUE
+        );
+    }
+
+    /**
      * @dev Allows holder toggle display flag.
      * Flag must be set to true for upgraded / external 
      * view to show. Metadata needs to be refershed 
@@ -1033,6 +1010,25 @@ contract C9Token is ERC721IdEnumBasic {
             BOOL_MASK
         );
         emit MetadataUpdate(tokenId);
+    }
+
+    /**
+     * @dev Allows the contract owner to set royalties 
+     * on a per token basis, within limits.
+     * Note: set _receiver address to the null address 
+     * to ignore it and use the already default set royalty address.
+     * Note: Updating the receiver the first time is nearly as
+     * expensive as updating both together the first time.
+     */
+    function setTokenRoyalty(uint256 tokenId, uint256 royalty, address receiver)
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE)
+    requireMinted(tokenId)
+    notDead(tokenId) {
+        if (royalty > 999) {
+            revert RoyaltyTooHigh();
+        }
+        _setTokenRoyalty(tokenId, receiver, royalty);
     }
 
     /**
@@ -1127,10 +1123,10 @@ contract C9Token is ERC721IdEnumBasic {
     function toggleSvgOnly(bool toggle)
     external
     onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (svgOnly == toggle) {
+        if (_svgOnly == toggle) {
             revert BoolAlreadySet();
         }
-        svgOnly = toggle;
+        _svgOnly = toggle;
     }
 
     /**
@@ -1151,7 +1147,7 @@ contract C9Token is ERC721IdEnumBasic {
         uint256 _tokenData = _owners[_tokenId];
         bool _externalView = (_tokenData>>MPOS_DISPLAY & BOOL_MASK) == EXTERNAL_IMG;
         bytes memory image;
-        if (svgOnly || !_externalView) {
+        if (_svgOnly || !_externalView) {
             // Onchain SVG
             image = abi.encodePacked(
                 ',"image":"data:image/svg+xml;base64,',
@@ -1163,7 +1159,7 @@ contract C9Token is ERC721IdEnumBasic {
             uint256 _viewIdx = _currentVId(_tokenData) >= REDEEMED ? URI1 : URI0;
             image = abi.encodePacked(
                 ',"image":"',
-                _baseURI[_viewIdx],
+                _baseURIArray[_viewIdx],
                 Helpers.tokenIdToBytes(_tokenId),
                 '.png'
             );
