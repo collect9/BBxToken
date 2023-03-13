@@ -159,6 +159,24 @@ contract C9Token is ERC721IdEnumBasic {
         super._beforeTokenTransfer(from, to, tokenId, batchSize);
     }
 
+    /**
+     * @dev To ensure the token still exists, instead of 
+     * delete burning, we are sending to the zero address.
+     * The token is no longer recoverable at this point.
+     */
+    function _burn(uint256 tokenId)
+    internal
+    override {
+        emit Transfer(_ownerOf(tokenId), address(0), tokenId);
+        delete _tokenApprovals[tokenId];
+        _owners[tokenId] = _setTokenParam(
+            _owners[tokenId],
+            0,
+            uint256(0),
+            type(uint160).max
+        );
+    }
+
     /*
      * @dev Since validity is looked up in many places, we have a 
      * private function for it.
@@ -169,7 +187,261 @@ contract C9Token is ERC721IdEnumBasic {
         return _viewPackedData(tokenData, MPOS_VALIDITY, MSZ_VALIDITY);
     }
 
-    //>>>>>>> CUSTOM ERC2981 START
+    /**
+     * @dev Returns a unique hash depending on certain token `_input` attributes. 
+     * This helps keep track the `_edition` number of a particular set of attributes. 
+     * Note that if the token is burned, the edition cannot be replaced but 
+     * instead will keep incrementing.
+     */
+    function _getPhysicalHashFromTokenData(TokenData calldata input, uint256 edition)
+    private pure
+    returns (bytes32) {
+        bytes calldata _bData = bytes(input.sData);
+        uint256 _splitIndex;
+        for (_splitIndex; _splitIndex<32;) {
+            if (_bData[_splitIndex] == 0x3d) {
+                break;
+            }
+            unchecked {++_splitIndex;}
+        }
+        return _physicalHash(edition,
+            input.cntrytag, input.cntrytush, input.gentag,
+            input.gentush, input.markertush, input.special,
+            input.sData[:_splitIndex]
+        );
+    }
+
+    /**
+     * @dev Returns a unique hash depending on certain token `_input` attributes. 
+     * This helps keep track the `_edition` number of a particular set of attributes. 
+     * Note that if the token is burned, the edition cannot be replaced but 
+     * instead will keep incrementing.
+     */
+    function _physicalHash(
+        uint256 edition, uint256 cntrytag, uint256 cntrytush,
+        uint256 gentag, uint256 gentush, uint256 markertush, 
+        uint256 special, string calldata name
+    )
+    private pure
+    returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(edition, cntrytag, cntrytush,
+                gentag, gentush, markertush, special, name
+            )
+        );
+    }
+
+    /*
+     * @dev A lot of code has been repeated (inlined) here to minimize 
+     * storage reads to reduce gas cost.
+     */
+    function _redeemLockTokens(uint256[] calldata _tokenIds)
+    private {
+        uint256 _batchSize = _tokenIds.length;
+        address _tokenOwner;
+        uint256 _tokenId;
+        uint256 _tokenData;
+        for (uint256 i; i<_batchSize;) {
+            _tokenId = _tokenIds[i];
+            // 1. Check token exists and get owner
+            _tokenOwner = ownerOf(_tokenId);
+            // 2. Check caller is owner or approved to redeem
+            if (_msgSender() != _tokenOwner) {
+                if (!isApprovedForAll(_tokenOwner, _msgSender())) {
+                    revert CallerNotOwnerOrApproved(_tokenId, _tokenOwner, _msgSender());
+                }
+            }
+            // 3. Check token is redeemable
+            if (preRedeemable(_tokenId)) {
+                revert TokenPreRedeemable(_tokenId);
+            }
+            // 4. Check the token validity status
+            _tokenData = _owners[_tokenId];
+            uint256 _validity = _currentVId(_tokenData);
+            if (_validity != VALID) {
+                if (_validity == INACTIVE) {
+                    /* Inactive tokens can still be redeemed and 
+                    will be changed to valid as user activity 
+                    will automatically fix this status. */
+                    _tokenData = _setDataValidity(_tokenData, VALID);
+                }
+                else {
+                    revert IncorrectTokenValidity(VALID, _validity);
+                }
+            }
+            // 5. If valid but locked, token is already in redeemer
+            if ((_tokenData >> MPOS_LOCKED & BOOL_MASK) == LOCKED) {
+                revert TokenIsLocked(_tokenId);
+            }
+            // 6. All checks pass, so lock the token
+            _tokenData = _setTokenParam(
+                _tokenData,
+                MPOS_LOCKED,
+                LOCKED,
+                BOOL_MASK
+            );
+            // 7. Save token data back to storage.
+            _owners[_tokenId] = _tokenData;
+            unchecked {++i;}
+        }
+    }
+
+    /**
+     * @dev Updates the token's data validity status.
+     */
+    function _setDataValidity(uint256 tokenData, uint256 vId)
+    private view
+    returns (uint256) {
+         tokenData = _setTokenParam(
+            tokenData,
+            MPOS_VALIDITY,
+            vId,
+            MASK_VALIDITY
+        );
+        tokenData = _setTokenParam(
+            tokenData,
+            MPOS_VALIDITYSTAMP,
+            block.timestamp,
+            type(uint40).max
+        );
+        return tokenData;
+    }
+
+    /**
+     * @dev Minting function. This checks and sets the `_edition` based on 
+     * the `TokenData` input attributes, sets the `__mintId` based on 
+     * the `_edition`, sets the royalty, and then stores all of the 
+     * attributes required to construct the SVG in the tightly packed 
+     * `TokenData` structure.
+     */
+    function _setTokenData(TokenData[] calldata input)
+    private
+    returns (uint256 votes) {
+        uint256 timestamp = block.timestamp;
+        uint256 batchSize = input.length;
+        TokenData calldata _input;
+
+        bytes32 _data;
+        uint256 edition;
+        uint256 editionMintId;
+        uint256 tokenId;
+        uint256 globalMintId = totalSupply();
+        address to = _msgSender();
+        uint256 _to = uint256(uint160(to));
+
+        for (uint256 i; i<batchSize;) {
+            _input = input[i];
+
+            // Get physical edition id
+            edition = _input.edition;
+            if (edition == 0) {
+                for (edition; edition<98;) {
+                    unchecked {
+                        ++edition;
+                        _data = _getPhysicalHashFromTokenData(_input, edition);
+                    }
+                    if (!_tokenComboExists[_data]) {
+                        // Store token attribute combo
+                        _tokenComboExists[_data] = true;
+                        break;
+                    }
+                }
+            }
+
+            // Get the edition mint id
+            unchecked {editionMintId = _mintId[edition]+1;}
+            if (_input.mintid != 0) {
+                editionMintId = _input.mintid;
+            }
+            else {
+                _mintId[edition] = uint16(editionMintId);
+            }
+
+            // Checks
+            tokenId = _input.tokenid;
+            if (tokenId == 0) {
+                revert ZeroTokenId();
+            }
+            if (_exists(tokenId)) {
+                revert TokenAlreadyMinted(tokenId);
+            }
+            if (edition == 0) {
+                revert ZeroEdition();
+            }
+            if (edition > 98) {
+                revert EditionOverflow(edition);
+            }
+            if (editionMintId == 0) {
+                revert ZeroMintId();
+            }
+
+            // Add to all tokens list
+            _allTokens.push(uint24(tokenId));
+
+            /* None of the values are big enough to overflow into the 
+            next packed storage space, so the |= operation is fine when 
+            done sequentially. */
+
+            // _owners eXtended storage
+            uint256 packedToken = _to;
+            packedToken |= timestamp<<MPOS_VALIDITYSTAMP;
+            packedToken |= _input.validity<<MPOS_VALIDITY;
+            packedToken |= _input.upgraded<<MPOS_UPGRADED;
+            packedToken |= _input.display<<MPOS_DISPLAY;
+            packedToken |= _input.locked<<MPOS_LOCKED;
+            packedToken |= _input.insurance<<MPOS_INSURANCE;
+            packedToken |= _input.votes<<MPOS_VOTES;
+            _owners[tokenId] = packedToken; // Officially minted
+
+            // Additional storage in _uTokenData
+            unchecked {++globalMintId;}
+            packedToken = globalMintId;
+            packedToken |= timestamp<<UPOS_MINTSTAMP;
+            packedToken |= edition<<UPOS_EDITION;
+            packedToken |= editionMintId<<UPOS_EDITION_MINT_ID;
+            packedToken |= _input.cntrytag<<UPOS_CNTRYTAG;
+            packedToken |= _input.cntrytush<<UPOS_CNTRYTUSH;
+            packedToken |= _input.gentag<<UPOS_GENTAG;
+            packedToken |= _input.gentush<<UPOS_GENTUSH;
+            packedToken |= _input.markertush<<UPOS_MARKERTUSH;
+            packedToken |= _input.special<<UPOS_SPECIAL;
+            packedToken |= _input.raritytier<<UPOS_RARITYTIER;
+            packedToken |= _input.royalty<<UPOS_ROYALTY;
+            packedToken |= _input.royaltiesdue<<UPOS_ROYALTIES_DUE;
+            _uTokenData[tokenId] = packedToken;
+
+            // Store token string data for SVG
+            _sTokenData[tokenId] = _input.sData;
+
+            //emit Transfer(address(0), to, tokenId);
+
+            unchecked {
+                ++i;
+                votes += _input.votes;
+            }
+        }
+        return votes;
+    }
+
+    /**
+     * @dev Updates the token validity status.
+     */
+    function _setTokenValidity(uint256 tokenId, uint256 vId)
+    private {
+        uint256 _tokenData = _owners[tokenId];
+        _tokenData = _setDataValidity(_tokenData, vId);
+        // Lock if changing to a dead status (forever lock)
+        if (vId >= REDEEMED) {
+            _tokenData = _setTokenParam(
+                _tokenData,
+                MPOS_LOCKED,
+                LOCKED,
+                BOOL_MASK
+            );
+        }
+        _owners[tokenId] = _tokenData;
+        emit MetadataUpdate(tokenId);
+    }
 
     /*
      * @dev Since royalty info is already stored in the uTokenData,
@@ -205,6 +477,40 @@ contract C9Token is ERC721IdEnumBasic {
             );
         }
     }
+
+    /**
+     * @dev Allows the compressed data that is used to display the 
+     * micro QR code on the SVG to be updated.
+     */
+    function _setTokenSData(uint256 tokenId, string calldata sData)
+    private
+    requireMinted(tokenId)
+    notDead(tokenId) {
+        _sTokenData[tokenId] = sData;
+    }
+
+    /**
+     * @dev Unlocks the token. The Redeem cancel functions 
+     * call this to unlock the token.
+     * Modifiers are placed here as it makes it simpler
+     * to enforce their conditions.
+     */
+    function _unlockToken(uint256 _tokenId)
+    private {
+        uint256 _tokenData = _owners[_tokenId];
+        if ((_tokenData>>MPOS_LOCKED & BOOL_MASK) == UNLOCKED) {
+            revert TokenNotLocked(_tokenId);
+        }
+        _tokenData = _setTokenParam(
+            _tokenData,
+            MPOS_LOCKED,
+            UNLOCKED,
+            BOOL_MASK
+        );
+        _owners[_tokenId] = _tokenData;
+    }
+
+    //>>>>>>> CUSTOM ERC2981 START
 
     /**
      * @dev Resets royalty information for the token id back to the 
@@ -296,261 +602,6 @@ contract C9Token is ERC721IdEnumBasic {
     //>>>>>>> CUSTOM ERC2981 END
 
     /**
-     * @dev Returns a unique hash depending on certain token `_input` attributes. 
-     * This helps keep track the `_edition` number of a particular set of attributes. 
-     * Note that if the token is burned, the edition cannot be replaced but 
-     * instead will keep incrementing.
-     */
-    function _physicalHashDescriptor(
-        uint256 edition, uint256 cntrytag, uint256 cntrytush,
-        uint256 gentag, uint256 gentush, uint256 markertush, 
-        uint256 special, string calldata name
-    )
-    private pure
-    returns (bytes32) {
-        return keccak256(
-            abi.encodePacked(
-                edition,
-                cntrytag,
-                cntrytush,
-                gentag,
-                gentush,
-                markertush,
-                special,
-                name
-            )
-        );
-    }
-
-    function _getPhysicalHash(TokenData calldata input, uint256 edition)
-    private pure
-    returns (bytes32) {
-        bytes calldata _bData = bytes(input.sData);
-        uint256 _splitIndex;
-        for (_splitIndex; _splitIndex<32;) {
-            if (_bData[_splitIndex] == 0x3d) {
-                break;
-            }
-            unchecked {++_splitIndex;}
-        }
-        return _physicalHashDescriptor(
-            edition,
-            input.cntrytag,
-            input.cntrytush,
-            input.gentag,
-            input.gentush,
-            input.markertush,
-            input.special,
-            input.sData[:_splitIndex]
-        );
-    }
-
-    /**
-     * @dev Minting function. This checks and sets the `_edition` based on 
-     * the `TokenData` input attributes, sets the `__mintId` based on 
-     * the `_edition`, sets the royalty, and then stores all of the 
-     * attributes required to construct the SVG in the tightly packed 
-     * `TokenData` structure.
-     */
-    function _setTokenData(TokenData[] calldata input)
-    private
-    returns (uint256 votes) {
-        uint256 timestamp = block.timestamp;
-        uint256 batchSize = input.length;
-        TokenData calldata _input;
-
-        bytes32 _data;
-        uint256 edition;
-        uint256 editionMintId;
-        uint256 tokenId;
-        uint256 globalMintId = totalSupply();
-        address to = _msgSender();
-        uint256 _to = uint256(uint160(to));
-
-        for (uint256 i; i<batchSize;) {
-            _input = input[i];
-
-            // Get physical edition id
-            edition = _input.edition;
-            if (edition == 0) {
-                for (edition; edition<98;) {
-                    unchecked {
-                        ++edition;
-                        _data = _getPhysicalHash(_input, edition);
-                    }
-                    if (!_tokenComboExists[_data]) {
-                        // Store token attribute combo
-                        _tokenComboExists[_data] = true;
-                        break;
-                    }
-                }
-            }
-
-            // Get the edition mint id
-            unchecked {editionMintId = _mintId[edition]+1;}
-            if (_input.mintid != 0) {
-                editionMintId = _input.mintid;
-            }
-            else {
-                _mintId[edition] = uint16(editionMintId);
-            }
-
-            // Checks
-            tokenId = _input.tokenid;
-            if (tokenId == 0) {
-                revert ZeroTokenId();
-            }
-            if (_exists(tokenId)) {
-                revert TokenAlreadyMinted(tokenId);
-            }
-            if (edition == 0) {
-                revert ZeroEdition();
-            }
-            if (edition > 98) {
-                revert EditionOverflow(edition);
-            }
-            if (editionMintId == 0) {
-                revert ZeroMintId();
-            }
-
-            // Add to all tokens list
-            _allTokens.push(uint24(tokenId));
-
-            /* None of the values are big enough to overflow into the 
-            next packed storage space, so the |= operation is fine when 
-            done sequentially. */
-
-            // _owners eXtended storage
-            uint256 packedToken = _to;
-            packedToken |= timestamp<<MPOS_VALIDITYSTAMP;
-            packedToken |= _input.validity<<MPOS_VALIDITY;
-            packedToken |= _input.upgraded<<MPOS_UPGRADED;
-            packedToken |= _input.display<<MPOS_DISPLAY;
-            packedToken |= _input.locked<<MPOS_LOCKED;
-            packedToken |= _input.insurance<<MPOS_INSURANCE;
-            packedToken |= _input.votes<<MPOS_VOTES;
-            _owners[tokenId] = packedToken; // Officially minted
-
-            // Additional storage in _uTokenData
-            unchecked {++globalMintId;}
-            packedToken = globalMintId;
-            packedToken |= timestamp<<UPOS_MINTSTAMP;
-            packedToken |= edition<<UPOS_EDITION;
-            packedToken |= editionMintId<<UPOS_EDITION_MINT_ID;
-            packedToken |= _input.cntrytag<<UPOS_CNTRYTAG;
-            packedToken |= _input.cntrytush<<UPOS_CNTRYTUSH;
-            packedToken |= _input.gentag<<UPOS_GENTAG;
-            packedToken |= _input.gentush<<UPOS_GENTUSH;
-            packedToken |= _input.markertush<<UPOS_MARKERTUSH;
-            packedToken |= _input.special<<UPOS_SPECIAL;
-            packedToken |= _input.raritytier<<UPOS_RARITYTIER;
-            packedToken |= _input.royalty<<UPOS_ROYALTY;
-            packedToken |= _input.royaltiesdue<<UPOS_ROYALTIES_DUE;
-            _uTokenData[tokenId] = packedToken;
-
-            // Store token string data for SVG
-            _sTokenData[tokenId] = _input.sData;
-
-            //emit Transfer(address(0), to, tokenId);
-
-            unchecked {
-                ++i;
-                votes += _input.votes;
-            }
-        }
-        return votes;
-    }
-
-    function mint(TokenData[] calldata input)
-    external
-    onlyRole(DEFAULT_ADMIN_ROLE) {
-        uint256 votes = _setTokenData(input);
-
-        // Update minter balance
-        (uint256 minterBalance, uint256 minterVotes,,) = ownerDataOf(_msgSender());
-        unchecked {
-            minterBalance += input.length;
-            minterVotes += votes;
-        }
-        uint256 balances = _balances[_msgSender()];
-        balances = _setTokenParam(
-            balances,
-            0,
-            minterBalance,
-            type(uint64).max
-        );
-        balances = _setTokenParam(
-            balances,
-            64,
-            minterVotes,
-            type(uint64).max
-        );
-         _balances[_msgSender()] = balances;
-    }
-
-    /**
-     * @dev Updates the token's data validity status.
-     */
-    function _setDataValidity(uint256 tokenData, uint256 vId)
-    private view
-    returns (uint256) {
-         tokenData = _setTokenParam(
-            tokenData,
-            MPOS_VALIDITY,
-            vId,
-            MASK_VALIDITY
-        );
-        tokenData = _setTokenParam(
-            tokenData,
-            MPOS_VALIDITYSTAMP,
-            block.timestamp,
-            type(uint40).max
-        );
-        return tokenData;
-    }
-
-    /**
-     * @dev Updates the token validity status.
-     */
-    function _setTokenValidity(uint256 tokenId, uint256 vId)
-    private {
-        uint256 _tokenData = _owners[tokenId];
-        _tokenData = _setDataValidity(_tokenData, vId);
-        // Lock if changing to a dead status (forever lock)
-        if (vId >= REDEEMED) {
-            _tokenData = _setTokenParam(
-                _tokenData,
-                MPOS_LOCKED,
-                LOCKED,
-                BOOL_MASK
-            );
-        }
-        _owners[tokenId] = _tokenData;
-        emit MetadataUpdate(tokenId);
-    }
-
-    /**
-     * @dev Unlocks the token. The Redeem cancel functions 
-     * call this to unlock the token.
-     * Modifiers are placed here as it makes it simpler
-     * to enforce their conditions.
-     */
-    function _unlockToken(uint256 _tokenId)
-    private {
-        uint256 _tokenData = _owners[_tokenId];
-        if ((_tokenData>>MPOS_LOCKED & BOOL_MASK) == UNLOCKED) {
-            revert TokenNotLocked(_tokenId);
-        }
-        _tokenData = _setTokenParam(
-            _tokenData,
-            MPOS_LOCKED,
-            UNLOCKED,
-            BOOL_MASK
-        );
-        _owners[_tokenId] = _tokenData;
-    }
-
-    /**
      * @dev Fail-safe function that can unlock an active token.
      * This is for any edge cases that may have been missed 
      * during redeemer testing. Dead tokens are still not 
@@ -563,24 +614,6 @@ contract C9Token is ERC721IdEnumBasic {
         requireMinted(_tokenId)
         notDead(_tokenId) {
             _unlockToken(_tokenId);
-    }
-
-    /**
-     * @dev To ensure the token still exists, instead of 
-     * delete burning, we are sending to the zero address.
-     * The token is no longer recoverable at this point.
-     */
-    function _burn(uint256 tokenId)
-    internal
-    override {
-        emit Transfer(_ownerOf(tokenId), address(0), tokenId);
-        delete _tokenApprovals[tokenId];
-        _owners[tokenId] = _setTokenParam(
-            _owners[tokenId],
-            0,
-            uint256(0),
-            type(uint160).max
-        );
     }
 
     /**
@@ -640,14 +673,9 @@ contract C9Token is ERC721IdEnumBasic {
     )
     external view
     returns (bool) {
-        bytes32 _data = _physicalHashDescriptor(
-            1,
-            cntrytag,
-            cntrytush,
-            gentag,
-            gentush,
-            markertush,
-            special,
+        bytes32 _data = _physicalHash(1,
+            cntrytag, cntrytush, gentag,
+            gentush, markertush, special,
             name
         );
         return _tokenComboExists[_data];
@@ -713,62 +741,36 @@ contract C9Token is ERC721IdEnumBasic {
         xParams[20] = _viewPackedData(data, UPOS_ROYALTIES_DUE, USZ_ROYALTIES_DUE);
     }
 
-    //>>>>>>> REDEEMER FUNCTIONS START
-
-    /*
-     * @dev A lot of code has been repeated (inlined) here to minimize 
-     * storage reads to reduce gas cost.
+    /* @dev Batch minting function.
      */
-    function _redeemLockTokens(uint256[] calldata _tokenIds)
-    private {
-        uint256 _batchSize = _tokenIds.length;
-        address _tokenOwner;
-        uint256 _tokenId;
-        uint256 _tokenData;
-        for (uint256 i; i<_batchSize;) {
-            _tokenId = _tokenIds[i];
-            // 1. Check token exists and get owner
-            _tokenOwner = ownerOf(_tokenId);
-            // 2. Check caller is owner or approved to redeem
-            if (_msgSender() != _tokenOwner) {
-                if (!isApprovedForAll(_tokenOwner, _msgSender())) {
-                    revert CallerNotOwnerOrApproved(_tokenId, _tokenOwner, _msgSender());
-                }
-            }
-            // 3. Check token is redeemable
-            if (preRedeemable(_tokenId)) {
-                revert TokenPreRedeemable(_tokenId);
-            }
-            // 4. Check the token validity status
-            _tokenData = _owners[_tokenId];
-            uint256 _validity = _currentVId(_tokenData);
-            if (_validity != VALID) {
-                if (_validity == INACTIVE) {
-                    /* Inactive tokens can still be redeemed and 
-                    will be changed to valid as user activity 
-                    will automatically fix this status. */
-                    _tokenData = _setDataValidity(_tokenData, VALID);
-                }
-                else {
-                    revert IncorrectTokenValidity(VALID, _validity);
-                }
-            }
-            // 5. If valid but locked, token is already in redeemer
-            if ((_tokenData >> MPOS_LOCKED & BOOL_MASK) == LOCKED) {
-                revert TokenIsLocked(_tokenId);
-            }
-            // 6. All checks pass, so lock the token
-            _tokenData = _setTokenParam(
-                _tokenData,
-                MPOS_LOCKED,
-                LOCKED,
-                BOOL_MASK
-            );
-            // 7. Save token data back to storage.
-            _owners[_tokenId] = _tokenData;
-            unchecked {++i;}
+    function mint(TokenData[] calldata input)
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE) {
+        uint256 votes = _setTokenData(input);
+
+        // Update minter balance
+        (uint256 minterBalance, uint256 minterVotes,,) = ownerDataOf(_msgSender());
+        unchecked {
+            minterBalance += input.length;
+            minterVotes += votes;
         }
+        uint256 balances = _balances[_msgSender()];
+        balances = _setTokenParam(
+            balances,
+            0,
+            minterBalance,
+            type(uint64).max
+        );
+        balances = _setTokenParam(
+            balances,
+            64,
+            minterVotes,
+            type(uint64).max
+        );
+         _balances[_msgSender()] = balances;
     }
+
+    //>>>>>>> REDEEMER FUNCTIONS START
 
     /**
      * @dev Returns whether or not the token pre-release period 
@@ -884,39 +886,6 @@ contract C9Token is ERC721IdEnumBasic {
         address tokenOwner = _ownerOf(tokenIds[0]);
         IC9Redeemer(contractRedeemer).start(tokenOwner, tokenIds);
     }
-
-    /**
-     * @dev Gets or sets the global token redeemable period.
-     * Limit hardcoded.
-     */
-    function setBurnablePeriod(uint256 period)
-    external
-    onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (period > MAX_PERIOD) {
-            revert PeriodTooLong(MAX_PERIOD, period);
-        }
-        if (burnableDs == period) {
-            revert ValueAlreadySet();
-        }
-        burnableDs = period;
-    }
-
-    /**
-     * @dev Gets or sets the global token redeemable period.
-     * Limit hardcoded.
-     */
-    function setPreRedeemPeriod(uint256 period)
-    external
-    onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (period > MAX_PERIOD) {
-            revert PeriodTooLong(MAX_PERIOD, period);
-        }
-        if (_preRedeemablePeriod == period) {
-            revert ValueAlreadySet();
-        }
-        _preRedeemablePeriod = period;
-    }
-
     //>>>>>>> REDEEMER FUNCTIONS END
 
     //>>>>>>> SETTER FUNCTIONS START
@@ -939,6 +908,22 @@ contract C9Token is ERC721IdEnumBasic {
             revert URIMissingEndSlash();
         }
         _baseURI[_idx] = _newBaseURI;
+    }
+
+    /**
+     * @dev Gets or sets the global token redeemable period.
+     * Limit hardcoded.
+     */
+    function setBurnablePeriod(uint256 period)
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (period > MAX_PERIOD) {
+            revert PeriodTooLong(MAX_PERIOD, period);
+        }
+        if (burnableDs == period) {
+            revert ValueAlreadySet();
+        }
+        burnableDs = period;
     }
 
     /**
@@ -1007,6 +992,22 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
+     * @dev Gets or sets the global token redeemable period.
+     * Limit hardcoded.
+     */
+    function setPreRedeemPeriod(uint256 period)
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (period > MAX_PERIOD) {
+            revert PeriodTooLong(MAX_PERIOD, period);
+        }
+        if (_preRedeemablePeriod == period) {
+            revert ValueAlreadySet();
+        }
+        _preRedeemablePeriod = period;
+    }
+
+    /**
      * @dev Allows holder toggle display flag.
      * Flag must be set to true for upgraded / external 
      * view to show. Metadata needs to be refershed 
@@ -1038,13 +1039,6 @@ contract C9Token is ERC721IdEnumBasic {
      * @dev Allows the compressed data that is used to display the 
      * micro QR code on the SVG to be updated.
      */
-    function _setTokenSData(uint256 tokenId, string calldata sData)
-    private
-    requireMinted(tokenId)
-    notDead(tokenId) {
-        _sTokenData[tokenId] = sData;
-    }
-
     function setTokenSData(TokenSData[] calldata sData)
     external 
     onlyRole(UPDATER_ROLE) {

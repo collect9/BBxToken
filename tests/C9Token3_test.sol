@@ -394,5 +394,7 @@ contract testSuite is C9Struct {
         uint256 royaltiesDueSet = c9t.getTokenParams(tokenId)[20];
         Assert.equal(royaltiesDueSet, royaltiesDue, "Invalid royalties due");
     }
+
+    /* @dev 12. Testing some additional setters.
+     */ 
 }
-    
