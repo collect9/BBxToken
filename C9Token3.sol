@@ -1197,7 +1197,7 @@ contract C9Token is ERC721IdEnumBasic {
      * later. Such features will only be available to 
      * external contracts, as this contract will have no
      * built-in parsing.
-     * 112 bits remain in the reserved storage space.
+     * 120 bits remain in the reserved storage space.
      */
     function _setReserved(uint256 tokenId, uint256 data)
     private

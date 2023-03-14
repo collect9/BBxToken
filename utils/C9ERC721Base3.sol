@@ -17,8 +17,6 @@ import "./../C9OwnerControl.sol";
 import "./../abstract/C9Errors.sol";
 import "./../abstract/C9Struct4.sol";
 
-uint256 constant MAX_TRANSFER_BATCH_SIZE = 128;
-
 /**
  * @dev Implementation of https://eips.ethereum.org/EIPS/eip-721[ERC721] Non-Fungible Token Standard, including
  * the Metadata extension, but not including the Enumerable extension, which is available separately as
@@ -129,12 +127,12 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     internal virtual {
         // Copy from storage first
         uint256 balancesFrom = _balances[from];
-        uint256 balancesTo = _balances[to];
-
         // Check that the from account did not have an active lock
-        if (uint256(uint8(balancesFrom>>APOS_LOCKED)) == 1) {
+        if (uint256(uint8(balancesFrom>>APOS_LOCKED)) == LOCKED) {
             revert AddressLocked(from);
         }
+        // Copy from storage first
+        uint256 balancesTo = _balances[to];
 
         // Parameters to update, token owners balances and transfer counts
         uint256 balanceFrom = uint256(uint16(balancesFrom));
@@ -518,10 +516,10 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
         _beforeTokenTransfer(from, to, tokenId, 1);
         // Set new owner
         uint256 votes = __transfer(uint256(uint160(to)), tokenId);
-        // Emit event
-        emit Transfer(from, to, tokenId);
         // Update balances
         _afterTokenTransfer(from, to, 0, 1, votes);
+        // Emit event
+        emit Transfer(from, to, tokenId);
     }
 
     /**
@@ -570,9 +568,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     function approve(address[] calldata to, uint256[][] calldata tokenIds)
     external virtual {
         uint256 _batchSize = tokenIds.length;
-        if (_batchSize > MAX_TRANSFER_BATCH_SIZE) {
-            revert BatchSizeTooLarge(MAX_TRANSFER_BATCH_SIZE, _batchSize);
-        }
         uint256 _addressBookSize = to.length;
         if (_addressBookSize != _batchSize) {
             revert TransferSizeMismatch(_addressBookSize, _batchSize);
@@ -751,9 +746,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     function safeTransferFrom(address from, address[] calldata to, uint256[][] calldata tokenIds)
     external {
         uint256 _batchSize = tokenIds.length;
-        if (_batchSize > MAX_TRANSFER_BATCH_SIZE) {
-            revert BatchSizeTooLarge(MAX_TRANSFER_BATCH_SIZE, _batchSize);
-        }
         uint256 _addressBookSize = to.length;
         if (_addressBookSize != _batchSize) {
             revert TransferSizeMismatch(_addressBookSize, _batchSize);
@@ -904,14 +896,14 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
         }
         // Check that the from account does not already have an active lock
         uint256 addressInfo = _balances[_msgSender()];
-        if (uint256(uint8(addressInfo>>APOS_LOCKED)) == 1) {
+        if (uint256(uint8(addressInfo>>APOS_LOCKED)) == LOCKED) {
             revert AddressLocked(_msgSender());
         }
         // Set the account lock
         addressInfo = _setTokenParam(
             addressInfo,
             APOS_LOCKED,
-            1,
+            LOCKED,
             type(uint8).max
         );
         // Set the account lock timestamp
@@ -940,12 +932,12 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     external virtual {
         uint256 addressInfo = _balances[_msgSender()];
         // Check that the from account does not already have an active lock
-        if (uint256(uint8(addressInfo>>APOS_LOCKED)) == 0) {
+        if (uint256(uint8(addressInfo>>APOS_LOCKED)) == UNLOCKED) {
             revert AddressNotLocked();
         }
         // Check the lock period has expired
         uint256 _userLockPeriod =  uint256(uint24(addressInfo>>APOS_LOCKPERIOD));
-        uint256 _sinceLocked = uint256(uint40(addressInfo>>APOS_LOCKSTAMP)) - block.timestamp;
+        uint256 _sinceLocked = block.timestamp - uint256(uint40(addressInfo>>APOS_LOCKSTAMP));
         if (_sinceLocked < _userLockPeriod) {
             revert LockPeriodNotFinished(_userLockPeriod, _sinceLocked);
         }
@@ -953,7 +945,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
         addressInfo = _setTokenParam(
             addressInfo,
             APOS_LOCKED,
-            0,
+            UNLOCKED,
             type(uint8).max
         );
         // No need to update lock timestamp
