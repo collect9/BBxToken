@@ -145,18 +145,40 @@ contract C9Token is ERC721IdEnumBasic {
      * mechanism in case Ethereum becomes too expensive to 
      * continue transacting on.
      */
-    function _beforeTokenTransfer(address from, address to, uint256 tokenId, uint256 batchSize)
+    function _beforeTokenTransfer(address from, address /*to*/, uint256 firstTokenId, uint256 batchSize)
     internal
     override(ERC721)
     notFrozen() {
-        uint256 _tokenData = _owners[tokenId];
+        // Make sure from is correct
+        uint256 _tokenData = _owners[firstTokenId];
+        address tokenOwner = address(uint160(_tokenData));
+        if (tokenOwner != from) {
+            revert TransferFromIncorrectOwner(tokenOwner, from);
+        }
+        // Make sure the caller is owner
+        if (_msgSender() != tokenOwner) {
+            if (!isApprovedForAll(tokenOwner, _msgSender())) {
+                revert CallerNotOwnerOrApproved(firstTokenId, tokenOwner, _msgSender());
+            }
+        }
+        // Make sure token is not locked
         if ((_tokenData>>MPOS_LOCKED & BOOL_MASK) == LOCKED) {
-            revert TokenIsLocked(tokenId);
+            revert TokenIsLocked(firstTokenId);
         }
+        // Make sure token is not inactive
         if (_currentVId(_tokenData) == INACTIVE) {
-            _owners[tokenId] = _setDataValidity(_tokenData, VALID);
+            _owners[firstTokenId] = _setDataValidity(_tokenData, VALID);
         }
-        super._beforeTokenTransfer(from, to, tokenId, batchSize);
+
+        /*
+        Clear approvals from the previous owner.
+        The if statement saves ~200 gas when no approval is set (most users).
+        */
+        if (uint256(uint160(_tokenApprovals[firstTokenId])) != 0) {
+            _tokenApprovals[firstTokenId] = _setTokenParam(
+                _tokenApprovals[firstTokenId], 0, 0, type(uint160).max
+            );
+        }
     }
 
     /**
