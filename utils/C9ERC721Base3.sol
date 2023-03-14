@@ -697,7 +697,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
      * @dev Allows safe batch transfer to make is cheaper to move multiple NFTs 
      * between two addresses. Max batch size is 64.
      */
-    function safeTransferFrom(address from, address to, uint256[] calldata tokenIds)
+    function safeTransferBatchFrom(address from, address to, uint256[] calldata tokenIds)
     external {
         _transfer(from, to, tokenIds);
         // Only need to check one time
@@ -712,7 +712,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
      * safe transfer version to prevent accidents of sending to a 
      * non-ERC721 receiver.
      */
-    function safeTransferFrom(address from, address[] calldata to, uint256[][] calldata tokenIds)
+    function safeBatchTransferBatchFrom(address from, address[] calldata to, uint256[][] calldata tokenIds)
     external {
         uint256 _batchSize = tokenIds.length;
         uint256 _addressBookSize = to.length;
@@ -845,7 +845,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
      * @dev Allows batch transfer to make is cheaper to move multiple NFTs 
      * between two addresses. Max batch size is 64.
      */
-    function transferFrom(address from, address to, uint256[] calldata tokenIds)
+    function transferBatchFrom(address from, address to, uint256[] calldata tokenIds)
     external virtual
     override {
         _transfer(from, to, tokenIds);

@@ -1,0 +1,38 @@
+## Simple Summary
+An extension of the ERC721 standard that provides safe batch transfer functions.
+
+## Abstract
+Smart contracts are not efficiently mutable; thus they must be future proofed as much as possible prior to deployment. The ERC721 extension presented in the EIP accomplishes some of that future-proofing, by standardizing a way to transfer multiple ERC721 tokens requiring multiple transactions. Current methods, such as delegating batch transfer to an operator approved proxy contract, use uses more gas than is necessary. The benchmarks presented demonstrate the savings of native batch transfer capability, versus that of an operator approved proxy contract.
+
+## Motivation
+In the past we’ve seen Ethereum gas fees sustain 100+ GWEI. Such fees make transferring many NFTs between two wallets too expensive to perform. Often, operator approved proxy contracts are used to facilitate NFT batch transfers, effectively reducing the transfer cost per token.
+
+However, contrary to popular belief, such delegation of work to proxy contracts is not nearly as efficient as an ERC721 contract being able to natively batch transfer itself. The benchmarks below show a 24-32% reduction in safe transfer costs from a proxy contract for batches sized 10-100. Additionally, individual users may perform batch transfer without the overhead of a proxy contract, further increasing the gas savings to 28-35% for batched sized 10-100. Such a reduction could go a long way in reducing ecosystem wide gas fees.
+
+
+## Rationale
+Two ERC721 contracts are benchmarked within the Remix VM: one with the extension - referred to as the test contract, and another without - the control contract, which the base ERC721 standard contract. Both contracts are called from an approved operator proxy contract. The transaction gas costs and reductions in costs are as follows:
+
+
+| Proxy to Control      | Proxy to Test | Direct to Test | Proxy Reduction | Direct Reduction |
+| ----------- | ----------- | ----------- | ----------- | ----------- |
+| 52332 | 50730 | 46921 | 3.1% | 10.3% |
+| 65302 | 59397 | 55582 | 9.0% | 14.9% | 
+| 104212 | 85398 | 81565 | 18.1% | 21.7% |
+| 169062 | 128733 | 124870 | 23.9% | 26.1% |
+| 1336362 | 908808 | 868302 | 32.0% | 35.0% |
+
+Benchmarks show the EIP extended contract sees immediate gas savings over the control contract with just a batch of two tokens. The test contract exceeds gas savings of over ~4000 gas units per token over larger transfers (>10 tokens). A batch of 100 tokens were tested to save ~4300 gas units per token, suggesting a plateau around this number.
+
+## Backwards Compatability
+To take full advantage of batching, the following must be done:
+1.	A single event, `event TransferBatch(...)` must be emitted to summarizes all token transfers per batch.
+2.	Token owner balances must only be updated one time per batch.
+3.	`_checkOnERC721Received()` must only be called one time per batch.
+
+Thus, the original private `_transfer()` function is not suitable for batched transfer, as it performs event emissions and balance update for every transfer. To maintain backwards compatibility, this EIP includes a new private `_transferBatch()` function. However, it is highly recommended to update the original `_transfer()` so that duplicate code does not need to be inlined within `_transferBatch()`.
+
+The `transferBatch()` function cannot be written within the extension by itself as it tries to read from storage that is marked as private in the ERC721 contract. Thus, to maintain full backwards compatibility, transferBatch() must be hard coded into the ERC721 base contract.
+
+## Copyright
+Copyright and related rights waived via [CC0](https://creativecommons.org/publicdomain/zero/1.0/).

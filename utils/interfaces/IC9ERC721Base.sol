@@ -5,7 +5,10 @@ import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 
 interface IC9ERC721Base is IERC721, IERC721Metadata {
     function clearApproved(uint256[] calldata tokenIds) external;
-    function safeTransferFrom(address from, address to, uint256[] calldata tokenIds) external;
-    function safeTransferFrom(address from, address[] calldata to, uint256[][] calldata tokenIds) external;
-    function transferFrom(address from, address to, uint256[] calldata tokenIds) external;
+    function safeTransferBatchFrom(address from, address to, uint256[] calldata tokenIds) external;
+    function safeBatchTransferBatchFrom(address from, address[] calldata to, uint256[][] calldata tokenIds) external;
+    function transferBatchFrom(address from, address to, uint256[] calldata tokenIds) external;
+
+    // Only one emit event needed to save gas
+    event TransferBatch(address indexed from, address indexed to, uint256[] tokenIds); 
 }
