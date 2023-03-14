@@ -69,11 +69,11 @@ abstract contract C9Struct {
     // uint256 constant MPOS_INSURANCE = 231; // 20 bits, max 1048575
     // uint256 constant MPOS_VOTES = 251; // 5 bits, max 31
 
-    uint256 constant MPOS_VALIDITYSTAMP = 0; // 40 bits
-    uint256 constant MPOS_VALIDITY = 40; // 4 bits, max 15
-    uint256 constant MPOS_UPGRADED = 44; // 1 bit, max 1
-    uint256 constant MPOS_DISPLAY = 45; // 1 bit, max 1
-    uint256 constant MPOS_LOCKED = 46; // 1 bit, max 1
+    uint256 constant MPOS_LOCKED = 0; // 1 bit, max 1
+    uint256 constant MPOS_VALIDITY = 1; // 4 bits, max 15
+    uint256 constant MPOS_VALIDITYSTAMP = 5; // 40 bits
+    uint256 constant MPOS_UPGRADED = 45; // 1 bit, max 1
+    uint256 constant MPOS_DISPLAY = 46; // 1 bit, max 1
     uint256 constant MPOS_INSURANCE = 47; // 20 bits, max 1048575
     uint256 constant MPOS_VOTES = 67; // 5 bits, max 31
     uint256 constant MPOS_OWNER = 72; // 160 bits
@@ -111,8 +111,13 @@ abstract contract C9Struct {
     uint256 constant USZ_ROYALTIES_DUE = 15;
 
     uint256 constant MASK_VALIDITY = 2**MSZ_VALIDITY-1;
+    uint256 constant IMASK_VALIDITY = 2**(256-MSZ_VALIDITY)-1;
     uint256 constant MASK_ROYALTY = 2**USZ_ROYALTY-1;
     uint256 constant MASK_ROYALTIES_DUE = 2**USZ_ROYALTIES_DUE-1;
+    uint256 constant MASK_ADDRESS_XFER = 2**184-1;
+    uint256 constant MASK_BALANCER = 2**64-1;
+
+
 
     /*
      * @dev Returns the indices that split sTokenData into 

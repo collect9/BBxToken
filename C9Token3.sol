@@ -116,12 +116,7 @@ contract C9Token is ERC721IdEnumBasic {
      * ownerOf enforces token existing.
      */ 
     modifier isOwnerOrApproved(uint256 tokenId) {
-        address tokenOwner = ownerOf(tokenId);
-        if (_msgSender() != tokenOwner) {
-            if (!isApprovedForAll(tokenOwner, _msgSender())) {
-                revert CallerNotOwnerOrApproved(tokenId, tokenOwner, _msgSender());
-            }
-        }
+        _isApprovedOrOwner(_msgSender(), ownerOf(tokenId), tokenId);
         _;
     }
 
@@ -135,50 +130,6 @@ contract C9Token is ERC721IdEnumBasic {
             revert TokenIsDead(tokenId);
         }
         _;
-    }
-
-    /**
-     * @dev Required overrides from imported contracts.
-     * This one checks to make sure the token is not locked 
-     * either in the redemption process, or locked due to a 
-     * dead status. Frozen is a long-term fail-safe migration 
-     * mechanism in case Ethereum becomes too expensive to 
-     * continue transacting on.
-     */
-    function _beforeTokenTransfer(address from, address /*to*/, uint256 firstTokenId, uint256 /*batchSize*/)
-    internal
-    override(ERC721)
-    notFrozen() {
-        // Make sure from is correct
-        uint256 _tokenData = _owners[firstTokenId];
-        address tokenOwner = address(uint160(_tokenData>>MPOS_OWNER));
-        if (tokenOwner != from) {
-            revert TransferFromIncorrectOwner(tokenOwner, from);
-        }
-        // Make sure the caller is owner
-        if (_msgSender() != tokenOwner) {
-            if (!isApprovedForAll(tokenOwner, _msgSender())) {
-                revert CallerNotOwnerOrApproved(firstTokenId, tokenOwner, _msgSender());
-            }
-        }
-        // Make sure token is not locked
-        if ((_tokenData>>MPOS_LOCKED & BOOL_MASK) == LOCKED) {
-            revert TokenIsLocked(firstTokenId);
-        }
-        // Make sure token is not inactive
-        if (_currentVId(_tokenData) == INACTIVE) {
-            _owners[firstTokenId] = _setDataValidity(_tokenData, VALID);
-        }
-
-        /*
-        Clear approvals from the previous owner.
-        The if statement saves ~200 gas when no approval is set (most users).
-        */
-        if (uint256(uint160(_tokenApprovals[firstTokenId])) != 0) {
-            _tokenApprovals[firstTokenId] = _setTokenParam(
-                _tokenApprovals[firstTokenId], 0, 0, type(uint160).max
-            );
-        }
     }
 
     /**
@@ -233,6 +184,12 @@ contract C9Token is ERC721IdEnumBasic {
         );
     }
 
+    function _isLocked(uint256 _tokenData)
+    private pure
+    returns (bool) {
+        return _tokenData & BOOL_MASK == LOCKED;
+    }
+
     /**
      * @dev Returns a unique hash depending on certain token `_input` attributes. 
      * This helps keep track the `_edition` number of a particular set of attributes. 
@@ -260,19 +217,13 @@ contract C9Token is ERC721IdEnumBasic {
     function _redeemLockTokens(uint256[] calldata _tokenIds)
     private {
         uint256 _batchSize = _tokenIds.length;
-        address _tokenOwner;
         uint256 _tokenId;
         uint256 _tokenData;
         for (uint256 i; i<_batchSize;) {
             _tokenId = _tokenIds[i];
             // 1. Check token exists and get owner
-            _tokenOwner = ownerOf(_tokenId);
             // 2. Check caller is owner or approved to redeem
-            if (_msgSender() != _tokenOwner) {
-                if (!isApprovedForAll(_tokenOwner, _msgSender())) {
-                    revert CallerNotOwnerOrApproved(_tokenId, _tokenOwner, _msgSender());
-                }
-            }
+            _isApprovedOrOwner(_msgSender(), ownerOf(_tokenId), _tokenId);
             // 3. Check token is redeemable
             if (preRedeemable(_tokenId)) {
                 revert TokenPreRedeemable(_tokenId);
@@ -292,7 +243,7 @@ contract C9Token is ERC721IdEnumBasic {
                 }
             }
             // 5. If valid but locked, token is already in redeemer
-            if ((_tokenData >> MPOS_LOCKED & BOOL_MASK) == LOCKED) {
+            if (_isLocked(_tokenData)) {
                 revert TokenIsLocked(_tokenId);
             }
             // 6. All checks pass, so lock the token
@@ -306,27 +257,6 @@ contract C9Token is ERC721IdEnumBasic {
             _owners[_tokenId] = _tokenData;
             unchecked {++i;}
         }
-    }
-
-    /**
-     * @dev Updates the token's data validity status.
-     */
-    function _setDataValidity(uint256 tokenData, uint256 vId)
-    private view
-    returns (uint256) {
-         tokenData = _setTokenParam(
-            tokenData,
-            MPOS_VALIDITY,
-            vId,
-            MASK_VALIDITY
-        );
-        tokenData = _setTokenParam(
-            tokenData,
-            MPOS_VALIDITYSTAMP,
-            block.timestamp,
-            type(uint40).max
-        );
-        return tokenData;
     }
 
     /**
@@ -405,11 +335,11 @@ contract C9Token is ERC721IdEnumBasic {
             done sequentially. */
 
             // _owners eXtended storage
-            uint256 packedToken = timestamp;
+            uint256 packedToken = _input.locked;
             packedToken |= _input.validity<<MPOS_VALIDITY;
+            packedToken |= timestamp<<MPOS_VALIDITYSTAMP;
             packedToken |= _input.upgraded<<MPOS_UPGRADED;
             packedToken |= _input.display<<MPOS_DISPLAY;
-            packedToken |= _input.locked<<MPOS_LOCKED;
             packedToken |= _input.insurance<<MPOS_INSURANCE;
             packedToken |= _input.votes<<MPOS_VOTES;
             packedToken |= _to<<MPOS_OWNER;
@@ -520,7 +450,7 @@ contract C9Token is ERC721IdEnumBasic {
     function _unlockToken(uint256 _tokenId)
     private {
         uint256 _tokenData = _owners[_tokenId];
-        if ((_tokenData>>MPOS_LOCKED & BOOL_MASK) == UNLOCKED) {
+        if (!_isLocked(_tokenData)) {
             revert TokenNotLocked(_tokenId);
         }
         _tokenData = _setTokenParam(
@@ -695,19 +625,10 @@ contract C9Token is ERC721IdEnumBasic {
             minterVotes += votes;
         }
         uint256 balances = _balances[_msgSender()];
-        balances = _setTokenParam(
-            balances,
-            APOS_BALANCE,
-            minterBalance,
-            type(uint16).max
-        );
-        balances = _setTokenParam(
-            balances,
-            APOS_VOTES,
-            minterVotes,
-            type(uint24).max
-        );
-         _balances[_msgSender()] = balances;
+        balances &= ~(MASK_BALANCER)<<APOS_BALANCE;
+        balances |= minterBalance<<APOS_BALANCE;
+        balances |= minterVotes<<APOS_VOTES;
+        _balances[_msgSender()] = balances;
     }
 
     //>>>>>>> REDEEMER FUNCTIONS START
@@ -790,19 +711,13 @@ contract C9Token is ERC721IdEnumBasic {
     external {
         uint256 _batchSize = tokenIds.length;
         uint256 _tokenId;
-        address _tokenOwner;
         for (uint256 i; i<_batchSize;) {
             _tokenId = tokenIds[i];
-            _tokenOwner = ownerOf(_tokenId);
-            if (_msgSender() != _tokenOwner) {
-                if (!isApprovedForAll(_tokenOwner, _msgSender())) {
-                    revert CallerNotOwnerOrApproved(_tokenId, _tokenOwner, _msgSender());
-                }
-            }
+            _isApprovedOrOwner(_msgSender(), ownerOf(_tokenId), _tokenId);
             _unlockToken(_tokenId);
             unchecked {++i;}
         }
-        IC9Redeemer(contractRedeemer).remove(_tokenOwner, tokenIds);
+        IC9Redeemer(contractRedeemer).remove(_msgSender(), tokenIds);
     }
 
     /**

@@ -15,7 +15,6 @@ import "./interfaces/IC9ERC721Base.sol";
 import "./C9Context.sol";
 import "./../C9OwnerControl.sol";
 import "./../abstract/C9Errors.sol";
-import "./../abstract/C9Struct4.sol";
 
 /**
  * @dev Implementation of https://eips.ethereum.org/EIPS/eip-721[ERC721] Non-Fungible Token Standard, including
@@ -36,7 +35,7 @@ import "./../abstract/C9Struct4.sol";
  *    royalties are the same, and the receiver is the contract deployer.
  * 5. Enhanced ownership control via C9OwnerControl.
  */
-contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9OwnerControl, C9Struct {
+contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9OwnerControl {
     using Address for address;
     using Strings for uint256;
 
@@ -89,10 +88,10 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     /**
      * @dev Initializes the contract by setting a `name` and a `symbol` to the token collection.
      */
-    constructor(string memory name_, string memory symbol_, uint256 royalty_) {
+    constructor(string memory name_, string memory symbol_, uint256 royalty) {
         name = name_;
         symbol = symbol_;
-        _royalty = uint96(royalty_);
+        _royalty = uint96(royalty);
         _royaltyReceiver = owner;
     }
 
@@ -120,8 +119,11 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
      *
      * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
      *
-     * This has been updated to add an on-chain transfer counter which adds around ~700 gas per transfer.
-     * balance, votes, redemptions, transfers
+     * This has been updated to add an on-chain transfer counters, which adds around ~700 gas per counter.
+     * balance, votes, redemptions, transfers.
+     *
+     * This could have been placed in _transfer if not for stack too deep errors. So we've placed it here
+     * instead.
      */
     function _afterTokenTransfer(address from, address to, uint256 /*firstTokenId*/, uint256 batchSize, uint256 votes)
     internal virtual {
@@ -133,7 +135,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
         }
         // Copy from storage first
         uint256 balancesTo = _balances[to];
-
         // Parameters to update, token owners balances and transfer counts
         uint256 balanceFrom = uint256(uint16(balancesFrom>>APOS_BALANCE));
         uint256 votesFrom = uint256(uint24(balancesFrom>>APOS_VOTES));
@@ -141,7 +142,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
         uint256 balanceTo = uint256(uint16(balancesTo>>APOS_BALANCE));
         uint256 votesTo = uint256(uint24(balancesTo>>APOS_VOTES));
         uint256 xfersTo = balancesTo>>APOS_TRANSFERS;
-
         // Update balances and transfer counter
         unchecked {
             balanceFrom -= batchSize;
@@ -151,18 +151,16 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
             votesTo += votes;
             xfersTo += batchSize;
         }
-
-        // Set packed data in memory
-        balancesFrom &= uint256(0)<<APOS_BALANCE;
+        // Set packed data From in memory
+        balancesFrom &= ~(MASK_BALANCER)<<APOS_BALANCE;
         balancesFrom |= balanceFrom<<APOS_BALANCE;
         balancesFrom |= votesFrom<<APOS_VOTES;
         balancesFrom |= xfersFrom<<APOS_TRANSFERS;
-
-        balancesTo &= uint256(0)<<APOS_BALANCE;
+        // Set packed data Ro in memory
+        balancesTo &= ~(MASK_BALANCER)<<APOS_BALANCE;
         balancesTo |= balanceTo<<APOS_BALANCE;
         balancesTo |= votesTo<<APOS_VOTES;
         balancesTo |= xfersTo<<APOS_TRANSFERS;
-
         // Copy back to storage
         _balances[from] = balancesFrom;
         _balances[to] = balancesTo;
@@ -175,12 +173,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
      */
     function _approve(address to, uint256 tokenId)
     internal virtual {
-        _tokenApprovals[tokenId] = _setTokenParam(
-            _tokenApprovals[tokenId],
-            0,
-            uint256(uint160(to)),
-            type(uint160).max
-        );
+        _tokenApprovals[tokenId] = uint256(uint160(to));
         emit Approval(_ownerOf(tokenId), to, tokenId);
     }
 
@@ -227,31 +220,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
      *
      * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
      */
-    function _beforeTokenTransfer(address from, address /*to*/, uint256 firstTokenId, uint256 /*batchSize*/)
-    internal virtual {
-        // Make sure from is correct
-        address tokenOwner = ownerOf(firstTokenId);
-        if (tokenOwner != from) {
-            revert TransferFromIncorrectOwner(tokenOwner, from);
-        }
-        // Make sure the caller is owner
-        if (_msgSender() != tokenOwner) {
-            if (!isApprovedForAll(tokenOwner, _msgSender())) {
-                revert CallerNotOwnerOrApproved(firstTokenId, tokenOwner, _msgSender());
-            }
-        }
-        /*
-        Clear approvals from the previous owner.
-        We restrict reading and writing to the first 160 bits only in case the remaining 
-        96 bits are used for storage.
-        The if statement saves ~200 gas when no approval is set (most users).
-        */
-        if (uint256(uint160(_tokenApprovals[firstTokenId])) != 0) {
-            _tokenApprovals[firstTokenId] = _setTokenParam(
-                _tokenApprovals[firstTokenId], 0, 0, type(uint160).max
-            );
-        }
-    }
+    function _beforeTokenTransfer(address from, address to, uint256 firstTokenId, uint256 batchSize)
+    internal virtual {}
 
     /**
      * @dev Destroys `tokenId`.
@@ -318,17 +288,27 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
 
     /**
      * @dev Returns whether `spender` is allowed to manage `tokenId`.
-     *
-     * Requirements:
-     *
-     * - `tokenId` must exist.
      */
-    function _isApprovedOrOwner(address spender, uint256 tokenId)
+    function _isApproved(address spender, address tokenOwner, uint256 tokenId)
     internal view virtual
     returns (bool) {
-        address tokenOwner = ownerOf(tokenId);
-        return (spender == tokenOwner || isApprovedForAll(tokenOwner, spender) || getApproved(tokenId) == spender);
+        return (isApprovedForAll(tokenOwner, spender) || getApproved(tokenId) == spender);
     }
+
+    /**
+     * @dev Returns whether `spender` is allowed to manage `tokenId`.
+     */
+    function _isApprovedOrOwner(address spender, address tokenOwner, uint256 tokenId)
+    internal view virtual {
+        if (spender != tokenOwner) {
+            if (!_isApproved(spender, tokenOwner, tokenId)) {
+                revert CallerNotOwnerOrApproved(tokenId, tokenOwner, spender);
+            }
+        }
+    }
+
+
+
 
     function _mint(address to, uint256 firstTokenId, uint256 batchSize)
     internal virtual {
@@ -440,7 +420,14 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
 
     /**
      * @dev Transfers `tokenId` from `from` to `to`.
-     *  As opposed to {transferFrom}, this imposes no restrictions on _msgSender().
+     * Updated to impose restriction on _msgSender() since this is 
+     * called singular or batched. The restriction on to 
+     * is called from the wrapper of this.
+     *
+     * The goal of this method is to read from _owners only 
+     * one time, do all checks and updates necessary in memory, 
+     * and then copy back to storage one time per tokenId, 
+     * making it extendable to batching.
      *
      * Requirements:
      *
@@ -450,16 +437,48 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
      * Emits a {Transfer} event.
      */
 
-    function __transfer(uint256 to, uint256 tokenId)
+    function __transfer(address from, uint256 to, uint256 tokenId)
     internal virtual
+    notFrozen()
     returns (uint256 votes) {
         uint256 tokenData = _owners[tokenId];
-        votes = _viewPackedData(tokenData, MPOS_VOTES, MSZ_VOTES);
+        /*
+        1. Make sure from is correct owner.
+           This also implicitly enforces the token existing or not being burned,
+           because the zero address will never have any approvals set.
+        */
+        address tokenOwner = address(uint160(tokenData>>MPOS_OWNER));
+        if (tokenOwner != from) {
+            revert TransferFromIncorrectOwner(tokenOwner, from);
+        }
+        // 2. Make sure the caller is owner or approved
+        if (_msgSender() != tokenOwner) {
+            if (!_isApproved(_msgSender(), tokenOwner, tokenId)) {
+                revert CallerNotOwnerOrApproved(tokenId, tokenOwner, _msgSender());
+            }
+        }
+        // 3. Make sure token is not locked
+        if (tokenData & BOOL_MASK == LOCKED) {
+            revert TokenIsLocked(tokenId);
+        }
+        // 4. If the token is inactive, automatically update to be active (~210 gas cost when active)
+        if (_viewPackedData(tokenData, MPOS_VALIDITY, MSZ_VALIDITY) == INACTIVE) {
+            tokenData = _setDataValidity(tokenData, VALID);
+        }
+        /*
+        5. Clear approvals from the previous owner.
+           The if statement saves ~200 gas when no approval is set (most users).
+        */
+        if (_tokenApprovals[tokenId] != 0) {
+            delete _tokenApprovals[tokenId];
+        }
+
         uint256 tokenTransferCount = tokenData>>MPOS_XFER_COUNTER;
         unchecked {++tokenTransferCount;}
+        votes = _viewPackedData(tokenData, MPOS_VOTES, MSZ_VOTES);
 
         // Set new owner and transfer count
-        tokenData &= uint256(0)<<MPOS_OWNER; // NEED EXACT MASK
+        tokenData &= ~(MASK_ADDRESS_XFER)<<MPOS_OWNER;
         tokenData |= to<<MPOS_OWNER;
         tokenData |= tokenTransferCount<<MPOS_XFER_COUNTER;
 
@@ -470,10 +489,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     function _transfer(address from, address to, uint256 tokenId)
     internal virtual
     validTo(to) {
-        // Before transfer checks
-        _beforeTokenTransfer(from, to, tokenId, 1);
-        // Set new owner
-        uint256 votes = __transfer(uint256(uint160(to)), tokenId);
+        // Checks, set new owner, return votes to add to balances
+        uint256 votes = __transfer(from, uint256(uint160(to)), tokenId);
         // Update balances
         _afterTokenTransfer(from, to, 0, 1, votes);
         // Emit event
@@ -493,10 +510,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
         uint256 votes;
         for (uint256 i; i<batchSize;) {
             tokenId = tokenIds[i];
-            // Before transfer checks
-            _beforeTokenTransfer(from, to, tokenId, 1);
             // Set new owner
-            unchecked {votes += __transfer(_to, tokenId);}
+            unchecked {votes += __transfer(from, _to, tokenId);}
             // Emit event
             emit Transfer(from, to, tokenId);
             unchecked {++i;}
@@ -515,11 +530,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
         if (to == tokenOwner) {
             revert OwnerAlreadyApproved();
         }
-        if (_msgSender() != tokenOwner) {
-            if (!isApprovedForAll(tokenOwner, _msgSender())) {
-                revert CallerNotOwnerOrApproved(tokenId, tokenOwner, _msgSender());
-            }
-        }
+        _isApprovedOrOwner(_msgSender(), tokenOwner, tokenId);
         _approve(to, tokenId);
     }
 
@@ -560,11 +571,11 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
      */
     function clearApproved(uint256[] calldata tokenIds) external {
         uint256 _batchSize = tokenIds.length;
+        uint256 _tokenId;
         for (uint256 i; i<_batchSize;) {
-            if (!_isApprovedOrOwner(_msgSender(), tokenIds[i])) {
-                revert CallerNotOwnerOrApproved(tokenIds[i], ownerOf(tokenIds[i]), _msgSender());
-            }
-            delete _tokenApprovals[tokenIds[i]];
+            _tokenId = tokenIds[i];
+            _isApprovedOrOwner(_msgSender(), ownerOf(_tokenId), _tokenId);
+            delete _tokenApprovals[_tokenId];
         }
     }
 
@@ -629,7 +640,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     public view virtual
     returns (bool locked, uint256 lockStamp) {
         uint256 ownerData = _balances[tokenOwner];
-        uint256 _locked = uint256(uint8(ownerData>>APOS_LOCKED));
+        uint256 _locked = uint256(uint8(ownerData));
         locked = _locked == 1 ? true : false;
         lockStamp = uint256(uint40(ownerData>>APOS_LOCKSTAMP));
     }
@@ -854,7 +865,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
         }
         // Check that the from account does not already have an active lock
         uint256 addressInfo = _balances[_msgSender()];
-        if (uint256(uint8(addressInfo>>APOS_LOCKED)) == LOCKED) {
+        if (uint256(uint8(addressInfo)) == LOCKED) {
             revert AddressLocked(_msgSender());
         }
         // Set the account lock
@@ -890,7 +901,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     external virtual {
         uint256 addressInfo = _balances[_msgSender()];
         // Check that the from account does not already have an active lock
-        if (uint256(uint8(addressInfo>>APOS_LOCKED)) == UNLOCKED) {
+        if (uint256(uint8(addressInfo)) == UNLOCKED) {
             revert AddressNotLocked();
         }
         // Check the lock period has expired

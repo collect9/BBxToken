@@ -1,40 +1,38 @@
 // SPDX-License-Identifier: GPL-3.0
-        
-pragma solidity >=0.4.22 <0.9.0;
-
-// This import is automatically injected by Remix
-import "remix_tests.sol"; 
+pragma solidity >0.8.17;
 
 // This import is required to use custom transaction context
 // Although it may fail compilation in 'Solidity Compiler' plugin
 // But it will work fine in 'Solidity Unit Testing' plugin
 import "remix_accounts.sol";
 
+// This import is automatically injected by Remix
+import "remix_tests.sol"; 
+
 import "../C9Token3.sol";
 import "../abstract/C9Struct4.sol";
 
-
 // File name has to end with '_test.sol', this file can contain more than one testSuite contracts
-contract testSuite is C9Struct {
+contract C9TestContract is C9Struct {
 
-    address c9tOwner;
+    address internal c9tOwner;
 
     // Variables to save and check against
-    mapping(address => uint256) balances;
-    mapping(address => uint256) redemptions;
-    mapping(address => uint256) transfers;
-    mapping(address => uint256) votes;
+    mapping(address => uint256) internal balances;
+    mapping(address => uint256) internal redemptions;
+    mapping(address => uint256) internal transfers;
+    mapping(address => uint256) internal votes;
 
-    uint256 _timestamp;
+    uint256 internal _timestamp;
 
     // Raw data stored to compare tests against
-    TokenData[32] _rawData;
+    TokenData[32] internal _rawData;
 
     // Create contract and mint some NFTs
-    C9Token c9t;
-    function beforeAll() public {
+    C9Token internal c9t;
 
-        // Store raw data input to compare against
+    constructor() {
+        // Store raw data to compare against in tests
         _rawData[0] = TokenData(0, 0, 0, 0, 0, 5, 4, 0, 1, 1, 0, 2, 0, 350, 0, 78081, 0, 0, 2500, 10, "CUBBIE=dB1B2C2B3C3G3d84G4A6B6C7B8d19d49G98AGAd1Bd4BGB3C2D6Dd7DFD1Ed2Ed5E1Fd2F9FdAFDF2GGGg3:S:9:3b:B:3:E:g4:R:A:f25:C:f25:G=293234434674g6:C:Ic:Jc:K:25:27:Lc:Nc:Z:O:g9:Y");
         _rawData[1] = TokenData(0, 0, 0, 0, 0, 6, 1, 3, 1, 0, 1, 5, 0, 375, 0, 893607, 0, 0, 1800, 3, "ROYAL BLUE PEANUT=D1B2C2d93C3G384G4C5dA6C7B819j2969G9d7AGA1Bj2B6BGB1C2CACd1Dj4DADBDBE2F3Fd7FdCFd4Gj7GDGdEGg3:3b:9:3h:A:3b:B:f33:C:g8:a:E=2932345254768196g6:Cc:J:20:23c:Kc:L:M:34c:41c:43c:49:g9:Eb:W:21h:K:Nh");
         _rawData[2] = TokenData(0, 0, 0, 0, 0, 6, 0, 3, 1, 0, 0, 5, 0, 475, 0, 78844, 0, 0, 300, 2, "VALENTINO=D1C2B3C3G3d84G4dA6C7B889G92Ad9AjDA8Bd9BCBGBd1C9CAC9DADFD7EBE2F3F7F8FCFDFd2Gj7GGGg3:f33:A:b:B:f67:C:g4:c:9:1:D:c:E=29384143546274g6:C:G:H:23c:M:Z:O:g9:Gh:Y");
@@ -68,11 +66,11 @@ contract testSuite is C9Struct {
         _rawData[30] = TokenData(0, 0, 0, 0, 0, 6, 1, 2, 1, 0, 0, 5, 0, 475, 0, 77003, 0, 0, 300, 2, "GOLDIE=B2C2B3C3G3d84G4C7B8d2979G96AGABBCBGB1C2C9C7DBDjCD7Ed8ECEj3Fd7FdAFDF3Gj4G9GAGGGg3:3h:1:3b:6:b:B:g4:a:A:1:C:c:D:c:E:g5:f8:A=29324043465874g6:C:H:Kc:31:Z:O:g9:I:Y");
         _rawData[31] = TokenData(0, 0, 0, 0, 0, 5, 4, 0, 1, 1, 0, 2, 0, 350, 0, 894298, 0, 0, 2500, 10, "LEGS=dB1B2G3d84G4C5C7B8d295999A9G9d4A7ACAjDAGB1C2C9CACd2D7EBE1FdAFEF6GDGdEGg3:3b:3:3b:6:f67:C:S:G:g5:f6:B:.2:E:g6:.17:B:1:D=293236525469768496g6:Cc:J:20:K:L:M:36:39c:40c:43c:49:g9:Eb:W:21h:Nh");
 
+        // Create NFT contract instance
+        c9t = new C9Token();
+
         // Seed for random mint Ids at test
         _timestamp = block.timestamp;
-
-        // Create token contract
-        c9t = new C9Token();
 
         // Local type to be compatible with c9t.mint
         TokenData[] memory minterData = new TokenData[](32);
@@ -93,41 +91,20 @@ contract testSuite is C9Struct {
         }
     }
 
+    /* @dev Returns ownerData.
+     */
     function _checkOwnerDataOf(address _address)
-    private {
+    internal {
         Assert.equal(c9t.balanceOf(_address), balances[_address], "Invalid balanceOf");
         Assert.equal(c9t.redemptionsOf(_address), redemptions[_address], "Invalid redemptionsOf");
         Assert.equal(c9t.transfersOf(_address), transfers[_address], "Invalid transfersOf");
         Assert.equal(c9t.votesOf(_address), votes[_address], "Invalid votesOf");
-    } 
-
-    function _getTokenIdVotes(uint256 mintId)
-    private view
-    returns (uint256 tokenId, uint256 numVotes) {
-        tokenId = _rawData[mintId].tokenid;
-        numVotes = _rawData[mintId].votes;
     }
 
-    function _getTokenIdsVotes(uint256[] memory mintId)
-    private view
-    returns (uint256[] memory tokenIds, uint256 numVotes) {
-        tokenIds = new uint256[](mintId.length);
-        for (uint256 i; i<mintId.length; ++i) {
-            (uint256 tokenId, uint256 _numVotes) = _getTokenIdVotes(mintId[i]);
-            tokenIds[i] = tokenId;
-            numVotes += _numVotes;
-        }
-    }
-
-    function _checkRoyaltyInfo(uint256 tokenId, uint256 royaltyAmt, address royaltyReceiver)
-    private {
-        (address receiver, uint256 royalty) = c9t.royaltyInfo(tokenId, 10000);
-        Assert.equal(receiver, royaltyReceiver, "Invalid royalty receiver");
-        Assert.equal(royalty, royaltyAmt, "Invalid royalty");
-    }
-
+    /* @dev Returns minted token params.
+     */
     function _checkTokenParams(uint256 mintId)
-    private {
+    internal {
         (uint256 tokenId,) = _getTokenIdVotes(mintId);
         uint256[21] memory _tokenParams = c9t.getTokenParams(tokenId);
         TokenData memory rawdata = _rawData[mintId];
@@ -152,17 +129,27 @@ contract testSuite is C9Struct {
         Assert.equal(rawdata.votes, _tokenParams[7], "Invalid votes");
     }
 
-    function _updateBalancesTruth(address from, address to, uint256 numTokens, uint256 numVotes)
-    private {
-        balances[from] -= numTokens;
-        transfers[from] += numTokens;
-        votes[from] -= numVotes;
-        balances[to] += numTokens;
-        transfers[to] += numTokens;
-        votes[to] += numVotes;
+    /* @dev Returns number of votes for the minted token.
+     */
+    function _getTokenIdVotes(uint256 mintId)
+    internal view
+    returns (uint256 tokenId, uint256 numVotes) {
+        tokenId = _rawData[mintId].tokenid;
+        numVotes = _rawData[mintId].votes;
     }
 
-    // Transfer Tests
+    /* @dev Returns number of votes for the minted tokens list.
+     */
+    function _getTokenIdsVotes(uint256[] memory mintId)
+    internal view
+    returns (uint256[] memory tokenIds, uint256 numVotes) {
+        tokenIds = new uint256[](mintId.length);
+        for (uint256 i; i<mintId.length; ++i) {
+            (uint256 tokenId, uint256 _numVotes) = _getTokenIdVotes(mintId[i]);
+            tokenIds[i] = tokenId;
+            numVotes += _numVotes;
+        }
+    }
 
     /* @dev 1. Make sure contract owner, total supply, and owner 
      * data are correct after minting. Check that token combos 
@@ -184,7 +171,7 @@ contract testSuite is C9Struct {
     }
 
     /* @dev 2. Checks that all data has been stored and is being 
-     * read properly.
+     * read properly by the viewer function.
      */ 
     function checkTokenParams()
     public {
@@ -192,246 +179,4 @@ contract testSuite is C9Struct {
             _checkTokenParams(i);
         }
     }
-
-    /* @dev 3. Tests upgrade and set display.
-     */ 
-    function checkSetTokenUpgradedDisplay()
-    public {
-        uint256 mintId = _timestamp % _rawData.length;
-        (uint256 tokenId,) = _getTokenIdVotes(mintId);
-        
-        c9t.setTokenUpgraded(tokenId);
-        uint256 upgradedSet = c9t.getTokenParams(tokenId)[3];
-        Assert.equal(upgradedSet, 1, "Invalid upgraded value");
-
-        c9t.setTokenDisplay(tokenId, true);
-        uint256 displaySet = c9t.getTokenParams(tokenId)[4];
-        Assert.equal(displaySet, 1, "Invalid display1 set");
-
-        c9t.setTokenDisplay(tokenId, false);
-        displaySet = c9t.getTokenParams(tokenId)[4];
-        Assert.equal(displaySet, 0, "Invalid display set");
-    }
-
-    /* @dev 4. Check to ensure optimized transfer works properly, 
-     * with proper owner and new owner data being updated correctly.
-     */ 
-    function checkTransfer1()
-    public {
-        address to = TestsAccounts.getAccount(1);
-        uint256 mintId = _timestamp % _rawData.length;
-        (uint256 tokenId, uint256 numVotes) = _getTokenIdVotes(mintId);
-
-        c9t.transferFrom(c9tOwner, to, tokenId);
-
-        // Make sure new owner is correct
-        Assert.equal(to, c9t.ownerOf(tokenId), "Invalid new owner");
-
-        // Ground truth of old and new owner params
-        _updateBalancesTruth(c9tOwner, to, 1, numVotes);
-
-        // Compare against
-        _checkOwnerDataOf(c9tOwner);
-        _checkOwnerDataOf(to);
-    }
-
-    /* @dev 5. Check to ensure optimized batch transfer works properly, 
-     * with proper owner and new owner data being updated correctly.
-     */ 
-    function checkTransferBatch()
-    public {
-        address to = TestsAccounts.getAccount(1);
-
-        uint256[] memory mintIds = new uint256[](2);
-        mintIds[0] = (_timestamp + 1) % _rawData.length;
-        mintIds[1] = (_timestamp + 2) % _rawData.length;
-        (uint256[] memory tokenIds, uint256 numVotes) = _getTokenIdsVotes(mintIds);
-
-        // Make sure new owner is correct
-        c9t.transferFrom(c9tOwner, to, tokenIds);
-
-        // Make sure new owner is correct
-        for (uint256 i; i<tokenIds.length; ++i) {
-            Assert.equal(to, c9t.ownerOf(tokenIds[i]), "Invalid new owner");
-        }
-
-        // Ground truth of old and new owner params
-        _updateBalancesTruth(c9tOwner, to, tokenIds.length, numVotes);
-        
-        // Compare against
-        _checkOwnerDataOf(c9tOwner);
-        _checkOwnerDataOf(to);
-    }
-
-    /* @dev 6. Check to ensure optimized safeTransfer works properly, 
-     * with proper owner and new owner data being updated correctly.
-     */ 
-    function checkSafeTransfer()
-    public {
-        address to = TestsAccounts.getAccount(2);
-        uint256 mintId = (_timestamp + 3) % _rawData.length;
-        (uint256 tokenId, uint256 numVotes) = _getTokenIdVotes(mintId);
-
-        c9t.safeTransferFrom(c9tOwner, to, tokenId);
-
-        // Make sure new owner is correct
-        Assert.equal(to, c9t.ownerOf(tokenId), "Invalid new owner");
-
-        // Ground truth of old and new owner params
-        _updateBalancesTruth(c9tOwner, to, 1, numVotes);
-
-        // Compare against
-        _checkOwnerDataOf(c9tOwner);
-        _checkOwnerDataOf(to);
-    }
-
-    /* @dev 7. Check to ensure optimized batch safeTransferBatch works properly, 
-     * with proper owner and new owner data being updated correctly.
-     */ 
-    function checkSafeTransferBatch()
-    public {
-        address to = TestsAccounts.getAccount(2);
-
-        uint256[] memory mintIds = new uint256[](2);
-        mintIds[0] = (_timestamp + 4) % _rawData.length;
-        mintIds[1] = (_timestamp + 5) % _rawData.length;
-        (uint256[] memory tokenIds, uint256 numVotes) = _getTokenIdsVotes(mintIds);
-
-        c9t.safeTransferFrom(c9tOwner, to, tokenIds);
-
-        // Make sure new owner is correct
-        for (uint256 i; i<tokenIds.length; ++i) {
-            Assert.equal(to, c9t.ownerOf(tokenIds[i]), "Invalid new owner");
-        }
-
-        // Ground truth of old and new owner params
-        _updateBalancesTruth(c9tOwner, to, tokenIds.length, numVotes);
-        
-        // Compare against
-        _checkOwnerDataOf(c9tOwner);
-        _checkOwnerDataOf(to);
-    }
-
-    /* @dev 8. Check to ensure optimized batch safeTransferBatchAddress works properly, 
-     * with proper owner and new owner data being updated correctly.
-     */ 
-    function checkSafeTransferBatchAddress()
-    public {
-        address[] memory toBatch = new address[](2);
-        toBatch[0] = TestsAccounts.getAccount(1);
-        toBatch[1] = TestsAccounts.getAccount(2);
-
-        uint256[] memory mintIdsTo1 = new uint256[](2);
-        mintIdsTo1[0] = (_timestamp + 6) % _rawData.length;
-        mintIdsTo1[1] = (_timestamp + 7) % _rawData.length;
-        (uint256[] memory tokenIdsTo1, uint256 numVotesTo1) = _getTokenIdsVotes(mintIdsTo1);
-
-        uint256[] memory mintIdsTo2 = new uint256[](1);
-        mintIdsTo2[0] = (_timestamp + 8) % _rawData.length;
-        (uint256[] memory tokenIdsTo2, uint256 numVotesTo2) = _getTokenIdsVotes(mintIdsTo2);
-
-        uint256[][] memory tokenIds = new uint256[][](2);
-        tokenIds[0] = tokenIdsTo1;
-        tokenIds[1] = tokenIdsTo2;
-
-        c9t.safeTransferFrom(c9tOwner, toBatch, tokenIds);
-
-        // Make sure new owners are correct
-        for (uint256 j; j<toBatch.length; j++) {
-            for (uint256 i; i<tokenIds[j].length; ++i) {
-                Assert.equal(toBatch[j], c9t.ownerOf(tokenIds[j][i]), "Invalid new owner");
-            }
-        }
-
-        // Better update
-        _updateBalancesTruth(c9tOwner, toBatch[0], tokenIds[0].length, numVotesTo1);
-        _updateBalancesTruth(c9tOwner, toBatch[1], tokenIds[1].length, numVotesTo2);
-        
-        // Compare against
-        _checkOwnerDataOf(c9tOwner);
-        _checkOwnerDataOf(toBatch[0]);
-        _checkOwnerDataOf(toBatch[1]);
-    }
-
-    /* @dev 9. Royalties testing - global.
-     */ 
-    function checkGlobalRoyalties()
-    public {
-        // Check to make sure info is read correctly
-        _checkRoyaltyInfo(0, 500, c9tOwner);
-    }
-
-    /* @dev 10. Royalties testing - token level.
-     */ 
-    function checkResetTokenRoyalties()
-    public {
-        uint256 mintId = _timestamp % _rawData.length;
-        (uint256 tokenId,) = _getTokenIdVotes(mintId);
-        address newReceiver = TestsAccounts.getAccount(3);
-        uint256 newRoyaltyAmt = 800;
-
-        // Set the new royalty for the tokens
-        c9t.setTokenRoyalty(tokenId, newRoyaltyAmt, newReceiver);
-
-        // Check to make sure updated info is read correctly
-        _checkRoyaltyInfo(tokenId, newRoyaltyAmt, newReceiver);
-
-        // Reset royalties
-        c9t.resetTokenRoyalty(tokenId);
-        _checkRoyaltyInfo(tokenId, 500, c9tOwner);
-    }
-
-    /* @dev 11. Royalties due testing.
-     */ 
-    function checkSetRoyaltiesDue()
-    public {
-        uint256 mintId = _timestamp % _rawData.length;
-        (uint256 tokenId,) = _getTokenIdVotes(mintId);
-        uint256 royaltiesDue = 8791;
-        
-        c9t.setTokenValidity(tokenId, ROYALTIES);
-        c9t.setRoyaltiesDue(tokenId, royaltiesDue);
-        uint256 royaltiesDueSet = c9t.getTokenParams(tokenId)[20];
-        Assert.equal(royaltiesDueSet, royaltiesDue, "Invalid royalties due");
-    }
-
-    /* @dev 12. Testing some additional setters.
-     */
-    function checkSetters()
-    public {
-        // Base URI testing
-        string memory baseURI0 = "testbaseuri/uri0/";
-        string memory baseURI1 = "testbaseuri/uri1/"; 
-        c9t.setBaseUri(baseURI0, 0);
-        c9t.setBaseUri(baseURI1, 1);
-        Assert.equal(baseURI0, c9t.baseURIArray(0), "Invalid baseURI0");
-        Assert.equal(baseURI1, c9t.baseURIArray(1), "Invalid baseURI1");
-
-        // Contract URI testing
-        string memory contractURI = "somecontract/uri";
-        c9t.setContractURI(contractURI);
-        Assert.equal(string.concat("https://", contractURI, ".json"), c9t.contractURI(), "Invalid contractURI");
-
-    }
-
-    /* @dev 13. Check account lockers.
-     */
-    function checkAccountLockers()
-    public {
-        c9t.userLockAddress(86400);
-        
-        // Check the account locked and lockStamp is correct
-        (bool locked, uint256 lockStamp) = c9t.ownerLocked(c9tOwner);
-        Assert.equal(locked, true, "Invalid account lock");
-        Assert.equal(lockStamp, block.timestamp, "Invalid account lock timestamp");
-
-        // // Check the user can unlock
-        // c9t.userUnlockAddress();
-        // (locked, lockStamp) = c9t.ownerLocked(c9tOwner);
-        // Assert.equal(locked, false, "Invalid account lock");
-        // Assert.equal(lockStamp, block.timestamp, "Invalid account lock timestamp");
-    }
-
-
 }
-    
