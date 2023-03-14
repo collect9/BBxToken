@@ -8,7 +8,7 @@ abstract contract C9Struct {
     uint256 constant VALID = 0;
     uint256 constant ROYALTIES = 1;
     uint256 constant INACTIVE = 2;
-    uint256 constant OTHER = 3;
+    uint256 constant OTHER = 3; // USER?
     uint256 constant REDEEMED = 4;
     uint256 constant BURNED = 5;
 
@@ -59,14 +59,25 @@ abstract contract C9Struct {
     }
 
     // _owners eXtended storage -> mutable data
-    uint256 constant MPOS_XFER_COUNTER = 160; // 24 bits, max 16777215
-    uint256 constant MPOS_VALIDITYSTAMP = 184; // 40 bits
-    uint256 constant MPOS_VALIDITY = 224; // 4 bits, max 15
-    uint256 constant MPOS_UPGRADED = 228; // 1 bit, max 1
-    uint256 constant MPOS_DISPLAY = 229; // 1 bit, max 1
-    uint256 constant MPOS_LOCKED = 230; // 1 bit, max 1
-    uint256 constant MPOS_INSURANCE = 231; // 20 bits, max 1048575
-    uint256 constant MPOS_VOTES = 251; // 5 bits, max 31
+    // uint256 constant MPOS_OWNER = 0; // 24 bits, max 16777215
+    // uint256 constant MPOS_XFER_COUNTER = 160; // 24 bits, max 16777215
+    // uint256 constant MPOS_VALIDITYSTAMP = 184; // 40 bits
+    // uint256 constant MPOS_VALIDITY = 224; // 4 bits, max 15
+    // uint256 constant MPOS_UPGRADED = 228; // 1 bit, max 1
+    // uint256 constant MPOS_DISPLAY = 229; // 1 bit, max 1
+    // uint256 constant MPOS_LOCKED = 230; // 1 bit, max 1
+    // uint256 constant MPOS_INSURANCE = 231; // 20 bits, max 1048575
+    // uint256 constant MPOS_VOTES = 251; // 5 bits, max 31
+
+    uint256 constant MPOS_VALIDITYSTAMP = 0; // 40 bits
+    uint256 constant MPOS_VALIDITY = 40; // 4 bits, max 15
+    uint256 constant MPOS_UPGRADED = 44; // 1 bit, max 1
+    uint256 constant MPOS_DISPLAY = 45; // 1 bit, max 1
+    uint256 constant MPOS_LOCKED = 46; // 1 bit, max 1
+    uint256 constant MPOS_INSURANCE = 47; // 20 bits, max 1048575
+    uint256 constant MPOS_VOTES = 67; // 5 bits, max 31
+    uint256 constant MPOS_OWNER = 72; // 160 bits
+    uint256 constant MPOS_XFER_COUNTER = 232; // 24 bits, max 16777215
 
     // _uTokenData -> mostly immutable by code logic
     uint256 constant UPOS_GLOBAL_MINT_ID = 0; // 16 bits
@@ -85,6 +96,9 @@ abstract contract C9Struct {
     uint256 constant UPOS_RESERVED = 136; // 120 bits (MUTABLE)
 
     uint256 constant MSZ_VALIDITY = 4;
+    uint256 constant MSZ_INSURANCE = 20;
+    uint256 constant MSZ_VOTES = 5;
+
     uint256 constant USZ_EDITION = 7;
     uint256 constant USZ_CNTRYTAG = 4;
     uint256 constant USZ_CNTRYTUSH = 4;
@@ -98,7 +112,7 @@ abstract contract C9Struct {
 
     uint256 constant MASK_VALIDITY = 2**MSZ_VALIDITY-1;
     uint256 constant MASK_ROYALTY = 2**USZ_ROYALTY-1;
-    uint256 constant ROYALTIES_DUE_MASK = 2**USZ_ROYALTIES_DUE-1;
+    uint256 constant MASK_ROYALTIES_DUE = 2**USZ_ROYALTIES_DUE-1;
 
     /*
      * @dev Returns the indices that split sTokenData into 

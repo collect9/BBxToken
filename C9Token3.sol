@@ -145,13 +145,13 @@ contract C9Token is ERC721IdEnumBasic {
      * mechanism in case Ethereum becomes too expensive to 
      * continue transacting on.
      */
-    function _beforeTokenTransfer(address from, address /*to*/, uint256 firstTokenId, uint256 batchSize)
+    function _beforeTokenTransfer(address from, address /*to*/, uint256 firstTokenId, uint256 /*batchSize*/)
     internal
     override(ERC721)
     notFrozen() {
         // Make sure from is correct
         uint256 _tokenData = _owners[firstTokenId];
-        address tokenOwner = address(uint160(_tokenData));
+        address tokenOwner = address(uint160(_tokenData>>MPOS_OWNER));
         if (tokenOwner != from) {
             revert TransferFromIncorrectOwner(tokenOwner, from);
         }
@@ -193,7 +193,7 @@ contract C9Token is ERC721IdEnumBasic {
         delete _tokenApprovals[tokenId];
         _owners[tokenId] = _setTokenParam(
             _owners[tokenId],
-            0,
+            MPOS_OWNER,
             uint256(0),
             type(uint160).max
         );
@@ -405,14 +405,14 @@ contract C9Token is ERC721IdEnumBasic {
             done sequentially. */
 
             // _owners eXtended storage
-            uint256 packedToken = _to;
-            packedToken |= timestamp<<MPOS_VALIDITYSTAMP;
+            uint256 packedToken = timestamp;
             packedToken |= _input.validity<<MPOS_VALIDITY;
             packedToken |= _input.upgraded<<MPOS_UPGRADED;
             packedToken |= _input.display<<MPOS_DISPLAY;
             packedToken |= _input.locked<<MPOS_LOCKED;
             packedToken |= _input.insurance<<MPOS_INSURANCE;
             packedToken |= _input.votes<<MPOS_VOTES;
+            packedToken |= _to<<MPOS_OWNER;
             _owners[tokenId] = packedToken; // Officially minted
 
             // Additional storage in _uTokenData
@@ -666,7 +666,7 @@ contract C9Token is ERC721IdEnumBasic {
         xParams[7] = _viewPackedData(data, MPOS_VOTES, MSZ_VOTES);
         // Data stored in uTokenData
         data = _uTokenData[tokenId];
-        xParams[8] = uint256(uint16(data)); // Global Mint Id
+        xParams[8] = uint256(uint16(data>>UPOS_GLOBAL_MINT_ID)); // Global Mint Id
         xParams[9] = uint256(uint40(data>>UPOS_MINTSTAMP));
         xParams[10] = _viewPackedData(data, UPOS_EDITION, USZ_EDITION);
         xParams[11] = uint256(uint16(data>>UPOS_EDITION_MINT_ID));

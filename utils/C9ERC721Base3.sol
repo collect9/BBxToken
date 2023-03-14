@@ -40,13 +40,13 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     using Address for address;
     using Strings for uint256;
 
-    uint256 constant APOS_BALANCE = 0;
-    uint256 constant APOS_VOTES = 16;
-    uint256 constant APOS_REDEMPTIONS = 40;
-    uint256 constant APOS_LOCKED = 56;
-    uint256 constant APOS_LOCKSTAMP = 64;
-    uint256 constant APOS_LOCKPERIOD = 104;
-    uint256 constant APOS_RESERVED = 128;
+    uint256 constant APOS_LOCKED = 0;
+    uint256 constant APOS_LOCKSTAMP = 8;
+    uint256 constant APOS_LOCKPERIOD = 48;
+    uint256 constant APOS_RESERVED = 72;
+    uint256 constant APOS_REDEMPTIONS = 176;
+    uint256 constant APOS_BALANCE = 192;
+    uint256 constant APOS_VOTES = 208;
     uint256 constant APOS_TRANSFERS = 232;
     uint256 constant MAX_LOCK_PERIOD = 1209600; // 14 days
 
@@ -128,17 +128,17 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
         // Copy from storage first
         uint256 balancesFrom = _balances[from];
         // Check that the from account did not have an active lock
-        if (uint256(uint8(balancesFrom>>APOS_LOCKED)) == LOCKED) {
+        if (uint256(uint8(balancesFrom)) == LOCKED) {
             revert AddressLocked(from);
         }
         // Copy from storage first
         uint256 balancesTo = _balances[to];
 
         // Parameters to update, token owners balances and transfer counts
-        uint256 balanceFrom = uint256(uint16(balancesFrom));
+        uint256 balanceFrom = uint256(uint16(balancesFrom>>APOS_BALANCE));
         uint256 votesFrom = uint256(uint24(balancesFrom>>APOS_VOTES));
         uint256 xfersFrom = balancesFrom>>APOS_TRANSFERS;
-        uint256 balanceTo = uint256(uint16(balancesTo));
+        uint256 balanceTo = uint256(uint16(balancesTo>>APOS_BALANCE));
         uint256 votesTo = uint256(uint24(balancesTo>>APOS_VOTES));
         uint256 xfersTo = balancesTo>>APOS_TRANSFERS;
 
@@ -152,44 +152,16 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
             xfersTo += batchSize;
         }
 
-        // Set packed values in memory
-        balancesFrom = _setTokenParam(
-            balancesFrom,
-            APOS_BALANCE,
-            balanceFrom,
-            type(uint16).max
-        );
-        balancesFrom = _setTokenParam(
-            balancesFrom,
-            APOS_VOTES,
-            votesFrom,
-            type(uint24).max
-        );
-        balancesFrom = _setTokenParam(
-            balancesFrom,
-            APOS_TRANSFERS,
-            xfersFrom,
-            type(uint24).max
-        );
+        // Set packed data in memory
+        balancesFrom &= uint256(0)<<APOS_BALANCE;
+        balancesFrom |= balanceFrom<<APOS_BALANCE;
+        balancesFrom |= votesFrom<<APOS_VOTES;
+        balancesFrom |= xfersFrom<<APOS_TRANSFERS;
 
-        balancesTo = _setTokenParam(
-            balancesTo,
-            APOS_BALANCE,
-            balanceTo,
-            type(uint16).max
-        );
-        balancesTo = _setTokenParam(
-            balancesTo,
-            APOS_VOTES,
-            votesTo,
-            type(uint24).max
-        );
-        balancesTo = _setTokenParam(
-            balancesTo,
-            APOS_TRANSFERS,
-            xfersTo,
-            type(uint24).max
-        );
+        balancesTo &= uint256(0)<<APOS_BALANCE;
+        balancesTo |= balanceTo<<APOS_BALANCE;
+        balancesTo |= votesTo<<APOS_VOTES;
+        balancesTo |= xfersTo<<APOS_TRANSFERS;
 
         // Copy back to storage
         _balances[from] = balancesFrom;
@@ -367,7 +339,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
             if (_exists(_tokenId)) {
                 revert TokenAlreadyMinted(_tokenId);
             }
-            _owners[_tokenId] = _to;
+            _owners[_tokenId] = _to<<MPOS_OWNER;
             emit Transfer(address(0), to, _tokenId);
             unchecked {
                 ++_tokenId;
@@ -380,15 +352,13 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
         }
     }
 
-
-
     /**
      * @dev Returns the owner of the `tokenId`. Does NOT revert if token doesn't exist
      */
     function _ownerOf(uint256 tokenId)
     internal view virtual
     returns (address) {
-        return address(uint160(_owners[tokenId]));
+        return address(uint160(_owners[tokenId]>>MPOS_OWNER));
     }
 
     /**
@@ -482,31 +452,19 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
 
     function __transfer(uint256 to, uint256 tokenId)
     internal virtual
-    returns (uint256) {
+    returns (uint256 votes) {
         uint256 tokenData = _owners[tokenId];
-        uint256 tokenTransferCount = uint256(uint24(tokenData>>MPOS_XFER_COUNTER));
+        votes = _viewPackedData(tokenData, MPOS_VOTES, MSZ_VOTES);
+        uint256 tokenTransferCount = tokenData>>MPOS_XFER_COUNTER;
         unchecked {++tokenTransferCount;}
 
-        // Set new owner
-        tokenData = _setTokenParam(
-            tokenData,
-            0,
-            to,
-            type(uint160).max
-        );
-        // Update token transfer count
-        tokenData = _setTokenParam(
-            tokenData,
-            MPOS_XFER_COUNTER,
-            tokenTransferCount,
-            type(uint24).max
-        );
+        // Set new owner and transfer count
+        tokenData &= uint256(0)<<MPOS_OWNER; // NEED EXACT MASK
+        tokenData |= to<<MPOS_OWNER;
+        tokenData |= tokenTransferCount<<MPOS_XFER_COUNTER;
 
         // Copy back to storage
         _owners[tokenId] = tokenData;
-
-        // Return number of votes this token is worth
-        return tokenData>>MPOS_VOTES;
     }
 
     function _transfer(address from, address to, uint256 tokenId)
@@ -658,7 +616,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     public view virtual
     returns (uint256 balance, uint256 votes, uint256 redemptions, uint256 transfers) {
         uint256 ownerData = _balances[tokenOwner];
-        balance = uint256(uint16(ownerData));
+        balance = uint256(uint16(ownerData>>APOS_BALANCE));
         votes = uint256(uint24(ownerData>>APOS_VOTES));
         redemptions = uint256(uint16(ownerData>>APOS_REDEMPTIONS));
         transfers = uint256(ownerData>>APOS_TRANSFERS);
