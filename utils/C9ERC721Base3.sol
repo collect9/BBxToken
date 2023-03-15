@@ -191,7 +191,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     /**
      * @dev Updates the addresse's redemptions count.
      */
-    function _addRedemptions(address from, uint256 batchSize)
+    function _addRedemptionsTo(address from, uint256 batchSize)
     internal view virtual {
         uint256 balancesFrom = _balances[from];
         uint256 redemptions = uint256(uint16(balancesFrom>>APOS_REDEMPTIONS));

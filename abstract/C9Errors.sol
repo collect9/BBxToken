@@ -2,11 +2,14 @@
 pragma solidity >=0.8.17;
 
 // C9ERC721
+error AddressLocked(address from);
+error AddressNotLocked();
 error ApproveToCaller(); //0xb06307db
 error BatchSizeTooLarge(uint256 maxSize, uint256 received); //0x01df19f6
 //error CallerNotOwnerOrApproved(); //0x8c11f105
 error CallerNotOwnerOrApproved(uint256 tokenId, address owner, address from);
 error InvalidToken(uint256 tokenId); //0x925d6b18
+error LockPeriodNotFinished(uint256 period, uint256 received);
 error NonERC721Receiver(); //0x80526d0c
 error OwnerAlreadyApproved(); //0x08fb3828
 error OwnerIndexOOB(uint256 maxIndex, uint256 received); //0xc643a750
@@ -25,6 +28,7 @@ error NoRoleOnAccount(); //0xb1a60829
 error NoTransferPending(); //0x9c6b0866
 error C9Unauthorized(); //0xa020ddad
 error C9ZeroAddressInvalid(); //0x7c7fa4fb
+error RequiredAccessMissing(address account, bytes32 role);
 
 // Market contract
 error InputSizeMismatch(uint256 tokenIdSize, uint256 listingPriceSize, uint256 sigSize); //0x0e8930bf
@@ -53,10 +57,11 @@ error PriceFeedDated(uint256 maxDelay, uint256 received); //0xb8875fad
 // Token
 error AddressAlreadySet(); //0xf62c2d82
 error CallerNotContract(); //0xa85366a7
+error CannotValidToDead(uint256 tokenId, uint256 validity);
 error C9TokenNotBurnable(uint256 tokenId, uint256 validity);
 error EditionOverflow(uint256 received); //0x5723b5d1
 error IncorrectTokenValidity(uint256 expected, uint256 received); //0xe8c07318
-error Input2SizeMismatch(uint256 inputSize1, uint256 inputSize2); //0xa9d63c10
+error InputsSizeMismatch(uint256 inputSize1, uint256 inputSize2); //0xa9d63c10
 error InvalidVId(uint256 received); //0xcf8cffb0
 error NoOwnerSupply(address sender); //0x973d81af
 error PeriodTooLong(uint256 maxPeriod, uint256 received); //0xd36b55de

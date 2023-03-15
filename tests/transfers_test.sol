@@ -22,7 +22,7 @@ contract TransfersTest is C9TestContract {
     function checkTransfer1()
     public {
         address to = TestsAccounts.getAccount(1);
-        uint256 mintId = _timestamp % _rawData.length;
+        uint256 mintId = _timestamp % (_rawData.length-4);
         (uint256 tokenId, uint256 numVotes) = _getTokenIdVotes(mintId);
 
         c9t.transferFrom(c9tOwner, to, tokenId);
@@ -46,12 +46,12 @@ contract TransfersTest is C9TestContract {
         address to = TestsAccounts.getAccount(1);
 
         uint256[] memory mintIds = new uint256[](2);
-        mintIds[0] = (_timestamp + 1) % _rawData.length;
-        mintIds[1] = (_timestamp + 2) % _rawData.length;
+        mintIds[0] = (_timestamp + 1) % (_rawData.length-4);
+        mintIds[1] = (_timestamp + 2) % (_rawData.length-4);
         (uint256[] memory tokenIds, uint256 numVotes) = _getTokenIdsVotes(mintIds);
 
         // Make sure new owner is correct
-        c9t.transferFrom(c9tOwner, to, tokenIds);
+        c9t.transferBatchFrom(c9tOwner, to, tokenIds);
 
         // Make sure new owner is correct
         for (uint256 i; i<tokenIds.length; ++i) {
@@ -72,7 +72,7 @@ contract TransfersTest is C9TestContract {
     function checkSafeTransfer()
     public {
         address to = TestsAccounts.getAccount(2);
-        uint256 mintId = (_timestamp + 3) % _rawData.length;
+        uint256 mintId = (_timestamp + 3) % (_rawData.length-4);
         (uint256 tokenId, uint256 numVotes) = _getTokenIdVotes(mintId);
 
         c9t.safeTransferFrom(c9tOwner, to, tokenId);
@@ -96,11 +96,11 @@ contract TransfersTest is C9TestContract {
         address to = TestsAccounts.getAccount(2);
 
         uint256[] memory mintIds = new uint256[](2);
-        mintIds[0] = (_timestamp + 4) % _rawData.length;
-        mintIds[1] = (_timestamp + 5) % _rawData.length;
+        mintIds[0] = (_timestamp + 4) % (_rawData.length-4);
+        mintIds[1] = (_timestamp + 5) % (_rawData.length-4);
         (uint256[] memory tokenIds, uint256 numVotes) = _getTokenIdsVotes(mintIds);
 
-        c9t.safeTransferFrom(c9tOwner, to, tokenIds);
+        c9t.safeTransferBatchFrom(c9tOwner, to, tokenIds);
 
         // Make sure new owner is correct
         for (uint256 i; i<tokenIds.length; ++i) {
@@ -125,19 +125,19 @@ contract TransfersTest is C9TestContract {
         toBatch[1] = TestsAccounts.getAccount(2);
 
         uint256[] memory mintIdsTo1 = new uint256[](2);
-        mintIdsTo1[0] = (_timestamp + 6) % _rawData.length;
-        mintIdsTo1[1] = (_timestamp + 7) % _rawData.length;
+        mintIdsTo1[0] = (_timestamp + 6) % (_rawData.length-4);
+        mintIdsTo1[1] = (_timestamp + 7) % (_rawData.length-4);
         (uint256[] memory tokenIdsTo1, uint256 numVotesTo1) = _getTokenIdsVotes(mintIdsTo1);
 
         uint256[] memory mintIdsTo2 = new uint256[](1);
-        mintIdsTo2[0] = (_timestamp + 8) % _rawData.length;
+        mintIdsTo2[0] = (_timestamp + 8) % (_rawData.length-4);
         (uint256[] memory tokenIdsTo2, uint256 numVotesTo2) = _getTokenIdsVotes(mintIdsTo2);
 
         uint256[][] memory tokenIds = new uint256[][](2);
         tokenIds[0] = tokenIdsTo1;
         tokenIds[1] = tokenIdsTo2;
 
-        c9t.safeTransferFrom(c9tOwner, toBatch, tokenIds);
+        c9t.safeBatchTransferBatchFrom(c9tOwner, toBatch, tokenIds);
 
         // Make sure new owners are correct
         for (uint256 j; j<toBatch.length; j++) {
