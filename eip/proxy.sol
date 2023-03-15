@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "./interfaces/ieip7777.sol";
+import "./interfaces/ierc6670.sol";
 
 /**
 * @dev This a proxy contract that one would build to 
@@ -39,6 +39,6 @@ contract Proxy {
      */
     function safeTransferBatch(address from, address to, uint256[] calldata tokenIds)
     public {
-        IEIP7777(contractTokenUpdated).safeTransferBatchFrom(from, to, tokenIds);
+        IERC6670(contractTokenUpdated).safeTransferBatchFrom(from, to, tokenIds);
     }
 }

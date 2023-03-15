@@ -13,4 +13,3 @@ contract UpdatedTokenContract is ERC721 {
         }
     }
 }
-

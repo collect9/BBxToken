@@ -12,14 +12,14 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
 
 // New interface
-import "./interfaces/ieip7777.sol";
+import "./interfaces/IERC6670.sol";
 
 /**
  * @dev Implementation of https://eips.ethereum.org/EIPS/eip-721[ERC721] Non-Fungible Token Standard, including
  * the Metadata extension, but not including the Enumerable extension, which is available separately as
  * {ERC721Enumerable}.
  */
-contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IEIP7777 {
+contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IERC6670 {
     using Address for address;
     using Strings for uint256;
 
@@ -465,92 +465,92 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata, IEIP7777 {
     // NEW BATCH FUNCTIONS DOWN HERE
 
 
-    /**
-     * @dev See {IERC165-supportsInterface}. New interface added so indexers know to look 
-     * for the new TransferBatch event.
-     */
-    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC165, IERC165) returns (bool) {
-        return
-            interfaceId == type(IERC721).interfaceId ||
-            interfaceId == type(IERC721Metadata).interfaceId ||
-            interfaceId == type(IEIP7777).interfaceId ||
-            super.supportsInterface(interfaceId);
-    }
-
-    /**
-     * @dev Custom errors reduce deployment costs.
-     */
-    error InputSizesMisMatch();
-    error NonERC721Receiver();
-
-    /**
-    * @dev New transfer batch method needed.
-    * Note: The original _transfer function could be updated so that we
-    * aren't repeating code here between A. and B. Additionally,
-    * _beforeTokenTransfer and _afterTokenTransfer are now 
-    * more flexible to work with batches.
+/**
+    * @dev See {IERC165-supportsInterface}. New interface added so indexers know to look 
+    * for the new TransferBatch event.
     */
-    function _transferBatch(address from, address to, uint256[] calldata tokenIds)
-    internal virtual {
-        uint256 _batchSize = tokenIds.length;
-        uint256 tokenId;
-        for (uint256 i; i<_batchSize;) {
-            tokenId = tokenIds[i];
+function supportsInterface(bytes4 interfaceId) public view virtual override(ERC165, IERC165) returns (bool) {
+    return
+        interfaceId == type(IERC721).interfaceId ||
+        interfaceId == type(IERC721Metadata).interfaceId ||
+        interfaceId == type(IERC6670).interfaceId ||
+        super.supportsInterface(interfaceId);
+}
 
-            // A.
-            // This part is the same from _transfer (no batch updates for a more fair benchmark comparison)
-            // _transfer(...) should be updated so we don't have to repeat this code here.
-            require(ERC721.ownerOf(tokenId) == from, "ERC721: transfer from incorrect owner");
-            require(to != address(0), "ERC721: transfer to the zero address");
-            _beforeTokenTransfer(from, to, tokenId, 1);
-            // Check that tokenId was not transferred by `_beforeTokenTransfer` hook
-            require(ERC721.ownerOf(tokenId) == from, "ERC721: transfer from incorrect owner");
+/**
+    * @dev Custom errors reduce deployment costs.
+    */
+error InputSizesMisMatch();
+error NonERC721Receiver();
 
-            // Clear approvals from the previous owner
-            delete _tokenApprovals[tokenId];
-            _owners[tokenId] = to;
-            _afterTokenTransfer(from, to, tokenId, 1);
-            // A.
-            // This concludes the copy/paste from _transfer(...)
+/**
+* @dev New transfer batch method needed.
+* Note: The original _transfer function could be updated so that we
+* aren't repeating code here between A. and B. Additionally,
+* _beforeTokenTransfer and _afterTokenTransfer are now 
+* more flexible to work with batches.
+*/
+function _transferBatch(address from, address to, uint256[] calldata tokenIds)
+internal virtual {
+    uint256 _batchSize = tokenIds.length;
+    uint256 tokenId;
+    for (uint256 i; i<_batchSize;) {
+        tokenId = tokenIds[i];
 
-            unchecked {++i;}
-        }
+        // A.
+        // This part is the same from _transfer (no batch updates for a more fair benchmark comparison)
+        // _transfer(...) should be updated so we don't have to repeat this code here.
+        require(ERC721.ownerOf(tokenId) == from, "ERC721: transfer from incorrect owner");
+        require(to != address(0), "ERC721: transfer to the zero address");
+        _beforeTokenTransfer(from, to, tokenId, 1);
+        // Check that tokenId was not transferred by `_beforeTokenTransfer` hook
+        require(ERC721.ownerOf(tokenId) == from, "ERC721: transfer from incorrect owner");
 
-        // Only one updated needed now for balances
-        unchecked {
-            _balances[from] -= _batchSize;
-            _balances[to] += _batchSize;
-        }
+        // Clear approvals from the previous owner
+        delete _tokenApprovals[tokenId];
+        _owners[tokenId] = to;
+        _afterTokenTransfer(from, to, tokenId, 1);
+        // A.
+        // This concludes the copy/paste from _transfer(...)
 
-        // Emit event only one time
-        emit TransferBatch(from, to, tokenIds);
+        unchecked {++i;}
     }
 
-    /**
-     * @dev Batched safeTransfer.
-     */
-    function safeTransferBatchFrom(address from, address to, uint256[] calldata tokenIds)
-    public virtual override {
-        _transferBatch(from, to, tokenIds);
-        // Only need to check one time when going to same address
-        if (!_checkOnERC721Received(from, to, tokenIds[0], "")) {
-            revert NonERC721Receiver();
-        }
+    // Only one updated needed now for balances
+    unchecked {
+        _balances[from] -= _batchSize;
+        _balances[to] += _batchSize;
     }
 
-    /**
-     * @dev Batched safeTransfer from batched.
-     */
-    function safeTransferBatchFromBatch(address from, address[] calldata to, uint256[][] calldata tokenIds)
-    public virtual override {
-        uint256 _batchSize = tokenIds.length;
-        uint256 _addressBookSize = to.length;
-        if (_addressBookSize != _batchSize) {
-            revert InputSizesMisMatch();
-        }
-        for (uint256 i; i<_batchSize;) {
-            safeTransferBatchFrom(from, to[i], tokenIds[i]);
-            unchecked {++i;}
-        }
+    // Emit event only one time
+    emit TransferBatch(from, to, tokenIds);
+}
+
+/**
+    * @dev Batched safeTransfer.
+    */
+function safeTransferBatchFrom(address from, address to, uint256[] calldata tokenIds)
+public virtual override {
+    _transferBatch(from, to, tokenIds);
+    // Only need to check one time when going to same address
+    if (!_checkOnERC721Received(from, to, tokenIds[0], "")) {
+        revert NonERC721Receiver();
     }
+}
+
+/**
+    * @dev Batched safeTransfer from batched.
+    */
+function safeBatchTransferBatchFrom(address from, address[] calldata to, uint256[][] calldata tokenIds)
+public virtual override {
+    uint256 _batchSize = tokenIds.length;
+    uint256 _addressBookSize = to.length;
+    if (_addressBookSize != _batchSize) {
+        revert InputSizesMisMatch();
+    }
+    for (uint256 i; i<_batchSize;) {
+        safeTransferBatchFrom(from, to[i], tokenIds[i]);
+        unchecked {++i;}
+    }
+}
 }
