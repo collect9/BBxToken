@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.17;
+pragma solidity >0.8.17;
 import "./abstract/C9Struct4.sol";
 import "./interfaces/IC9MetaData.sol";
 import "./interfaces/IC9SVG.sol";
@@ -189,6 +189,26 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
+     * @dev See {IERC-5560 IRedeemable}
+     * The IERC is not official, but the function is a good
+     * idea to implement anyway for quick lookup.
+     */
+    function _isRedeemable(uint256 tokenId, uint256 tokenData)
+    private view
+    returns (bool) {
+        if (_preRedeemable(_uTokenData[tokenId])) {
+            return false;
+        }
+        uint256 _vId = _currentVId(tokenData); 
+        if (_vId != VALID) {
+            if (_vId != INACTIVE) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * @dev Returns a unique hash depending on certain token `_input` attributes. 
      * This helps keep track the `_edition` number of a particular set of attributes. 
      * Note that if the token is burned, the edition cannot be replaced but 
@@ -208,6 +228,17 @@ contract C9Token is ERC721IdEnumBasic {
         );
     }
 
+    /**
+     * @dev Returns whether or not the token pre-release period 
+     * has ended.
+     */
+    function _preRedeemable(uint256 tokenData)
+    private view
+    returns (bool) {
+        uint256 _ds = block.timestamp - uint256(uint40(tokenData>>UPOS_MINTSTAMP));
+        return _ds < _preRedeemablePeriod;
+    }
+
     /*
      * @dev The function that locks to token prior to 
      * calling the redeemer contract.
@@ -219,7 +250,7 @@ contract C9Token is ERC721IdEnumBasic {
         uint256 _tokenData;
         for (uint256 i; i<_batchSize;) {
             _tokenId = _tokenIds[i];
-            // 1. Check token exists that caller is owner or approved
+            // 1. Check token exists (implicit via ownerOf()) and that caller is owner or approved
             _isApprovedOrOwner(_msgSender(), ownerOf(_tokenId), _tokenId);
             // 2. Copy token data from storage
             _tokenData = _owners[_tokenId];
@@ -451,20 +482,20 @@ contract C9Token is ERC721IdEnumBasic {
      * contract owner where they may only be burned.
      */
     function adminUnlock(uint256 tokenId)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-        requireMinted(tokenId)
-        notDead(tokenId) {
-            _unlockToken(tokenId);
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE)
+    requireMinted(tokenId)
+    notDead(tokenId) {
+        _unlockToken(tokenId);
     }
 
     /**
       Temp function testing only.
       */
     function baseURIArray(uint256 index)
-        external view
-        returns (string memory) {
-            return _baseURIArray[index];
+    external view
+    returns (string memory) {
+        return _baseURIArray[index];
     }
 
     /**
@@ -542,16 +573,6 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Burned tokens still exist at the zero 
-     * address in this contract.
-     */
-    function exists(uint256 tokenId)
-    external view 
-    returns (bool) {
-        return _exists(tokenId);
-    }
-
-    /**
      * @dev Returns the list of burned tokens.
      */
     function getBurned()
@@ -586,8 +607,8 @@ contract C9Token is ERC721IdEnumBasic {
      * @dev Returns the data in the reserved space.
      */
     function getReserved(uint256 tokenId)
-    requireMinted(tokenId)
     external view
+    requireMinted(tokenId)
     returns (uint256) {
         uint256 tokenData = _uTokenData[tokenId];
         return tokenData>>UPOS_RESERVED;
@@ -595,8 +616,7 @@ contract C9Token is ERC721IdEnumBasic {
 
     /**
      * @dev uTokenData is packed into a single uint256. This function
-     * returns an unpacked array. It overrides the C9Struct defintion 
-     * so only the _tokenId needs to be passed in.
+     * returns an unpacked array.
      */
     function getTokenParams(uint256 tokenId)
     external view
@@ -634,23 +654,9 @@ contract C9Token is ERC721IdEnumBasic {
      * The IERC is not official, but the function is a good
      * idea to implement anyway for quick lookup.
      */
-    function _isRedeemable(uint256 tokenId, uint256 tokenData)
-    private view
-    returns (bool) {
-        if (preRedeemable(tokenId)) {
-            return false;
-        }
-        uint256 _vId = _currentVId(tokenData); 
-        if (_vId != VALID) {
-            if (_vId != INACTIVE) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     function isRedeemable(uint256 tokenId)
-    public view
+    external view
+    requireMinted(tokenId)
     returns (bool) {
         return _isRedeemable(tokenId, _owners[tokenId]);
     }
@@ -661,6 +667,7 @@ contract C9Token is ERC721IdEnumBasic {
      */
     function isRedeemed(uint256 tokenId)
     external view
+    requireMinted(tokenId)
     returns (bool) {
         if (_currentVId(_owners[tokenId]) == REDEEMED) {
             return true;
@@ -696,11 +703,10 @@ contract C9Token is ERC721IdEnumBasic {
      * has ended.
      */
     function preRedeemable(uint256 tokenId)
-    public view
+    external view
+    requireMinted(tokenId)
     returns (bool) {
-        uint256 tokenData = _uTokenData[tokenId];
-        uint256 _ds = block.timestamp - uint256(uint40(tokenData>>UPOS_MINTSTAMP));
-        return _ds < _preRedeemablePeriod;
+        return _preRedeemable(_uTokenData[tokenId]);
     }
 
     /**
@@ -725,13 +731,14 @@ contract C9Token is ERC721IdEnumBasic {
         uint256 _redeemerData = IC9Redeemer(contractRedeemer).cancel(_msgSender());
         uint256 _batchSize = uint256(uint8(_redeemerData>>RPOS_BATCHSIZE));
         uint256 _tokenOffset = RPOS_TOKEN1;
+        uint256 _tokenOffsetMax;
+        unchecked {_tokenOffset + (_batchSize*UINT_SIZE);}
         uint256 _tokenId;
-        for (uint256 i; i<_batchSize;) {
+        for (_tokenOffset; _tokenOffset<_tokenOffsetMax;) {
             _tokenId = uint256(uint24(_redeemerData>>_tokenOffset));
             _unlockToken(_tokenId);
             unchecked {
                 _tokenOffset += UINT_SIZE;
-                ++i;
             }
         }
     }
@@ -745,19 +752,20 @@ contract C9Token is ERC721IdEnumBasic {
     isContract() {
         uint256 _batchSize = uint256(uint8(redeemerData>>RPOS_BATCHSIZE));
         uint256 _tokenOffset = RPOS_TOKEN1;
+        uint256 _tokenOffsetMax;
+        unchecked {_tokenOffset + (_batchSize*UINT_SIZE);}
         uint256 _tokenId;
         // Set all tokens to redeemed
-        for (uint256 i; i<_batchSize;) {
+        for (_tokenOffset; _tokenOffset<_tokenOffsetMax;) {
             _tokenId = uint256(uint24(redeemerData>>_tokenOffset));
             _setTokenValidity(_tokenId, REDEEMED);
+            _redeemedTokens.push(uint24(_tokenId));
             unchecked {
                 _tokenOffset += UINT_SIZE;
-                ++i;
             }
-            _redeemedTokens.push(uint24(_tokenId));
         }
-        // Update the redeemer's redemption count
-        _addRedemptionsTo(ownerOf(_tokenId), _batchSize);
+        // Update the token owner's redemption count
+        _addRedemptionsTo(_ownerOf(_tokenId), _batchSize);
     }
 
     /**
@@ -795,10 +803,10 @@ contract C9Token is ERC721IdEnumBasic {
      * global defaults.
      */
     function resetTokenRoyalty(uint256 tokenId)
+    external
     onlyRole(DEFAULT_ADMIN_ROLE)
     requireMinted(tokenId)
-    notDead(tokenId)
-    external {
+    notDead(tokenId) {
         _setTokenRoyalty(tokenId, _royaltyReceiver, _royalty);
     }
 
@@ -940,7 +948,8 @@ contract C9Token is ERC721IdEnumBasic {
      * 120 bits remain in the reserved storage space.
      */
     function setReserved(uint256 tokenId, uint256 data)
-    public {
+    public
+    requireMinted(tokenId) {
         bool _isReservedRole = hasRole(RESERVED_ROLE, _msgSender());
         // If owner or approved or RESERVED_ROLE
         if (!_isReservedRole) {

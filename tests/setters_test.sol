@@ -76,5 +76,49 @@ contract SettersTest is C9TestContract {
         Assert.equal(string.concat("https://", contractURI, ".json"), c9t.contractURI(), "Invalid contractURI");
     }
 
+    /* @dev 4. Tests reserved space setters.
+     */
+    function checkReserved()
+    public {
+        uint256 mintId = _timestamp % _rawData.length;
+        (uint256 tokenId,) = _getTokenIdVotes(mintId);
+
+        // Must enable reserved space
+        c9t.toggleReserved(true);
+
+        c9t.setReserved(tokenId, _timestamp);
+        uint256 reservedResult = c9t.getReserved(tokenId);
+        Assert.equal(reservedResult, _timestamp, "Invalid reserved 1");
+
+        uint256 randomness = uint256(uint120(uint256(keccak256(abi.encodePacked(_timestamp)))));
+        c9t.setReserved(tokenId, randomness);
+        reservedResult = c9t.getReserved(tokenId);
+        Assert.equal(reservedResult, randomness, "Invalid reserved 2");
+
+        c9t.setReserved(tokenId, _timestamp);
+        reservedResult = c9t.getReserved(tokenId);
+        Assert.equal(reservedResult, _timestamp, "Invalid reserved 3");
+    }
+
+    /* @dev 5. Tests for account reserved space setters.
+     */
+    function checkAccountReserved()
+    public {
+        // Must enable reserved space
+        c9t.toggleReservedBalanceSpace(true);
+
+        c9t.setReservedBalanceSpace(_timestamp);
+        uint256 reservedResult = c9t.getReservedBalanceSpace(c9tOwner);
+        Assert.equal(reservedResult, _timestamp, "Invalid account reserved 1");
+
+        uint256 randomness = uint256(uint104(uint256(keccak256(abi.encodePacked(_timestamp)))));
+        c9t.setReservedBalanceSpace(randomness);
+        reservedResult = c9t.getReservedBalanceSpace(c9tOwner);
+        Assert.equal(reservedResult, randomness, "Invalid account reserved 2");
+
+        c9t.setReservedBalanceSpace(_timestamp);
+        reservedResult = c9t.getReservedBalanceSpace(c9tOwner);
+        Assert.equal(reservedResult, _timestamp, "Invalid account reserved 3");
+    }
 }
     
