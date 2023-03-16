@@ -141,14 +141,17 @@ contract C9Token is ERC721IdEnumBasic {
     function _burn(uint256 tokenId)
     internal
     override {
-        emit Transfer(_ownerOf(tokenId), address(0), tokenId);
+        emit Transfer(ownerOf(tokenId), address(0), tokenId);
         delete _tokenApprovals[tokenId];
+        // Set zero address
         _owners[tokenId] = _setTokenParam(
             _owners[tokenId],
             MPOS_OWNER,
             uint256(0),
             type(uint160).max
         );
+
+        
     }
 
     /*
@@ -206,8 +209,8 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /*
-     * @dev A lot of code has been repeated (inlined) here to minimize 
-     * storage reads to reduce gas cost.
+     * @dev The function that locks to token prior to 
+     * calling the redeemer contract.
      */
     function _redeemLockTokens(uint256[] calldata _tokenIds)
     private {
@@ -216,42 +219,29 @@ contract C9Token is ERC721IdEnumBasic {
         uint256 _tokenData;
         for (uint256 i; i<_batchSize;) {
             _tokenId = _tokenIds[i];
-            // 1. Check token exists and get owner
-            // 2. Check caller is owner or approved to redeem
+            // 1. Check token exists that caller is owner or approved
             _isApprovedOrOwner(_msgSender(), ownerOf(_tokenId), _tokenId);
-            // 3. Check token is redeemable
-            if (preRedeemable(_tokenId)) {
-                revert TokenPreRedeemable(_tokenId);
-            }
-            // 4. Check the token validity status
+            // 2. Copy token data from storage
             _tokenData = _owners[_tokenId];
-            uint256 _validity = _currentVId(_tokenData);
-            if (_validity != VALID) {
-                if (_validity == INACTIVE) {
-                    /* Inactive tokens can still be redeemed and 
-                       will be changed to valid as user activity 
-                       will automatically fix this status. */
-                    _tokenData = _setDataValidity(_tokenData, VALID);
-                }
-                else {
-                    revert IncorrectTokenValidity(VALID, _validity);
-                }
+            // 3. Check token is redeemable
+            if (!_isRedeemable(_tokenId, _tokenData)) {
+                revert TokenNotRedeemable(_tokenId);
             }
-            /* 5. If valid but locked, token is already in redeemer.
+            /* 4. If redeemable but locked, token is already in redeemer.
                   This will also prevent multiple approved trying to
                   redeem the same token at once.
             */
             if (_tokenData & BOOL_MASK == LOCKED) {
                 revert TokenIsLocked(_tokenId);
             }
-            // 6. All checks pass, so lock the token
+            // 5. All checks pass, so lock the token
             _tokenData = _setTokenParam(
                 _tokenData,
                 MPOS_LOCKED,
                 LOCKED,
                 BOOL_MASK
             );
-            // 7. Save token data (locked) back to storage.
+            // 6. Save to storage
             _owners[_tokenId] = _tokenData;
             unchecked {++i;}
         }
@@ -494,9 +484,12 @@ contract C9Token is ERC721IdEnumBasic {
         if (validity < REDEEMED) {
             revert C9TokenNotBurnable(tokenId, validity);
         }
-        // 2. Zero address burn
+        // 2. Votes burn
+        uint256 votesToBurn = _viewPackedData(_tokenData, MPOS_VOTES, MSZ_VOTES);
+        unchecked {_totalVotes -= votesToBurn;}
+        // 3. Zero address burn
         _burn(tokenId);
-        // 3. Add to list of burned tokens
+        // 4. Add to list of burned tokens
         _burnedTokens.push(uint24(tokenId));
     }
 
@@ -546,6 +539,16 @@ contract C9Token is ERC721IdEnumBasic {
         return string(abi.encodePacked(
             "https://", _contractURI, ".json"
         ));
+    }
+
+    /**
+     * @dev Burned tokens still exist at the zero 
+     * address in this contract.
+     */
+    function exists(uint256 tokenId)
+    external view 
+    returns (bool) {
+        return _exists(tokenId);
     }
 
     /**
@@ -631,19 +634,25 @@ contract C9Token is ERC721IdEnumBasic {
      * The IERC is not official, but the function is a good
      * idea to implement anyway for quick lookup.
      */
-    function isRedeemable(uint256 tokenId)
-    external view
+    function _isRedeemable(uint256 tokenId, uint256 tokenData)
+    private view
     returns (bool) {
         if (preRedeemable(tokenId)) {
             return false;
         }
-        uint256 _vId = _currentVId(_owners[tokenId]); 
+        uint256 _vId = _currentVId(tokenData); 
         if (_vId != VALID) {
             if (_vId != INACTIVE) {
                 return false;
             }
         }
         return true;
+    }
+
+    function isRedeemable(uint256 tokenId)
+    public view
+    returns (bool) {
+        return _isRedeemable(tokenId, _owners[tokenId]);
     }
 
     /**
@@ -671,6 +680,7 @@ contract C9Token is ERC721IdEnumBasic {
         unchecked {
             minterBalance += input.length;
             minterVotes += votes;
+            _totalVotes += votes;
         }
         uint256 balances = _balances[_msgSender()];
         balances &= ~(MASK_BALANCER)<<APOS_BALANCE;
@@ -685,11 +695,10 @@ contract C9Token is ERC721IdEnumBasic {
      * @dev Returns whether or not the token pre-release period 
      * has ended.
      */
-    function preRedeemable(uint256 _tokenId)
+    function preRedeemable(uint256 tokenId)
     public view
-    requireMinted(_tokenId)
     returns (bool) {
-        uint256 tokenData = _uTokenData[_tokenId];
+        uint256 tokenData = _uTokenData[tokenId];
         uint256 _ds = block.timestamp - uint256(uint40(tokenData>>UPOS_MINTSTAMP));
         return _ds < _preRedeemablePeriod;
     }
@@ -1113,7 +1122,7 @@ contract C9Token is ERC721IdEnumBasic {
     requireMinted(tokenId)
     returns (string memory) {
         return IC9SVG(contractSVG).returnSVG(
-            ownerOf(tokenId),
+            _ownerOf(tokenId),
             tokenId,
             _uTokenData[tokenId],
             _sTokenData[tokenId]
@@ -1198,6 +1207,24 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
+     * @dev Returns the number of burned tokens.
+     */
+    function totalBurned()
+    external view
+    returns (uint256) {
+        return _burnedTokens.length;
+    }
+
+    /**
+     * @dev Returns the number of redeemed tokens.
+     */
+    function totalRedeemed()
+    external view
+    returns (uint256) {
+        return _redeemedTokens.length;
+    }
+
+    /**
      * @dev Disables self-destruct functionality.
      * Note: even if admin gets through the confirm 
      * is hardcoded to false.
@@ -1208,6 +1235,4 @@ contract C9Token is ERC721IdEnumBasic {
         //confirm = false;
         super.__destroy(_receiver, confirm);
     }
-
-
 }

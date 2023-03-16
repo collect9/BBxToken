@@ -57,6 +57,9 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
 
     // Total supply
     uint256 internal _totalSupply;
+
+    // Total votes
+    uint256 internal _totalVotes;
     
     // Mapping from token ID to owner address
     // Updated to be packed, uint160 (default address) with 96 extra bits of custom storage
@@ -525,7 +528,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
      */
     function approve(address to, uint256 tokenId)
     public virtual
-    override {
+    override
+    validTo(to) {
         address tokenOwner = ownerOf(tokenId);
         if (to == tokenOwner) {
             revert OwnerAlreadyApproved();
@@ -647,6 +651,11 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
 
     /**
      * @dev See {IERC721-ownerOf}.
+     * Note: Prior ownerOf reverts is the owner address (0) meaning 
+     * the token doesn't exist. Since this ERC stores additional 
+     * data in tokenId, we need to check if any data is present 
+     * to ensure the token is invalid. This checks only happens 
+     * if tokenOwner is address(0) to save on gas.
      */
     function ownerOf(uint256 tokenId)
     public view virtual
@@ -654,7 +663,9 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     returns (address) {
         address tokenOwner = _ownerOf(tokenId);
         if (tokenOwner == address(0)) {
-            revert InvalidToken(tokenId);
+            if (!_exists(tokenId)) {
+                revert InvalidToken(tokenId);
+            }
         }
         return tokenOwner;
     }
@@ -825,6 +836,12 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     public view virtual 
     returns (uint256) {
         return _totalSupply;
+    }
+
+    function totalVotes()
+    public view virtual 
+    returns (uint256) {
+        return _totalVotes;
     }
 
     function transfersOf(address tokenOwner)
