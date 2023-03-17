@@ -75,6 +75,7 @@ error TokenAlreadyUpgraded(uint256 tokenId); //0xb4aab4a3
 error TokenIsDead(uint256 tokenId); //0xf87e5785
 error TokenIsLocked(uint256 tokenId); //0xdc8fb341
 error TokenNotLocked(uint256 tokenId); //0x5ef77436
+error TokenNotRedeemable(uint256 tokenId);
 error TokenNotUpgraded(uint256 tokenId); //0x14388074
 error TokenPreRedeemable(uint256 tokenId); //0x04df46e6
 error Unauthorized(); //0x82b42900

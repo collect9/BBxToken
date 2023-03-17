@@ -3,7 +3,7 @@
 pragma solidity >=0.8.17;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
-import "./C9ERC721Base2.sol";
+import "./C9ERC721Base3.sol";
 
 /**
  * @dev A very basic implementation of {ERC721Enumerable} that only includes 
@@ -13,7 +13,7 @@ import "./C9ERC721Base2.sol";
  */
 abstract contract ERC721IdEnumBasic is ERC721 {
     // Array of all token ids, used for enumeration
-    uint24[] private _allTokens;
+    uint24[] internal _allTokens;
 
     function _mint(address to, uint256[] calldata tokenIds)
     internal virtual {

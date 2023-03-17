@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >0.8.17;
-import "./abstract/C9Struct4.sol";
 import "./interfaces/IC9MetaData.sol";
 import "./interfaces/IC9SVG.sol";
 import "./interfaces/IC9Redeemer24.sol";

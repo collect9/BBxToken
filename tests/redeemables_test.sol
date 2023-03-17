@@ -38,13 +38,6 @@ contract RedeemablesTest is C9TestContract {
         }
     }
 
-    function _setValidityStatus(uint256 tokenId, uint256 status)
-    private {
-        c9t.setTokenValidity(tokenId, status);
-        uint256 validityStatus = c9t.getTokenParams(tokenId)[2];
-        Assert.equal(validityStatus, status, "Invalid validity status");
-    }
-
     /* @dev 1. Checks if preredeemable is working properly
      * for existing valid tokens.
      */ 

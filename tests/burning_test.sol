@@ -28,9 +28,6 @@ contract BurningTest is C9TestContract {
         // Check the 'owner' is now address 0
         Assert.equal(c9t.ownerOf(tokenId), address(0), "Invalid burned address");
 
-        // Make sure the token still exists
-        Assert.equal(c9t.exists(tokenId), true, "Invalid burned exists");
-
         // Check the burned tokens array
         uint24[] memory burned = c9t.getBurned();
         Assert.equal(burned[0], tokenId, "Invalid burned tokenId");
