@@ -2,7 +2,7 @@
 pragma solidity >=0.8.17;
 import "./abstract/C9Shared.sol";
 import "./abstract/C9Struct4.sol";
-import "./interfaces/IC9SVG.sol";
+import "./interfaces/IC9SVG2.sol";
 import "./interfaces/IC9Token.sol";
 import "./utils/C9Context.sol";
 import "./utils/Helpers.sol";
@@ -370,69 +370,68 @@ contract C9SVG is C9Context, C9Shared {
         }
     }
 
-
     function addTokenInfo(uint256 data, uint256 validity, string calldata _name, bytes memory b)
-        private view {
-            bytes7 _tagtxt = genTagsToAscii(
-                _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG),
-                _viewPackedData(data, UPOS_CNTRYTAG, USZ_CNTRYTAG)
-            );
-            bytes7 _tushtxt = genTagsToAscii(
-                _viewPackedData(data, UPOS_GENTUSH, USZ_GENTUSH),
-                _viewPackedData(data, UPOS_CNTRYTUSH, USZ_CNTRYTUSH)
-            );
-            bytes4 __mintid = Helpers.flip4Space(
-                bytes4(Helpers.uintToBytes(
-                    uint256(uint16(data>>UPOS_EDITION_MINT_ID))
+    private view {
+        bytes7 _tagtxt = genTagsToAscii(
+            _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG),
+            _viewPackedData(data, UPOS_CNTRYTAG, USZ_CNTRYTAG)
+        );
+        bytes7 _tushtxt = genTagsToAscii(
+            _viewPackedData(data, UPOS_GENTUSH, USZ_GENTUSH),
+            _viewPackedData(data, UPOS_CNTRYTUSH, USZ_CNTRYTUSH)
+        );
+        bytes4 __mintid = Helpers.flip4Space(
+            bytes4(Helpers.uintToBytes(
+                uint256(uint16(data>>UPOS_EDITION_MINT_ID))
+            ))
+        );
+        bytes4 _royalty = Helpers.bpsToPercent(
+            _viewPackedData(data, UPOS_ROYALTY, USZ_ROYALTY)
+        );
+        bytes2 _edition = Helpers.flip2Space(
+            Helpers.remove2Null(
+                bytes2(Helpers.uintToBytes(
+                    _viewPackedData(data, UPOS_EDITION, USZ_EDITION)
                 ))
-            );
-            bytes4 _royalty = Helpers.bpsToPercent(
-                _viewPackedData(data, UPOS_ROYALTY, USZ_ROYALTY)
-            );
-            bytes2 _edition = Helpers.flip2Space(
-                Helpers.remove2Null(
-                    bytes2(Helpers.uintToBytes(
-                        _viewPackedData(data, UPOS_EDITION, USZ_EDITION)
-                    ))
-                )
-            );
-            (uint256 _bgidx, bytes16 _classer) = _getRarityTier(
-                _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG),
-                _viewPackedData(data, UPOS_RARITYTIER, USZ_RARITYTIER),
-                _viewPackedData(data, UPOS_SPECIAL, USZ_SPECIAL)
-            );
-            bytes3 _rgc2 = validity < 4 ? hex3[_bgidx] : bytes3("888");
-            bytes2 _namesize = getNameSize(uint256(bytes(_name).length));
-        
-            assembly {
-                // Name Font Size
-                let dst := add(b, 334)
-                mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _namesize))
-                // Colors
-                dst := add(b, 525)
-                mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _rgc2))
-                dst := add(b, 1609)
-                mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _classer))
-                // Edition
-                let _edcheck := gt(_edition, 9)
-                switch _edcheck case 0 {
-                    dst := add(b, 1678)
-                } default {
-                    dst := add(b, 1677)
-                }
-                mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _edition))
-                // Mintid
-                dst := add(b, 1680)
-                mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), __mintid))
-                // Royalty
-                dst := add(b, 1475)
-                mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _royalty))
-                // Gen Country Text
-                dst := add(b, 1901)
-                mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tagtxt))
-                dst := add(b, 1911)
-                mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tushtxt))
+            )
+        );
+        (uint256 _bgidx, bytes16 _classer) = _getRarityTier(
+            _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG),
+            _viewPackedData(data, UPOS_RARITYTIER, USZ_RARITYTIER),
+            _viewPackedData(data, UPOS_SPECIAL, USZ_SPECIAL)
+        );
+        bytes3 _rgc2 = validity < 4 ? hex3[_bgidx] : bytes3("888");
+        bytes2 _namesize = getNameSize(uint256(bytes(_name).length));
+    
+        assembly {
+            // Name Font Size
+            let dst := add(b, 334)
+            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _namesize))
+            // Colors
+            dst := add(b, 525)
+            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _rgc2))
+            dst := add(b, 1609)
+            mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _classer))
+            // Edition
+            let _edcheck := gt(_edition, 9)
+            switch _edcheck case 0 {
+                dst := add(b, 1678)
+            } default {
+                dst := add(b, 1677)
             }
+            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _edition))
+            // Mintid
+            dst := add(b, 1680)
+            mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), __mintid))
+            // Royalty
+            dst := add(b, 1475)
+            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _royalty))
+            // Gen Country Text
+            dst := add(b, 1901)
+            mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tagtxt))
+            dst := add(b, 1911)
+            mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tushtxt))
+        }
     }
 
     /** 
@@ -441,14 +440,14 @@ contract C9SVG is C9Context, C9Shared {
      * tags. The provides the user with the information necessary to know 
      * what type of tag is present based on the SVG display alone.
      */
-    function addTushMarker(uint256 _markertush, uint256 _gentag)
+    function addTushMarker(uint256 markerTush, uint256 genTag)
     private view
     returns (bytes memory e) {
-        if (_markertush > 0) {
+        if (markerTush > 0) {
             e = "<g transform='translate(555 726)' style='opacity:0.8; font-family:\"Brush Script MT\", cursive; font-size:24px; font-weight:700'>"
                 "<text text-anchor='middle' fill='#222'>    </text>"
                 "</g>"; 
-            bytes4 x = _vMarkers[_markertush-1];
+            bytes4 x = _vMarkers[markerTush-1];
             bytes4 y = x == bytes4("CE  ") ?
                 bytes4("c e ") :
                 x == bytes4("EMBF") ?
@@ -458,12 +457,12 @@ contract C9SVG is C9Context, C9Shared {
             assembly {
                 let dst := add(e, 198)
                 mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), y))
-                switch _gentag case 0 {
+                switch genTag case 0 {
                     dst := add(e, 193)
                     mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), "eee"))
                 }
             }
-            if (_markertush > 4) {
+            if (markerTush > 4) {
                 assembly {
                     let dst := add(e, 56)
                     mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), "75 "))
@@ -544,8 +543,10 @@ contract C9SVG is C9Context, C9Shared {
     /**
      * @dev If token has been upgraded, add text that shows it has.
      */
-    function addUpgradeText(uint256 _upgraded) private pure returns(bytes memory upgradedText) {
-        if (_upgraded == UPGRADED) {
+    function addUpgradeText(uint256 upgraded)
+    private pure
+    returns (bytes memory upgradedText) {
+        if (upgraded == UPGRADED) {
             upgradedText = "<text x='190' y='58' style='font-family: \"Brush Script MT\", cursive;' font-size='22'>        </text>";
             assembly {
                 let dst := add(upgradedText, 117)
@@ -691,15 +692,16 @@ contract C9SVG is C9Context, C9Shared {
 
         return string(
             bytes.concat(b,
-                addVariableBytes(tokenId, tokenData, barCodeData, qrCodeData, name)
-                // addTushMarker(
-                //     uint256(uint8(_uTokenData>>POS_MARKERTUSH)),
-                //     uint256(uint8(_uTokenData>>POS_GENTAG))
-                // ),
-                // addUpgradeText(uint256(uint8(_uTokenData>>POS_UPGRADED))),
-                // "</g></svg>"
+                addVariableBytes(tokenId, tokenData, barCodeData, qrCodeData, name),
+                addTushMarker(
+                    _viewPackedData(tokenData, UPOS_MARKERTUSH, USZ_MARKERTUSH),
+                    _viewPackedData(tokenData, UPOS_GENTAG, USZ_GENTAG)
+                ),
+                addUpgradeText(ownerData>>MPOS_UPGRADED & BOOL_MASK)
             )
         );
+
+
 
     }
 

@@ -30,7 +30,6 @@ abstract contract C9Struct {
     uint256 constant MAX_PERIOD = 63113852; //2 years
 
     struct TokenData {
-        string name;
         uint256 upgraded;
         uint256 display;
         uint256 locked;
@@ -51,7 +50,12 @@ abstract contract C9Struct {
         uint256 mintstamp; // Minting timestamp
         uint256 insurance; // Insured value
         uint256 votes;
-        uint256 cData;
+        string sData;
+    }
+
+    struct TokenSData {
+        uint256 tokenId; // Physical authentication id (tokenId mapping)
+        string sData;
     }
 
     // _owners eXtended storage -> mutable data
