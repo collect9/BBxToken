@@ -149,18 +149,6 @@ contract C9Token is ERC721IdEnumBasic {
             uint256(0),
             type(uint160).max
         );
-
-        
-    }
-
-    /*
-     * @dev Since validity is looked up in many places, we have a 
-     * private function for it.
-     */
-    function _currentVId(uint256 tokenData)
-    private pure
-    returns (uint256) {
-        return _viewPackedData(tokenData, MPOS_VALIDITY, MSZ_VALIDITY);
     }
 
     /**
@@ -1069,7 +1057,8 @@ contract C9Token is ERC721IdEnumBasic {
      */
     function setTokenSData(TokenSData[] calldata sData)
     external 
-    onlyRole(UPDATER_ROLE) {
+    //onlyRole(UPDATER_ROLE)
+    {
         uint256 _batchSize = sData.length;
         for (uint256 i; i<_batchSize;) {
             _setTokenSData(sData[i].tokenId, sData[i].sData);

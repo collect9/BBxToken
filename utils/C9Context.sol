@@ -5,6 +5,16 @@ import "./../abstract/C9Struct4.sol";
 
 abstract contract C9Context is C9Struct {
 
+    /*
+     * @dev Since validity is looked up in many places, we have a 
+     * private function for it.
+     */
+    function _currentVId(uint256 tokenData)
+    internal pure
+    returns (uint256) {
+        return _viewPackedData(tokenData, MPOS_VALIDITY, MSZ_VALIDITY);
+    }
+
     function _setTokenParam(uint256 packedData, uint256 pos, uint256 val, uint256 mask)
     internal pure virtual
     returns(uint256) {
