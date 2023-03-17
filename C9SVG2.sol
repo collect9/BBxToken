@@ -121,6 +121,126 @@ contract C9SVG is C9Context, C9Shared {
             "<text x='50%' y='698' class='tXXXXXX'>"; // Variable part starts
 
 
+    bytes constant FLG_BLK = ""
+        "<pattern id='ptrn' width='.1' height='.1'>"
+        "<rect width='64' height='48' fill='#def' stroke='#000'/>"
+        "</pattern>"
+        "<path d='M0 0h640v480H0z' fill='url(#ptrn)'/>";
+    bytes constant FLG_CAN = ""
+        "<path fill='#fff' d='M0 0h640v480H0z'/>"
+        "<path fill='#d21' d='M-19.7 0h169.8v480H-19.7zm509.5 0h169.8v480H489.9zM201 232l-13.3 4.4 61.4 54c4.7 13.7-1.6 "
+        "17.8-5.6 25l66.6-8.4-1.6 67 13.9-.3-3.1-66.6 66.7 8c-4.1-8.7-7.8-13.3-4-27.2l61.3-51-10.7-4c-8.8-6.8 3.8-32.6 "
+        "5.6-48.9 0 0-35.7 12.3-38 5.8l-9.2-17.5-32.6 35.8c-3.5.9-5-.5-5.9-3.5l15-74.8-23.8 13.4c-2 .9-4 .1-5.2-2.2l-23-46-23.6 "
+        "47.8c-1.8 1.7-3.6 1.9-5 .7L264 130.8l13.7 74.1c-1.1 3-3.7 3.8-6.7 2.2l-31.2-35.3c-4 6.5-6.8 17.1-12.2 19.5-5.4 "
+        "2.3-23.5-4.5-35.6-7 4.2 14.8 17 39.6 9 47.7z'/>";
+    bytes constant FLG_CHN = ""
+        "<g id='c9chn'>"
+        "<path fill='#ff0' d='M-.6.8 0-1 .6.8-1-.3h2z'/>"
+        "</g>"
+        "<path fill='#e12' d='M0 0h640v480H0z'/>"
+        "<use href='#c9chn' transform='matrix(72 0 0 72 120 120)'/>"
+        "<use href='#c9chn' transform='matrix(-12.3 -20.6 20.6 -12.3 240.3 48)'/>"
+        "<use href='#c9chn' transform='matrix(-3.4 -23.8 23.8 -3.4 288 96)'/>"
+        "<use href='#c9chn' transform='matrix(6.6 -23 23 6.6 288 168)'/>"
+        "<use href='#c9chn' transform='matrix(15 -18.7 18.7 15 240 216)'/>";
+    bytes constant FLG_GER = ""
+        "<path fill='#fc0' d='M0 320h640v160H0z'/>"
+        "<path d='M0 0h640v160H0z'/>"
+        "<path fill='#d00' d='M0 160h640v160H0z'/>";
+    bytes constant FLG_IND = ""
+        "<path fill='#e01' d='M0 0h640v249H0z'/>"
+        "<path fill='#fff' d='M0 240h640v240H0z'/>";
+    bytes constant FLG_KOR = ""
+        "<defs>"
+        "<clipPath id='c9kor1'>"
+        "<path fill-opacity='.7' d='M-95.8-.4h682.7v512H-95.8z'/>"
+        "</clipPath>"
+        "</defs>"
+        "<g fill-rule='evenodd' clip-path='url(#c9kor1)' transform='translate(89.8 .4) scale(.94)'>"
+        "<path fill='#fff' d='M-95.8-.4H587v512H-95.8Z'/>"
+        "<g transform='rotate(-56.3 361.6 -101.3) scale(10.67)'>"
+        "<g id='c9kor2'>"
+        "<path id='c9kor3' d='M-6-26H6v2H-6Zm0 3H6v2H-6Zm0 3H6v2H-6Z'/>"
+        "<use href='#c9kor3' y='44'/>"
+        "</g>"
+        "<path stroke='#fff' d='M0 17v10'/>"
+        "<path fill='#c33' d='M0-12a12 12 0 0 1 0 24Z'/>"
+        "<path fill='#04a' d='M0-12a12 12 0 0 0 0 24A6 6 0 0 0 0 0Z'/>"
+        "<circle cy='-6' r='6' fill='#c33'/>"
+        "</g>"
+        "<g transform='rotate(-123.7 191.2 62.2) scale(10.67)'>"
+        "<use href='#c9kor2'/>"
+        "<path stroke='#fff' d='M0-23.5v3M0 17v3.5m0 3v3'/>"
+        "</g>"
+        "</g>";
+    bytes constant FLG_UK  = ""
+        "<path fill='#026' d='M0 0h640v480H0z'/>"
+        "<path fill='#fff' d='m75 0 244 181L562 0h78v62L400 241l240 178v61h-80L320 301 81 480H0v-60l239-178L0 64V0h75z'/>"
+        "<path fill='#c12' d='m424 281 216 159v40L369 281h55zm-184 20 6 35L54 480H0l240-179zM640 0v3L391 191l2-44L590 0h50zM0 0l239 176h-60L0 42V0z'/>"
+        "<path fill='#fff' d='M241 0v480h160V0H241zM0 160v160h640V160H0z'/>"
+        "<path fill='#c12' d='M0 193v96h640v-96H0zM273 0v480h96V0h-96z'/>";
+    bytes constant FLG_US  = ""
+        "<path fill='#fff' d='M0 0h640v480H0z'/>"
+        "<g id='c9uss'>"
+        "<path fill='#fff' d='m30.4 11 3.4 10.3h10.6l-8.6 6.3 3.3 10.3-8.7-6.4-8.6 6.3L25 27.6l-8.7-6.3h10.9z'/>"
+        "</g>"
+        "<g id='c9uso'>"
+        "<use href='#c9uss'/>"
+        "<use href='#c9uss' y='51.7'/>"
+        "<use href='#c9uss' y='103.4'/>"
+        "<use href='#c9uss' y='155.1'/>"
+        "<use href='#c9uss' y='206.8'/>"
+        "</g>"
+        "<g id='c9use'>"
+        "<use href='#c9uss' y='25.9'/>"
+        "<use href='#c9uss' y='77.6'/>"
+        "<use href='#c9uss' y='129.5'/>"
+        "<use href='#c9uss' y='181.4'/>"
+        "</g>"
+        "<g id='c9usa'>"
+        "<use href='#c9uso'/>"
+        "<use href='#c9use' x='30.4'/>"
+        "</g>"
+        "<path fill='#b02' d='M0 0h640v37H0zm0 73.9h640v37H0zm0 73.8h640v37H0zm0 73.8h640v37H0zm0 74h640v36.8H0zm0 73.7h640v37H0zM0 443h640V480H0z'/>"
+        "<path fill='#026' d='M0 0h364.8v259H0z'/>"
+        "<use href='#c9usa'/>"
+        "<use href='#c9usa' x='60.8'/>"
+        "<use href='#c9usa' x='121.6'/>"
+        "<use href='#c9usa' x='182.4'/>"
+        "<use href='#c9usa' x='243.2'/>"
+        "<use href='#c9uso' x='304'/>";
+
+    function getSVGFlag(uint256 flagId)
+    public pure
+    returns(bytes memory flag) {
+        flag = "<svg version='1.1' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 480'>";
+        if (flagId == 0) {
+            flag = bytes.concat(flag, FLG_CAN);
+        }
+        else if (flagId == 1) {
+            flag = bytes.concat(flag, FLG_CHN);
+        }
+        else if (flagId == 2) {
+            flag = bytes.concat(flag, FLG_GER);
+        }
+        else if (flagId == 3) {
+            flag = bytes.concat(flag, FLG_IND);
+        }
+        else if (flagId == 4) {
+            flag = bytes.concat(flag, FLG_KOR);
+        }
+        else if (flagId == 5) {
+            flag = bytes.concat(flag, FLG_UK);
+        }
+        else if (flagId == 6) {
+            flag = bytes.concat(flag, FLG_US);
+        }
+        else {
+            flag = bytes.concat(flag, FLG_BLK);
+        }
+        flag = bytes.concat(flag, "</svg>");
+    }
+
         // LOGO WRAPPED
         // "<g transform='translate(470 6) scale(0.2)' fill-opacity='0.89'>"
         // "<a href='https://collect9.io' target='_blank'>"
@@ -321,7 +441,9 @@ contract C9SVG is C9Context, C9Shared {
      * tags. The provides the user with the information necessary to know 
      * what type of tag is present based on the SVG display alone.
      */
-    function addTushMarker(uint256 _markertush, uint256 _gentag) private view returns (bytes memory e) {
+    function addTushMarker(uint256 _markertush, uint256 _gentag)
+    private view
+    returns (bytes memory e) {
         if (_markertush > 0) {
             e = "<g transform='translate(555 726)' style='opacity:0.8; font-family:\"Brush Script MT\", cursive; font-size:24px; font-weight:700'>"
                 "<text text-anchor='middle' fill='#222'>    </text>"
@@ -350,39 +472,74 @@ contract C9SVG is C9Context, C9Shared {
         }
     }
 
+    function _href(uint256 tokenId)
+    private pure
+    returns (bytes memory href) {
+        bytes6 b6TokenId =  Helpers.tokenIdToBytes(tokenId);
+        href = "<a href='https://collect9.io/nft/XXXXXX' target='_blank'>";
+        assembly {
+            let dst := add(href, 65)
+            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), b6TokenId))
+        }
+    }
+
+    function _wrapInHref(uint256 tokenId, bytes memory b)
+    private pure
+    returns (bytes memory) {
+        return bytes.concat(_href(tokenId), b, "</a>");
+    }
+
+    function getBarCodeGroup(uint256 tokenId, uint256 barCodeData)
+    private pure
+    returns (bytes memory gb) {
+        gb = "<g transform='translate(XXX 646) scale(0.33)'>";
+        bytes3 x = tokenId > 10**5 ? bytes3("385") : bytes3("400");
+        assembly {
+            let dst := add(gb, 64)
+            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), x))
+        }
+        gb = bytes.concat(
+            gb,
+            barCodeSVG(barCodeData),
+            "</g>"
+        );
+    }
+
+    function getFlagsGroup(uint256 tokenData)
+    public pure
+    returns (bytes memory fb) {
+        bytes memory _flagTag = getSVGFlag(
+            _viewPackedData(tokenData, UPOS_CNTRYTAG, USZ_CNTRYTAG)
+        );
+        bytes memory _flagTush = getSVGFlag(
+            _viewPackedData(tokenData, UPOS_CNTRYTUSH, USZ_CNTRYTUSH)
+        );
+        fb = bytes.concat(
+            "<g transform='translate(20 621) scale(0.17)'>",
+            _flagTag,
+            "<g transform='translate(481)'>",
+            _flagTush,
+            "</g></g>"
+        );
+    }
+
     /**
      * @dev The SVG output memory `b` is finished off with the variable sized parts of `_token`.
      * This is a bit messy but bytes concat seems to get the job done.
      */
-    // function addVariableBytes(uint256 _uTokenData, string[3] memory _sTokenData, bytes6 _id)
-    //     private view
-    //     returns(bytes memory vb) {
-    //         bytes memory href = "<a href='https://collect9.io/nft/XXXXXX' target='_blank'>";
-    //         assembly {
-    //             let dst := add(href, 65)
-    //             mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), _id))
-    //         }
-    //         bytes memory gbarcode = "</a></g><g transform='translate(XXX 646) scale(0.33)'>";
-    //         bytes3 x = _id[0] != 0x30 ? bytes3("385") : bytes3("400");
-    //         assembly {
-    //             let dst := add(gbarcode, 64)
-    //             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), x))
-    //         }
-    //         vb = bytes.concat(
-    //             bytes(_sTokenData[0]),
-    //             "</text></g><g transform='translate(20 621) scale(0.17)'>",
-    //             getSVGFlag(uint256(uint8(_uTokenData>>POS_CNTRYTAG))),
-    //             "</g><g transform='translate(501 621) scale(0.17)'>",
-    //             getSVGFlag(uint256(uint8(_uTokenData>>POS_CNTRYTUSH))),
-    //             "</g><g transform='translate(157.5 146) scale(0.5)'>",
-    //             href,
-    //             //qrCodeSVGFull(bytes(_sTokenData[1])),
-    //             gbarcode,
-    //             href,
-    //             //barCodeSVG(bytes(_sTokenData[2]), _id),
-    //             "</a></g>"
-    //         );
-    // }
+    function addVariableBytes(uint256 tokenId, uint256 tokenData, uint256 barCodeData, uint256 qrCodeData, string calldata name)
+    private pure
+    returns(bytes memory vb) {
+        
+        bytes memory _qrCodeSVG = qrCodeSVG(qrCodeData);
+        
+
+        vb = bytes.concat(
+            bytes(name),
+            getFlagsGroup(tokenData),
+            getBarCodeGroup(tokenId, barCodeData)            
+        );
+    }
 
     /**
      * @dev If token has been upgraded, add text that shows it has.
@@ -413,18 +570,18 @@ contract C9SVG is C9Context, C9Shared {
             "0 0 0 0 0 1 0 0 0 0 0 1 1 1 0 0 "];
         if (rarityTier == 0) {
             assembly {
-                let dst := add(b, 574)
+                let dst := add(b, 594)
                 mstore(dst, _filter_mod)
-                dst := add(b, 620)
+                dst := add(b, 640)
                 mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "4"))
-                dst := add(b, 731)
-                mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), "0.9"))
+                dst := add(b, 753)
+                mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "9"))
             }
             uint256 psrand = block.timestamp % 4;
             if (psrand < 4) {
                 bytes32 _colormod = mods[psrand];
                 assembly {
-                    let dst := add(b, 697)
+                    let dst := add(b, 715)
                     mstore(dst, _colormod)
                 }
             }
@@ -513,33 +670,6 @@ contract C9SVG is C9Context, C9Shared {
         return bytes6(_periods);
     }
 
-    // /**
-    //  * @dev Constructs the SVG XML/HTML code from the fixed (hardcoded) and input `_qrdata`.
-    //  */
-    // function qrCodeSVGFull(uint256 qrCodeData) private view returns (bytes memory) {
-    //     bytes memory b = "<svg version='1.1' class='qr' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 17'>"
-    //         "<style type='text/css'>.qr{opacity:0.89;} .qr rect{width:1px;height:1px;}</style>"
-    //         "<symbol id='d'>"
-    //         "<rect height='1' width='1'/>"
-    //         "<rect x='2' height='1' width='1'/>"
-    //         "</symbol>"
-    //         "<symbol id='j'>"
-    //         "<rect height='1' width='1'/>"
-    //         "<rect x='3' height='1' width='1'/>"
-    //         "</symbol>"
-    //         "<rect transform='scale(3)' x='0.67' y='0.67' fill='#111'/>"
-    //         "<rect x='0.5' y='0.5' style='width:6px;height:6px;fill:none;stroke:#111;'/><g>";
-    //     return bytes.concat(
-    //         b,
-    //         qrCodeSVG(qrCodeData),
-    //         "</g><g>",
-    //         barCodeSVG(qrCodeData>>170),
-    //         "</g></svg>"
-    //     );
-    // }
-
-
-
     /**
      * @dev External function to call and return the SVG string built from `_token`  
      * and owner `_address`.
@@ -556,6 +686,20 @@ contract C9SVG is C9Context, C9Shared {
         addTokenInfo(tokenData, _currentVId(ownerData), name, b);
         addValidityInfo(tokenId, ownerData, b);
         addAddress(IC9Token(contractToken).ownerOf(tokenId), b);
+
+        checkForSpecialBg(_viewPackedData(tokenData, UPOS_SPECIAL, USZ_SPECIAL), b);
+
+        return string(
+            bytes.concat(b,
+                addVariableBytes(tokenId, tokenData, barCodeData, qrCodeData, name)
+                // addTushMarker(
+                //     uint256(uint8(_uTokenData>>POS_MARKERTUSH)),
+                //     uint256(uint8(_uTokenData>>POS_GENTAG))
+                // ),
+                // addUpgradeText(uint256(uint8(_uTokenData>>POS_UPGRADED))),
+                // "</g></svg>"
+            )
+        );
 
     }
 
@@ -725,13 +869,11 @@ contract C9SVG is C9Context, C9Shared {
 
     function qrCodeSVG(uint256 packed)
     public pure
-    returns (string memory svg) {
-        svg = string(
-            bytes.concat(
-                QR_CODE_BASE,
-                packedToRects(packed),
-                "</svg>"
-            )
+    returns (bytes memory svg) {
+        svg = bytes.concat(
+            QR_CODE_BASE,
+            packedToRects(packed),
+            "</svg>"
         );
     }
 
@@ -759,13 +901,11 @@ contract C9SVG is C9Context, C9Shared {
 
     function barCodeSVG(uint256 packed)
     public pure
-    returns (string memory svg) {
-        svg = string(
-            bytes.concat(
-                BAR_CODE_BASE,
-                barCodeGroups(packed),
-                "</g></svg>"
-            )
+    returns (bytes memory svg) {
+        svg = bytes.concat(
+            BAR_CODE_BASE,
+            barCodeGroups(packed),
+            "</g></svg>"
         );
     }
 }
