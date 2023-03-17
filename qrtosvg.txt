@@ -1,0 +1,224 @@
+// SPDX-License-Identifier: MIT
+pragma solidity >=0.8.17;
+
+contract A {
+
+        bytes constant QR_CODE_BASE = ""
+        "<svg version='1.1' xmlns='http://www.w3.org/2000/svg' class='c9QRcode' width='100%' height='100%' viewBox='0 0 17 17'>"
+        "<style type='text/css'>.c9QRcode{opacity:0.89;} .c9QRcode rect{width:1px;height:1px;}</style>"
+        "<rect x='0.5' y='0.5' style='width:6px; height:6px; stroke:#000; fill-opacity:0;'/>"
+        "<rect x='2' y='2' style='width:3px; height:3px;'/>"
+        "<rect x='15' y='4' style='height:7px;'/>"
+        "<rect x='8' y='0'/>"
+        "<rect x='10' y='0'/>"
+        "<rect x='12' y='0'/>"
+        "<rect x='14' y='0'/>"
+        "<rect x='16' y='0'/>"
+        "<rect x='0' y='8'/>"
+        "<rect x='0' y='10'/>"
+        "<rect x='0' y='12'/>"
+        "<rect x='0' y='14'/>"
+        "<rect x='0' y='16'/>"
+        "<rect x='16' y='1'/>"
+        "<rect x='9' y='2'/>"
+        "<rect x='10' y='2'/>"
+        "<rect x='13' y='3'/>"
+        "<rect x='9' y='4'/>"
+        "<rect x='11' y='4'/>"
+        "<rect x='12' y='4'/>"
+        "<rect x='13' y='5'/>"
+        "<rect x='9' y='6'/>"
+        "<rect x='11' y='7'/>"
+        "<rect x='16' y='7'/>"
+        "<rect x='2' y='8'/>"
+        "<rect x='5' y='8'/>"
+        "<rect x='7' y='8'/>"
+        "<rect x='9' y='8'/>"
+        "<rect x='10' y='8'/>"
+        "<rect x='12' y='8'/>"
+        "<rect x='16' y='8'/>"
+        "<rect x='13' y='11'/>"
+        "<rect x='14' y='11'/>"
+        "<rect x='11' y='12'/>"
+        "<rect x='12' y='12'/>"
+        "<rect x='16' y='12'/>"
+        "<rect x='16' y='13'/>"
+        "<rect x='15' y='14'/>"
+        "<rect x='11' y='15'/>"
+        "<rect x='11' y='16'/>"
+        "<rect x='12' y='16'/>";
+
+        bytes constant BAR_CODE_BASE = "<svg version='1.1' xmlns='http://www.w3.org/2000/svg' class='c9BARcode' width='100%' height='100%' viewBox='30 0 270 100'>"
+        "<style type='text/css'>.c9BARcode{opacity:0.89;} .c9BARcode rect{height:1px;}</style>"
+        "<g transform='scale(3 100)'>"
+        "<rect x='10' width='1'/>"
+        "<rect x='11' width='1'/>"
+        "<rect x='13' width='1'/>"
+        "<rect x='21' width='1'/>";
+
+        function getBoolean8(uint256 _packedBools, uint256 _boolNumber)
+        public pure
+        returns (uint8 flag)
+        {
+            flag = uint8((_packedBools >> _boolNumber) & uint256(1));
+        }
+
+        function getBoolean256(uint256 _packedBools, uint256 _boolNumber)
+        public pure
+        returns (uint256 flag)
+        {
+            flag = (_packedBools >> _boolNumber) & uint256(1);
+        }
+
+        function uintToBytes(uint256 v)
+        internal pure
+        returns (bytes32 ret) {
+            if (v == 0) {
+                ret = '0';
+            }
+            else {
+                while (v > 0) {
+                    ret = bytes32(uint256(ret) / (2 ** 8));
+                    ret |= bytes32(((v % 10) + 48) * 2 ** (8 * 31));
+                    v /= 10;
+                }
+            }
+            return ret;
+        }
+
+        function uintToDigit(uint256 input)
+        public pure
+        returns (bytes1) {
+            return bytes1(uintToBytes(input));
+        }
+
+        function uintToStr(uint256 input)
+        public pure
+        returns (bytes2) {
+            bytes32 b32Input = uintToBytes(input);
+            bytes memory output = new bytes(2);
+            output[0] = b32Input[0];
+            output[1] = b32Input[1];
+
+            if (input < 10) output[1] = 0x20;
+            
+            return bytes2(output);
+        }
+
+        function toXY(uint256 index)
+        public pure
+        returns (uint256 y, uint256 x) {
+            // Convert to true bit index
+            if (index > 3) {
+                unchecked {index += 10;}
+            }
+            unchecked {index += 28;}
+            unchecked {
+                y = index / 17;
+                x = index - y*17;
+            }
+        }
+
+        function _toRect(uint256 x, uint256 y)
+        private pure
+        returns (bytes memory) {
+            return bytes.concat(
+                "<rect x='",
+                uintToStr(x),
+                "' y='",
+                uintToStr(y),
+                "'/>"
+            );
+        }
+
+        function _toBar(uint256 x, uint256 multi)
+        public pure
+        returns (bytes memory b) {
+            b = bytes.concat(
+                "<rect x='",
+                uintToStr(x),
+                "' width='",
+                uintToDigit(multi),
+                "'/>"
+            );
+        }
+
+        function toRect(uint256 index)
+        public pure
+        returns (bytes memory) {
+            (uint256 y, uint256 x) = toXY(index);
+            return _toRect(x, y);
+        }
+
+        
+        function packedToBits(uint256 packed)
+        public pure
+        returns (uint8[256] memory bits) {
+            for (uint256 i; i<256;) {
+                bits[i] = getBoolean8(packed, (255-i));
+                unchecked {++i;}
+            }
+        }
+
+        function packedToRects(uint256 packed)
+        public pure 
+        returns (bytes memory rects) {
+            uint256 bitSwitch;
+            for (uint256 i; i<251;) {
+                bitSwitch = getBoolean256(packed, (255-i));
+                if (bitSwitch == 1) {
+                    rects = bytes.concat(
+                        rects,
+                        toRect(i)
+                    );
+                }
+                unchecked {++i;}
+            }
+        }
+
+        function qrSVG(uint256 packed)
+        public pure
+        returns (string memory svg) {
+            svg = string(
+                bytes.concat(
+                    QR_CODE_BASE,
+                    packedToRects(packed),
+                    "</svg>"
+                )
+            );
+        }
+
+        function barCodeGroups(uint256 packed)
+        public pure
+        returns (bytes memory rects) {
+            uint256 j;
+            for (uint256 i; i<86;) {
+                j = 1;
+                if (getBoolean256(packed, i) == 1) {
+                    for (j; j<4;) {                    
+                        if (getBoolean256(packed, i+j) == 0) {
+                            break;
+                        }
+                        unchecked {++j;}
+                    }
+                    rects = bytes.concat(
+                        rects,
+                        _toBar(i+14, j)
+                    );
+                }
+                unchecked {i += j;}
+            }
+        }
+
+        function barCodeSVG(uint256 packed)
+        public pure
+        returns (string memory svg) {
+            svg = string(
+                bytes.concat(
+                    BAR_CODE_BASE,
+                    barCodeGroups(packed),
+                    "</g></svg>"
+                )
+            );
+        }
+    }
