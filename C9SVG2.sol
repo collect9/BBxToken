@@ -18,14 +18,14 @@ contract C9SVG is C9Context, C9Shared {
         "<rect x='0.5' y='0.5' style='width:6px; height:6px; stroke:#000; fill-opacity:0;'/>"
         "<rect x='2' y='2' style='width:3px; height:3px;'/>"
         "<rect x='15' y='4' style='height:7px;'/>"
-        "<rect x='8' y='0'/>"
-        "<rect x='10' y='0'/>"
-        "<rect x='12' y='0'/>"
-        "<rect x='14' y='0'/>"
-        "<rect x='16' y='0'/>"
-        "<rect x='0' y='8'/>"
-        "<rect x='0' y='10'/>"
-        "<rect x='0' y='12'/>"
+        "<rect x='8'/>"
+        "<rect x='10'/>"
+        "<rect x='12'/>"
+        "<rect x='14'/>"
+        "<rect x='16'/>"
+        "<rect y='8'/>"
+        "<rect y='10'/>"
+        "<rect y='12'/>"
         "<rect x='0' y='14'/>"
         "<rect x='0' y='16'/>"
         "<rect x='16' y='1'/>"
@@ -57,7 +57,8 @@ contract C9SVG is C9Context, C9Shared {
         "<rect x='11' y='16'/>"
         "<rect x='12' y='16'/>";
 
-    bytes constant BAR_CODE_BASE = "<svg version='1.1' xmlns='http://www.w3.org/2000/svg' class='c9BARcode' width='100%' height='100%' viewBox='30 0 270 100'>"
+    bytes constant BAR_CODE_BASE = ""
+        "<svg version='1.1' xmlns='http://www.w3.org/2000/svg' class='c9BARcode' width='100%' height='100%' viewBox='30 0 270 100'>"
         "<style type='text/css'>.c9BARcode{opacity:0.89;} .c9BARcode rect{height:1px;}</style>"
         "<g transform='scale(3 100)'>"
         "<rect x='10' width='1'/>"
@@ -66,7 +67,7 @@ contract C9SVG is C9Context, C9Shared {
         "<rect x='21' width='1'/>";
 
     bytes constant SVG_OPENER = ""
-        "<svg version='1.1' xmlns='http://www.w3.org/2000/svg' class='c9Tsvg' viewBox='0 0 630 880'>"
+        "<svg version='1.1' xmlns='http://www.w3.org/2000/svg' class='c9Tsvg' width='100%' height='100%' viewBox='0 0 630 880'>"
         "<style type='text/css'>"
             ".c9Tsvg{font-family:'Courier New';} "
             ".sXXXXXX{font-size:22px;} "
@@ -107,7 +108,7 @@ contract C9SVG is C9Context, C9Shared {
         "</g>"
 
         "<g transform='translate(30 768)' class='sXXXXXX'>"
-            "<text>CLASS: VINTAGE BEANIE BABY</text>"
+            "<text>CLASS: VINTAGE BEANIE BABY(TM)</text>"
             "<text y='26'>RARITY TIER:                                 </text>"
             "<text y='52'>ED NUM.MINT ID:   .    </text>"
             "<text y='78'>NFT AGE:   YR   MO   D</text>"
@@ -126,10 +127,10 @@ contract C9SVG is C9Context, C9Shared {
         // "</a>"
         // "</g>"
 
-    address public immutable tokenContract;
+    address public immutable contractToken;
 
-    constructor (address _tokenContract) {
-        tokenContract = _tokenContract;
+    constructor (address _contractToken) {
+        contractToken = _contractToken;
     }
 
        /**
@@ -139,8 +140,8 @@ contract C9SVG is C9Context, C9Shared {
     function addAddress(address _address, bytes memory b) private pure {
         (bytes32 _a1, bytes8 _a2) = Helpers.addressToB32B8(_address);
         assembly {
-            mstore(add(b, 2907), _a1)
-            let dst := add(b, 2939)
+            mstore(add(b, 1792), _a1)
+            let dst := add(b, 1824)
             mstore(dst, or(and(mload(dst), not(shl(192, 0xFFFFFFFFFFFFFFFF))), _a2))
         }
     }
@@ -151,10 +152,10 @@ contract C9SVG is C9Context, C9Shared {
      * SVGs may be displayed on the same page without CSS conflict.
      */
     function addIds(bytes6 b6Tokenid, bytes memory b) private pure {
-        uint16[11] memory offsets = [182, 208, 234, 276, 351, 887, 2379, 2457, 2651, 3008, 3070];
+        uint16[13] memory offsets = [223, 249, 275, 317, 392, 566, 934, 1004, 1258, 1343, 1536, 1893, 1955];
         assembly {
             let dst := 0
-            for {let i := 0} lt(i, 11) {i := add(i, 1)} {
+            for {let i := 0} lt(i, 13) {i := add(i, 1)} {
                 dst := add(b, mload(add(offsets, mul(32, i))))
                 mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), b6Tokenid))
             }
@@ -164,36 +165,37 @@ contract C9SVG is C9Context, C9Shared {
     // /**
     //  * @dev Adds validity flag info to SVG output memory `b`.
     //  */
-    function addValidityInfo(uint256 tokenId, uint256 data, bytes memory b) private view {
+    function addValidityInfo(uint256 tokenId, uint256 data, bytes memory b)
+    private view {
         uint256 _validityIdx = _currentVId(data);
 
-        bytes3 _clr;
-        bytes16 _validity = _vValidity[_validityIdx % 5];
+        bytes3 color;
+        bytes16 validityText = _vValidity[_validityIdx % 5];
         uint256 _locked;
         if (_validityIdx == VALID) {
-            bool _preRedeemable = IC9Token(tokenContract).preRedeemable(tokenId);
+            bool _preRedeemable = IC9Token(contractToken).preRedeemable(tokenId);
             if (_preRedeemable) {
-                _clr = "a0f"; // purple
-                _validity = "PRE-REDEEMABLE  ";
+                color = "a0f"; // purple
+                validityText = "PRE-REDEEMABLE  ";
             }
             else {
                 // If validity 0 and locked == getting reedemed
                 _locked = data>>MPOS_LOCKED & BOOL_MASK;
                 if (_locked == 1) {
-                    _clr = "b50"; // orange
-                    _validity = "REDEEM PENDING  ";
+                    color = "b50"; // orange
+                    validityText = "REDEEM PENDING  ";
                 }
                 else {
-                    _clr = "0a0"; // green
+                    color = "0a0"; // green
                 }
             }
         }
         else {
-            _clr = "b00"; // red, invalid
+            color = "b00"; // red, invalid
         }
         assembly {
             let dst := add(b, 2519)
-            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _clr))
+            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), color))
             // VALID => INVALID
             if gt(_validityIdx, VALID) {
                 dst := add(b, 2524)
@@ -215,7 +217,7 @@ contract C9SVG is C9Context, C9Shared {
             dst := add(b, 2532)
             mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), ">>"))
             dst := add(b, 2535)
-            mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _validity))
+            mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), validityText))
         }
     }
 
@@ -284,31 +286,31 @@ contract C9SVG is C9Context, C9Shared {
         
             assembly {
                 // Name Font Size
-                let dst := add(b, 251)
+                let dst := add(b, 334)
                 mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _namesize))
                 // Colors
-                dst := add(b, 484)
+                dst := add(b, 525)
                 mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _rgc2))
-                dst := add(b, 2724)
+                dst := add(b, 1609)
                 mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _classer))
                 // Edition
                 let _edcheck := gt(_edition, 9)
                 switch _edcheck case 0 {
-                    dst := add(b, 2793)
+                    dst := add(b, 1678)
                 } default {
-                    dst := add(b, 2792)
+                    dst := add(b, 1677)
                 }
                 mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _edition))
                 // Mintid
-                dst := add(b, 2795)
+                dst := add(b, 1680)
                 mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), __mintid))
                 // Royalty
-                dst := add(b, 2590)
+                dst := add(b, 1475)
                 mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _royalty))
                 // Gen Country Text
-                dst := add(b, 3016)
+                dst := add(b, 1901)
                 mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tagtxt))
-                dst := add(b, 3026)
+                dst := add(b, 1911)
                 mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tushtxt))
             }
     }
@@ -402,12 +404,14 @@ contract C9SVG is C9Context, C9Shared {
      * but users should be able to fetch meta-data updates to see 
      * color changes.
      */
-    function checkForSpecialBg(uint256 _rtier, bytes memory b) private view {
+    function checkForSpecialBg(uint256 rarityTier, bytes memory b)
+    private view {
         bytes32 _filter_mod = "turbulence' baseFrequency='0.002";
-        bytes32[3] memory mods = [bytes32("1 1 0 0 0 1 0 0 0 0 0 1 0 0 0 0 "),
+        bytes32[3] memory mods = [bytes32(
+            "1 1 0 0 0 1 0 0 0 0 0 1 0 0 0 0 "),
             "0 0 0 0 1 1 0 0 0 0 0 1 0 0 0 0 ",
             "0 0 0 0 0 1 0 0 0 0 0 1 1 1 0 0 "];
-        if (_rtier == 5) {
+        if (rarityTier == 0) {
             assembly {
                 let dst := add(b, 574)
                 mstore(dst, _filter_mod)
@@ -551,6 +555,7 @@ contract C9SVG is C9Context, C9Shared {
         addIds(b6TokenId, b);
         addTokenInfo(tokenData, _currentVId(ownerData), name, b);
         addValidityInfo(tokenId, ownerData, b);
+        addAddress(IC9Token(contractToken).ownerOf(tokenId), b);
 
     }
 
