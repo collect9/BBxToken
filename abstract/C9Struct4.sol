@@ -2,15 +2,15 @@
 pragma solidity >=0.8.17;
 
 abstract contract C9Struct {
+    // For readability
     uint256 constant BOOL_MASK = 1;
 
     // Validity
     uint256 constant VALID = 0;
     uint256 constant ROYALTIES = 1;
     uint256 constant INACTIVE = 2;
-    uint256 constant OTHER = 3; // USER?
+    uint256 constant OTHER = 3;
     uint256 constant REDEEMED = 4;
-    uint256 constant BURNED = 5;
 
     // Upgraded
     uint256 constant UPGRADED = 1;
@@ -27,13 +27,15 @@ abstract contract C9Struct {
     uint256 constant URI0 = 0;
     uint256 constant URI1 = 1;
 
+    // Period constants
     uint256 constant MAX_PERIOD = 63113852; //2 years
 
+    // Token mint data struct
     struct TokenData {
-        string name;
-        uint256 upgraded;
-        uint256 display;
-        uint256 locked;
+        string name; // Name
+        uint256 upgraded; // Token upgraded bool
+        uint256 display; // Display type bool
+        uint256 locked; // Token lock bool
         uint256 validity; // Validity flag to show whether not token is redeemable
         uint256 edition; // Physical edition
         uint256 cntrytag; // Hang tag country id
@@ -50,92 +52,66 @@ abstract contract C9Struct {
         uint256 validitystamp; // Needed if validity invalid
         uint256 mintstamp; // Minting timestamp
         uint256 insurance; // Insured value
-        uint256 votes;
-        uint256 cData;
+        uint256 votes; // Number of votes the token is worth
+        uint256 cData; // Binary mapped QR code and barcode data
     }
 
-    // _owners eXtended storage -> mutable data
-    // uint256 constant MPOS_OWNER = 0; // 24 bits, max 16777215
-    // uint256 constant MPOS_XFER_COUNTER = 160; // 24 bits, max 16777215
-    // uint256 constant MPOS_VALIDITYSTAMP = 184; // 40 bits
-    // uint256 constant MPOS_VALIDITY = 224; // 4 bits, max 15
-    // uint256 constant MPOS_UPGRADED = 228; // 1 bit, max 1
-    // uint256 constant MPOS_DISPLAY = 229; // 1 bit, max 1
-    // uint256 constant MPOS_LOCKED = 230; // 1 bit, max 1
-    // uint256 constant MPOS_INSURANCE = 231; // 20 bits, max 1048575
-    // uint256 constant MPOS_VOTES = 251; // 5 bits, max 31
-
+    // Packed positions within ownerData - everything is mutable except votes
     uint256 constant MPOS_LOCKED = 0; // 1 bit, max 1
     uint256 constant MPOS_VALIDITY = 1; // 4 bits, max 15
-    uint256 constant MPOS_VALIDITYSTAMP = 5; // 40 bits
-    uint256 constant MPOS_UPGRADED = 45; // 1 bit, max 1
-    uint256 constant MPOS_DISPLAY = 46; // 1 bit, max 1
-    uint256 constant MPOS_INSURANCE = 47; // 20 bits, max 1048575
-    uint256 constant MPOS_VOTES = 67; // 5 bits, max 31
-    uint256 constant MPOS_OWNER = 72; // 160 bits
-    uint256 constant MPOS_XFER_COUNTER = 232; // 24 bits, max 16777215
+    uint256 constant MPOS_VALIDITYSTAMP = 5; // 38 bits
+    uint256 constant MPOS_UPGRADED = 43; // 1 bit, max 1
+    uint256 constant MPOS_DISPLAY = 44; // 1 bit, max 1
+    uint256 constant MPOS_INSURANCE = 45; // 20 bits, max 1048575
+    uint256 constant MPOS_ROYALTY = 65; // 7 bits, max 127 (multi by 10)
+    uint256 constant MPOS_VOTES = 72; // 4 bits, max 15 (IMMUTABLE by code logic)
+    uint256 constant MPOS_OWNER = 76; // 160 bits
+    uint256 constant MPOS_XFER_COUNTER = 236; // 20 bits, max 1048575
 
-    // _uTokenData -> mostly immutable by code logic
-    uint256 constant UPOS_GLOBAL_MINT_ID = 0; // 16 bits
-    uint256 constant UPOS_MINTSTAMP = 16; // 40 bits
-    uint256 constant UPOS_EDITION = 56; // 7 bits, max 127 (cannot be greater than 99 in logic)
-    uint256 constant UPOS_EDITION_MINT_ID = 63; // 16 bits, max 65535
-    uint256 constant UPOS_CNTRYTAG = 79; // 4 bits, max 15
-    uint256 constant UPOS_CNTRYTUSH = 83; // 4 bits, max 15
-    uint256 constant UPOS_GENTAG = 87; // 6 bits, max 63
-    uint256 constant UPOS_GENTUSH = 93; // 6 bits, max 63
-    uint256 constant UPOS_MARKERTUSH = 99; // 4 bits, max 15
-    uint256 constant UPOS_SPECIAL = 103; // 4 bits, max 15
-    uint256 constant UPOS_RARITYTIER = 107; // 4 bits, max 15
-    uint256 constant UPOS_ROYALTY = 111; // 10 bits, max 1023 (MUTABLE)
-    uint256 constant UPOS_ROYALTIES_DUE = 121; // 15 bits, max 32767 (MUTABLE)
-    uint256 constant UPOS_RESERVED = 136; // 120 bits (MUTABLE)
-
+    // Sizes of packed data in ownerData
     uint256 constant MSZ_VALIDITY = 4;
     uint256 constant MSZ_INSURANCE = 20;
-    uint256 constant MSZ_VOTES = 5;
+    uint256 constant MSZ_ROYALTY = 7;
+    uint256 constant MSZ_VOTES = 4;
+    uint256 constant MSZ_XFER_COUNTER = 20;
 
+    // Masks of packed data in ownerData
+    uint256 constant M_MASK_VALIDITY = 2**MSZ_VALIDITY-1;
+    uint256 constant M_MASK_ROYALTY = 2**MSZ_ROYALTY-1;
+    uint256 constant M_IMASK_VALIDITY = 2**(256-MSZ_VALIDITY)-1;
+
+    // Packed positions within uTokenData - everything is immutable except royalties due
+    uint256 constant UPOS_MINTSTAMP = 0; // 40 bits
+    uint256 constant UPOS_EDITION = 38; // 7 bits, max 127 (cannot be greater than 99 in logic)
+    uint256 constant UPOS_EDITION_MINT_ID = 45; // 15 bits, max 32767
+    uint256 constant UPOS_CNTRYTAG = 60; // 4 bits, max 15
+    uint256 constant UPOS_CNTRYTUSH = 64; // 4 bits, max 15
+    uint256 constant UPOS_GENTAG = 68; // 5 bits, max 31
+    uint256 constant UPOS_GENTUSH = 73; // 5 bits, max 31
+    uint256 constant UPOS_MARKERTUSH = 78; // 4 bits, max 15
+    uint256 constant UPOS_SPECIAL = 82; // 4 bits, max 15
+    uint256 constant UPOS_RARITYTIER = 86; // 4 bits, max 15
+    uint256 constant UPOS_ROYALTIES_DUE = 90; // 14 bits, max 16383 (MUTABLE by code logic)
+    uint256 constant UPOS_NAME = 104; //152 bits, 19 characters max name length
+
+    // Sizes of packed data in uTokenData
     uint256 constant USZ_EDITION = 7;
+    uint256 constant USZ_EDITION_MINT_ID = 15;
     uint256 constant USZ_CNTRYTAG = 4;
     uint256 constant USZ_CNTRYTUSH = 4;
-    uint256 constant USZ_GENTAG = 6;
-    uint256 constant USZ_GENTUSH = 6;
+    uint256 constant USZ_GENTAG = 5;
+    uint256 constant USZ_GENTUSH = 5;
     uint256 constant USZ_MARKERTUSH = 4;
+    uint256 constant USZ_TIMESTAMP = 38;
     uint256 constant USZ_SPECIAL = 4;
     uint256 constant USZ_RARITYTIER = 4;
-    uint256 constant USZ_ROYALTY = 10;
-    uint256 constant USZ_ROYALTIES_DUE = 15;
+    uint256 constant USZ_ROYALTIES_DUE = 14;
+    uint256 constant USZ_NAME = 152;
 
-    uint256 constant MASK_VALIDITY = 2**MSZ_VALIDITY-1;
-    uint256 constant IMASK_VALIDITY = 2**(256-MSZ_VALIDITY)-1;
-    uint256 constant MASK_ROYALTY = 2**USZ_ROYALTY-1;
-    uint256 constant MASK_ROYALTIES_DUE = 2**USZ_ROYALTIES_DUE-1;
+    // Masks of packed data in uTokenData
+    uint256 constant U_MASK_ROYALTIES_DUE = 2**USZ_ROYALTIES_DUE-1;
+    
+    // Masks of packed data in balances
     uint256 constant MASK_ADDRESS_XFER = 2**184-1;
     uint256 constant MASK_BALANCER = 2**64-1;
-
-
-
-    /*
-     * @dev Returns the indices that split sTokenData into 
-     * name, qrData, barCodeData.
-     */
-    function _getSliceIndices(string calldata _sTokenData)
-        internal pure
-        returns (uint256 _sliceIndex1, uint256 _sliceIndex2) {
-            bytes memory _bData = bytes(_sTokenData);
-            for (_sliceIndex1; _sliceIndex1<32;) {
-                if (_bData[_sliceIndex1] == 0x3d) {
-                    break;
-                }
-                unchecked {++_sliceIndex1;}
-            }
-            uint256 _bDataLen = _bData.length;
-            _sliceIndex2 = _sliceIndex1 + 50;
-            for (_sliceIndex2; _sliceIndex2<_bDataLen;) {
-                if (_bData[_sliceIndex2] == 0x3d) {
-                    break;
-                }
-                unchecked {++_sliceIndex2;}
-            }
-    }
 }

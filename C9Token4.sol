@@ -66,7 +66,6 @@ contract C9Token is ERC721IdEnumBasic {
      */
     mapping(uint256 => address) private _rTokenData;
     mapping(uint256 => uint256) private _cTokenData;
-    mapping(uint256 => string)  private _sTokenData;
     mapping(uint256 => uint256) private _uTokenData;
     
     
@@ -277,7 +276,6 @@ contract C9Token is ERC721IdEnumBasic {
         uint256 edition;
         uint256 editionMintId;
         uint256 tokenId;
-        uint256 globalMintId = totalSupply();
         address to = _msgSender();
         uint256 _to = uint256(uint160(to));
 
@@ -341,14 +339,13 @@ contract C9Token is ERC721IdEnumBasic {
             packedToken |= _input.upgraded<<MPOS_UPGRADED;
             packedToken |= _input.display<<MPOS_DISPLAY;
             packedToken |= _input.insurance<<MPOS_INSURANCE;
+            packedToken |= _input.royalty<<MPOS_ROYALTY;
             packedToken |= _input.votes<<MPOS_VOTES;
             packedToken |= _to<<MPOS_OWNER;
             _owners[tokenId] = packedToken; // Officially minted
-
+            
             // Additional storage in _uTokenData
-            unchecked {++globalMintId;}
-            packedToken = globalMintId;
-            packedToken |= timestamp<<UPOS_MINTSTAMP;
+            packedToken = timestamp;
             packedToken |= edition<<UPOS_EDITION;
             packedToken |= editionMintId<<UPOS_EDITION_MINT_ID;
             packedToken |= _input.cntrytag<<UPOS_CNTRYTAG;
@@ -358,15 +355,13 @@ contract C9Token is ERC721IdEnumBasic {
             packedToken |= _input.markertush<<UPOS_MARKERTUSH;
             packedToken |= _input.special<<UPOS_SPECIAL;
             packedToken |= _input.raritytier<<UPOS_RARITYTIER;
-            packedToken |= _input.royalty<<UPOS_ROYALTY;
+            packedToken |= uint256(uint152(bytes19(bytes(_input.name))))<<UPOS_NAME;
+            
             packedToken |= _input.royaltiesdue<<UPOS_ROYALTIES_DUE;
             _uTokenData[tokenId] = packedToken;
 
             // Store token data for SVG
             _cTokenData[tokenId] = _input.cData;
-
-            // Store name
-             _sTokenData[tokenId] = _input.name;
 
             emit Transfer(address(0), to, tokenId);
 
@@ -424,11 +419,11 @@ contract C9Token is ERC721IdEnumBasic {
         }
         // Set new royalty
         if (_newRoyalty) {
-            _uTokenData[tokenId] = _setTokenParam(
-                _uTokenData[tokenId],
-                UPOS_ROYALTY,
+            _owners[tokenId] = _setTokenParam(
+                _owners[tokenId],
+                MPOS_ROYALTY,
                 royalty,
-                MASK_ROYALTY
+                M_MASK_ROYALTY
             );
         }
     }
@@ -577,49 +572,69 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Returns the data in the reserved space.
+     * @dev Returns an unpacked view of the ownerData.
      */
-    function getReserved(uint256 tokenId)
+    function getOwnersParams(uint256 tokenId)
     external view
     requireMinted(tokenId)
-    returns (uint256) {
-        uint256 tokenData = _uTokenData[tokenId];
-        return tokenData>>UPOS_RESERVED;
-    }
-
-    /**
-     * @dev uTokenData is packed into a single uint256. This function
-     * returns an unpacked array.
-     */
-    function getTokenParams(uint256 tokenId)
-    external view
-    requireMinted(tokenId)
-    returns(uint256[21] memory xParams) {
-        // Data stored in owners
+    returns (uint[8] memory xParams) {
         uint256 data = _owners[tokenId];
-        xParams[0] = uint256(uint24(data>>MPOS_XFER_COUNTER));
-        xParams[1] = uint256(uint40(data>>MPOS_VALIDITYSTAMP));
+        xParams[0] = _viewPackedData(data, MPOS_XFER_COUNTER, MSZ_XFER_COUNTER);
+        xParams[1] = _viewPackedData(data, MPOS_VALIDITYSTAMP, USZ_TIMESTAMP);
         xParams[2] = _currentVId(data);
         xParams[3] = data>>MPOS_UPGRADED & BOOL_MASK;
         xParams[4] = data>>MPOS_DISPLAY & BOOL_MASK;
         xParams[5] = data>>MPOS_LOCKED & BOOL_MASK;
         xParams[6] = _viewPackedData(data, MPOS_INSURANCE, MSZ_INSURANCE);
         xParams[7] = _viewPackedData(data, MPOS_VOTES, MSZ_VOTES);
-        // Data stored in uTokenData
-        data = _uTokenData[tokenId];
-        xParams[8] = uint256(uint16(data>>UPOS_GLOBAL_MINT_ID)); // Global Mint Id
-        xParams[9] = uint256(uint40(data>>UPOS_MINTSTAMP));
-        xParams[10] = _viewPackedData(data, UPOS_EDITION, USZ_EDITION);
-        xParams[11] = uint256(uint16(data>>UPOS_EDITION_MINT_ID));
-        xParams[12] = _viewPackedData(data, UPOS_CNTRYTAG, USZ_CNTRYTAG);
-        xParams[13] = _viewPackedData(data, UPOS_CNTRYTUSH, USZ_CNTRYTUSH);
-        xParams[14] = _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG);
-        xParams[15] = _viewPackedData(data, UPOS_GENTUSH, USZ_GENTUSH);
-        xParams[16] = _viewPackedData(data, UPOS_MARKERTUSH, USZ_MARKERTUSH);
-        xParams[17] = _viewPackedData(data, UPOS_SPECIAL, USZ_SPECIAL);
-        xParams[18] = _viewPackedData(data, UPOS_RARITYTIER, USZ_RARITYTIER);
-        xParams[19] = _viewPackedData(data, UPOS_ROYALTY, USZ_ROYALTY);
-        xParams[20] = _viewPackedData(data, UPOS_ROYALTIES_DUE, USZ_ROYALTIES_DUE);
+    }
+
+    /**
+     * @dev Returns an unpacked view of the tokenData.
+     */
+    function getTokenParams(uint256 tokenId)
+    external view
+    requireMinted(tokenId)
+    returns (uint256[11] memory xParams) {
+        uint256 data = _uTokenData[tokenId];
+        xParams[0] = _viewPackedData(data, UPOS_MINTSTAMP, USZ_TIMESTAMP);
+        xParams[1] = _viewPackedData(data, UPOS_EDITION, USZ_EDITION);
+        xParams[2] = _viewPackedData(data, UPOS_EDITION_MINT_ID, USZ_EDITION_MINT_ID);
+        xParams[3] = _viewPackedData(data, UPOS_CNTRYTAG, USZ_CNTRYTAG);
+        xParams[4] = _viewPackedData(data, UPOS_CNTRYTUSH, USZ_CNTRYTUSH);
+        xParams[5] = _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG);
+        xParams[6] = _viewPackedData(data, UPOS_GENTUSH, USZ_GENTUSH);
+        xParams[7] = _viewPackedData(data, UPOS_MARKERTUSH, USZ_MARKERTUSH);
+        xParams[8] = _viewPackedData(data, UPOS_SPECIAL, USZ_SPECIAL);
+        xParams[9] = _viewPackedData(data, UPOS_RARITYTIER, USZ_RARITYTIER);
+        xParams[10] = _viewPackedData(data, UPOS_ROYALTIES_DUE, USZ_ROYALTIES_DUE);
+    }
+
+    /**
+     * @dev Returns the name stored in token params.
+     * This is in a separate function since it is a string 
+     * of unknown length that needs to be checked in a special 
+     * way prior to returning.
+     */
+    function getTokenParamsName(uint256 tokenId)
+    external view
+    requireMinted(tokenId)
+    returns (string memory name) {
+        uint256 data = _uTokenData[tokenId];
+        bytes19 b19Name = bytes19(uint152(data >> UPOS_NAME));
+        uint256 i;
+        for (i; i<19;) {
+            if (b19Name[i] == 0x00) {
+                break;
+            }
+            unchecked {++i;}
+        }
+        bytes memory bName = new bytes(i);
+        for (uint256 j; j<i;) {
+            bName[j] = b19Name[j];
+            unchecked {++j;}
+        }
+        return string(bName);
     }
 
     /**
@@ -799,10 +814,10 @@ contract C9Token is ERC721IdEnumBasic {
         uint256 _fraction = _royalty;
         if (_exists(tokenId)) {
             _fraction = _viewPackedData(
-                _uTokenData[tokenId],
-                UPOS_ROYALTY,
-                USZ_ROYALTY
-            );
+                _owners[tokenId],
+                MPOS_ROYALTY,
+                MSZ_ROYALTY
+            ) * 10;
         }
         uint256 royaltyAmount = (salePrice * _fraction) / 10000;
         return (receiver, royaltyAmount);
@@ -912,54 +927,6 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Sets the data for the reserved (unused at mint) 
-     * space. Since this storage is already paid for, it may
-     * be used for expansion features that may be available 
-     * later. Such features will only be available to 
-     * external contracts, as this contract will have no
-     * built-in parsing.
-     * 120 bits remain in the reserved storage space.
-     */
-    function setReserved(uint256 tokenId, uint256 data)
-    public
-    requireMinted(tokenId) {
-        bool _isReservedRole = hasRole(RESERVED_ROLE, _msgSender());
-        // If owner or approved or RESERVED_ROLE
-        if (!_isReservedRole) {
-            _isApprovedOrOwner(_msgSender(), ownerOf(tokenId), tokenId);
-        }
-        // If approved, check if approved can update, otherwise must be RESERVED_ROLE
-        if (!_reservedOpen) {
-            if (!_isReservedRole) {
-                revert ReservedSpaceNotOpen();
-            }
-        }
-        // Update the reserved space for this token
-        _uTokenData[tokenId] = _setTokenParam(
-            _uTokenData[tokenId],
-            UPOS_RESERVED,
-            data,
-            type(uint120).max
-        );
-    }
-
-    /**
-     * @dev The cost to set/update should be comparable 
-     * to updating insured values.
-     */
-    function setReserved(uint256[] calldata tokenIds, uint256[] calldata data)
-    external {
-        uint256 _batchSize = data.length;
-        if (_batchSize != tokenIds.length) {
-            revert InputsSizeMismatch(_batchSize, tokenIds.length);
-        }
-        for (uint256 i; i<_batchSize;) {
-            setReserved(tokenIds[i], data[i]);
-            unchecked {++i;}
-        }
-    }
-
-    /**
      * @dev Set royalties due if token validity status 
      * is ROYALTIES. This is admin role instead of VALIDITY_ROLE 
      * to reduce gas costs from using a proxy contract.
@@ -986,7 +953,7 @@ contract C9Token is ERC721IdEnumBasic {
             _tokenData,
             UPOS_ROYALTIES_DUE,
             amount,
-            MASK_ROYALTIES_DUE
+            U_MASK_ROYALTIES_DUE
         );
     }
 
@@ -1093,8 +1060,7 @@ contract C9Token is ERC721IdEnumBasic {
             tokenId,
             _owners[tokenId],
             _uTokenData[tokenId],
-            _cTokenData[tokenId],
-            _sTokenData[tokenId]
+            _cTokenData[tokenId]
         );
     }
 
