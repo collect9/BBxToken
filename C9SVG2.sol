@@ -14,9 +14,12 @@ contract C9SVG is C9Context, C9Shared {
 
     bytes constant QR_CODE_BASE = ""
         "<svg version='1.1' xmlns='http://www.w3.org/2000/svg' class='c9QRcode' width='100%' height='100%' viewBox='0 0 17 17'>"
-        "<style type='text/css'>.c9QRcode{opacity:0.89;} .c9QRcode rect{width:1px;height:1px;}</style>"
-        "<rect x='0.5' y='0.5' style='width:6px; height:6px; stroke:#000; fill-opacity:0;'/>"
-        "<rect x='2' y='2' style='width:3px; height:3px;'/>"
+        "<style type='text/css'>"
+            ".c9QRcode{opacity:0.89;} "
+            ".c9QRcode rect{width:1px;height:1px;}"
+        "</style>"
+        "<rect x='0.5' y='0.5' style='width:6px;height:6px;stroke:#000;fill-opacity:0;'/>"
+        "<rect x='2' y='2' style='width:3px;height:3px;'/>"
         "<rect x='15' y='4' style='height:7px;'/>"
         "<rect x='8'/>"
         "<rect x='10'/>"
@@ -26,8 +29,8 @@ contract C9SVG is C9Context, C9Shared {
         "<rect y='8'/>"
         "<rect y='10'/>"
         "<rect y='12'/>"
-        "<rect x='0' y='14'/>"
-        "<rect x='0' y='16'/>"
+        "<rect y='14'/>"
+        "<rect y='16'/>"
         "<rect x='16' y='1'/>"
         "<rect x='9' y='2'/>"
         "<rect x='10' y='2'/>"
@@ -59,73 +62,71 @@ contract C9SVG is C9Context, C9Shared {
 
     bytes constant BAR_CODE_BASE = ""
         "<svg version='1.1' xmlns='http://www.w3.org/2000/svg' class='c9BARcode' width='100%' height='100%' viewBox='30 0 270 100'>"
-        "<style type='text/css'>.c9BARcode{opacity:0.89;} .c9BARcode rect{height:1px;}</style>"
+        "<style type='text/css'>"
+            ".c9BARcode{opacity:0.89;} "
+            ".c9BARcode rect{height:1px;}"
+        "</style>"
         "<g transform='scale(3 100)'>"
-        "<rect x='10' width='1'/>"
-        "<rect x='11' width='1'/>"
-        "<rect x='13' width='1'/>"
-        "<rect x='21' width='1'/>";
+            "<rect x='10' width='1'/>"
+            "<rect x='11' width='1'/>"
+            "<rect x='13' width='1'/>"
+            "<rect x='21' width='1'/>";
 
     bytes constant SVG_OPENER = ""
         "<svg version='1.1' xmlns='http://www.w3.org/2000/svg' class='c9Tsvg' width='100%' height='100%' viewBox='0 0 630 880'>"
         "<style type='text/css'>"
             ".c9Tsvg{font-family:'Courier New';} "
-            ".sXXXXXX{font-size:22px;} "
-            ".mXXXXXX{font-size:34px;} "
-            ".tXXXXXX{font-size:54px;font-weight:700;} "
-            ".nXXXXXX{font-size:34px;font-weight:700;}"
+            ".c9Tsvg rect{width:100%;height:100%;} "
+            ".c9Ts{font-size:22px;} "
+            ".c9Tm{font-size:34px;} "
+            ".c9Tl{font-size:54px;} "
+            ".c9Tb{font-weight:700;}"
         "</style>"
         "<defs>"
             "<radialGradient id='rgXXXXXX' cx='50%' cy='44%' r='50%' gradientUnits='userSpaceOnUse'>"
-                "<stop offset='25%' stop-color='#fff'/>"
-                "<stop offset='1' stop-color='#e66'/>"
+                "<stop offset='0' stop-color='#fff'/>"
+                "<stop offset='1' stop-color='#101'/>"
             "</radialGradient>"
-            "<filter id='noiserXXXXXX'>"
-                "<feTurbulence type='fractalNoise' baseFrequency='0.2' numOctaves='8'/>"
+            "<filter id='c9Nse'>"
+                "<feTurbulence type='fractalNoise' baseFrequency='.2' numOctaves='8'/>"
                 "<feComposite in2='SourceGraphic' operator='in'/>"
-                "<feColorMatrix values='1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0.2 0'/>"
+                "<feColorMatrix values='1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 .2 0'/>"
             "</filter>"
-            "<filter id='grayscale'>"
-                "<feColorMatrix type='saturate' values='1.0'/>" // Upgradable can modify to an extent
+            "<filter id='c9Gs'>"
+                "<feColorMatrix type='saturate' values='1.0'/>"
             "</filter>"
         "</defs>"
-        "<g filter='url(#grayscale)'>" // Upgraded, dead, or burned filter
-
-        "<rect rx='20' width='100%' height='100%' fill='url(#rgXXXXXX)'/>"
-        "<rect rx='20' width='100%' height='100%' filter='url(#noiserXXXXXX)'/>"
-        "<rect y='560' width='100%' height='22' fill='#ddf' fill-opacity='0.6'/>"
-
-        "<rect x='20' y='20' width='590' height='150' rx='10' fill='#ded'/>"
-        "<rect x='20' y='740' width='590' height='120' rx='10' fill='#ded'/>"
-
-        "<g transform='translate(30 58)' class='mXXXXXX'>"
-            "<text>COLLECT9</text>"
-            "<text y='34'>Physically REDEEMABLE NFT</text>"
-            "<g class='sXXXXXX'>"
-                "<text y='74'>STATUS: <tspan font-weight='700' fill='#080'>  VALID                    </tspan></text>"
-                "<text y='100'>EIP-2981: 3.50%</text>"
-            "</g>" 
-        "</g>"
-
-        "<g transform='translate(30 768)' class='sXXXXXX'>"
-            "<text>CLASS: VINTAGE BEANIE BABY(TM)</text>"
-            "<text y='26'>RARITY TIER:                                 </text>"
-            "<text y='52'>ED NUM.MINT ID:   .    </text>"
-            "<text y='78'>NFT AGE:   YR   MO   D</text>"
-        "</g>"
-
-        "<text x='50%' y='576' fill='#999' text-anchor='middle'>                                        </text>"
-        
-        "<g text-anchor='middle'>"
-            "<text x='50%' y='645' class='nXXXXXX'>        |        </text>"
-            "<text x='50%' y='698' class='tXXXXXX'>"; // Variable part starts
-
+        "<g filter='url(#c9Gs)'>"
+            "<rect rx='20' fill='url(#rgXXXXXX)'/>"
+            "<rect rx='20' filter='url(#c9Nse)'/>"
+            "<g transform='translate(20 20)' style='fill:#ded;'>"
+                "<rect style='width:590px;height:150px;' rx='10'/>"
+                "<rect y='720' style='width:590px;height:120px;' rx='10'/>"
+            "</g>"
+            "<rect y='560' style='height:22px;fill:#ddf;fill-opacity:0.6;'/>"
+            "<g transform='translate(30 58)' class='c9Tm'>"
+                "<text>COLLECT9 PHYSICALLY</text>"
+                "<text y='34'>REDEEMABLE NFT</text>"
+                "<g class='c9Ts'>"
+                    "<text y='74'>STATUS: <tspan class='c9Tb' fill='#080'>  VALID                    </tspan></text>"
+                    "<text y='100'>EIP-2981: 3.50%</text>"
+                    "<text y='710'>CLASS: VINTAGE BEANIE BABY</text>"
+                    "<text y='736'>RARITY TIER:                                 </text>"
+                    "<text y='762'>ED NUM.MINT ID:   .    </text>"
+                    "<text y='788'>NFT AGE:   YR   MO   D</text>"
+                "</g>"
+            "</g>"
+            "<g transform='translate(315 576)' text-anchor='middle'>"
+                "<text fill='#999'>                                        </text>"
+                "<text y='69' class='c9Tm c9Tb'>        |        </text>"
+                "<text y='122' class='c9Tl c9Tb'>";
 
     bytes constant FLG_BLK = ""
         "<pattern id='ptrn' width='.1' height='.1'>"
-        "<rect width='64' height='48' fill='#def' stroke='#000'/>"
+            "<rect width='64' height='48' fill='#def' stroke='#000'/>"
         "</pattern>"
         "<path d='M0 0h640v480H0z' fill='url(#ptrn)'/>";
+        
     bytes constant FLG_CAN = ""
         "<path fill='#fff' d='M0 0h640v480H0z'/>"
         "<path fill='#d21' d='M-19.7 0h169.8v480H-19.7zm509.5 0h169.8v480H489.9zM201 232l-13.3 4.4 61.4 54c4.7 13.7-1.6 "
@@ -133,9 +134,10 @@ contract C9SVG is C9Context, C9Shared {
         "5.6-48.9 0 0-35.7 12.3-38 5.8l-9.2-17.5-32.6 35.8c-3.5.9-5-.5-5.9-3.5l15-74.8-23.8 13.4c-2 .9-4 .1-5.2-2.2l-23-46-23.6 "
         "47.8c-1.8 1.7-3.6 1.9-5 .7L264 130.8l13.7 74.1c-1.1 3-3.7 3.8-6.7 2.2l-31.2-35.3c-4 6.5-6.8 17.1-12.2 19.5-5.4 "
         "2.3-23.5-4.5-35.6-7 4.2 14.8 17 39.6 9 47.7z'/>";
+
     bytes constant FLG_CHN = ""
         "<g id='c9chn'>"
-        "<path fill='#ff0' d='M-.6.8 0-1 .6.8-1-.3h2z'/>"
+            "<path fill='#ff0' d='M-.6.8 0-1 .6.8-1-.3h2z'/>"
         "</g>"
         "<path fill='#e12' d='M0 0h640v480H0z'/>"
         "<use href='#c9chn' transform='matrix(72 0 0 72 120 120)'/>"
@@ -143,63 +145,68 @@ contract C9SVG is C9Context, C9Shared {
         "<use href='#c9chn' transform='matrix(-3.4 -23.8 23.8 -3.4 288 96)'/>"
         "<use href='#c9chn' transform='matrix(6.6 -23 23 6.6 288 168)'/>"
         "<use href='#c9chn' transform='matrix(15 -18.7 18.7 15 240 216)'/>";
+
     bytes constant FLG_GER = ""
         "<path fill='#fc0' d='M0 320h640v160H0z'/>"
         "<path d='M0 0h640v160H0z'/>"
         "<path fill='#d00' d='M0 160h640v160H0z'/>";
+
     bytes constant FLG_IND = ""
         "<path fill='#e01' d='M0 0h640v249H0z'/>"
         "<path fill='#fff' d='M0 240h640v240H0z'/>";
+
     bytes constant FLG_KOR = ""
         "<defs>"
-        "<clipPath id='c9kor1'>"
-        "<path fill-opacity='.7' d='M-95.8-.4h682.7v512H-95.8z'/>"
-        "</clipPath>"
+            "<clipPath id='c9kor1'>"
+                "<path fill-opacity='.7' d='M-95.8-.4h682.7v512H-95.8z'/>"
+            "</clipPath>"
         "</defs>"
         "<g fill-rule='evenodd' clip-path='url(#c9kor1)' transform='translate(89.8 .4) scale(.94)'>"
-        "<path fill='#fff' d='M-95.8-.4H587v512H-95.8Z'/>"
-        "<g transform='rotate(-56.3 361.6 -101.3) scale(10.67)'>"
-        "<g id='c9kor2'>"
-        "<path id='c9kor3' d='M-6-26H6v2H-6Zm0 3H6v2H-6Zm0 3H6v2H-6Z'/>"
-        "<use href='#c9kor3' y='44'/>"
-        "</g>"
-        "<path stroke='#fff' d='M0 17v10'/>"
-        "<path fill='#c33' d='M0-12a12 12 0 0 1 0 24Z'/>"
-        "<path fill='#04a' d='M0-12a12 12 0 0 0 0 24A6 6 0 0 0 0 0Z'/>"
-        "<circle cy='-6' r='6' fill='#c33'/>"
-        "</g>"
-        "<g transform='rotate(-123.7 191.2 62.2) scale(10.67)'>"
-        "<use href='#c9kor2'/>"
-        "<path stroke='#fff' d='M0-23.5v3M0 17v3.5m0 3v3'/>"
-        "</g>"
+            "<path fill='#fff' d='M-95.8-.4H587v512H-95.8Z'/>"
+            "<g transform='rotate(-56.3 361.6 -101.3) scale(10.67)'>"
+                "<g id='c9kor2'>"
+                    "<path id='c9kor3' d='M-6-26H6v2H-6Zm0 3H6v2H-6Zm0 3H6v2H-6Z'/>"
+                    "<use href='#c9kor3' y='44'/>"
+                "</g>"
+                "<path stroke='#fff' d='M0 17v10'/>"
+                "<path fill='#c33' d='M0-12a12 12 0 0 1 0 24Z'/>"
+                "<path fill='#04a' d='M0-12a12 12 0 0 0 0 24A6 6 0 0 0 0 0Z'/>"
+                "<circle cy='-6' r='6' fill='#c33'/>"
+            "</g>"
+            "<g transform='rotate(-123.7 191.2 62.2) scale(10.67)'>"
+                "<use href='#c9kor2'/>"
+                "<path stroke='#fff' d='M0-23.5v3M0 17v3.5m0 3v3'/>"
+            "</g>"
         "</g>";
+
     bytes constant FLG_UK  = ""
         "<path fill='#026' d='M0 0h640v480H0z'/>"
         "<path fill='#fff' d='m75 0 244 181L562 0h78v62L400 241l240 178v61h-80L320 301 81 480H0v-60l239-178L0 64V0h75z'/>"
         "<path fill='#c12' d='m424 281 216 159v40L369 281h55zm-184 20 6 35L54 480H0l240-179zM640 0v3L391 191l2-44L590 0h50zM0 0l239 176h-60L0 42V0z'/>"
         "<path fill='#fff' d='M241 0v480h160V0H241zM0 160v160h640V160H0z'/>"
         "<path fill='#c12' d='M0 193v96h640v-96H0zM273 0v480h96V0h-96z'/>";
+
     bytes constant FLG_US  = ""
         "<path fill='#fff' d='M0 0h640v480H0z'/>"
         "<g id='c9uss'>"
-        "<path fill='#fff' d='m30.4 11 3.4 10.3h10.6l-8.6 6.3 3.3 10.3-8.7-6.4-8.6 6.3L25 27.6l-8.7-6.3h10.9z'/>"
+            "<path fill='#fff' d='m30.4 11 3.4 10.3h10.6l-8.6 6.3 3.3 10.3-8.7-6.4-8.6 6.3L25 27.6l-8.7-6.3h10.9z'/>"
         "</g>"
         "<g id='c9uso'>"
-        "<use href='#c9uss'/>"
-        "<use href='#c9uss' y='51.7'/>"
-        "<use href='#c9uss' y='103.4'/>"
-        "<use href='#c9uss' y='155.1'/>"
-        "<use href='#c9uss' y='206.8'/>"
+            "<use href='#c9uss'/>"
+            "<use href='#c9uss' y='51.7'/>"
+            "<use href='#c9uss' y='103.4'/>"
+            "<use href='#c9uss' y='155.1'/>"
+            "<use href='#c9uss' y='206.8'/>"
         "</g>"
         "<g id='c9use'>"
-        "<use href='#c9uss' y='25.9'/>"
-        "<use href='#c9uss' y='77.6'/>"
-        "<use href='#c9uss' y='129.5'/>"
-        "<use href='#c9uss' y='181.4'/>"
+            "<use href='#c9uss' y='25.9'/>"
+            "<use href='#c9uss' y='77.6'/>"
+            "<use href='#c9uss' y='129.5'/>"
+            "<use href='#c9uss' y='181.4'/>"
         "</g>"
         "<g id='c9usa'>"
-        "<use href='#c9uso'/>"
-        "<use href='#c9use' x='30.4'/>"
+            "<use href='#c9uso'/>"
+            "<use href='#c9use' x='30.4'/>"
         "</g>"
         "<path fill='#b02' d='M0 0h640v37H0zm0 73.9h640v37H0zm0 73.8h640v37H0zm0 73.8h640v37H0zm0 74h640v36.8H0zm0 73.7h640v37H0zM0 443h640V480H0z'/>"
         "<path fill='#026' d='M0 0h364.8v259H0z'/>"
@@ -241,11 +248,11 @@ contract C9SVG is C9Context, C9Shared {
         flag = bytes.concat(flag, "</svg>");
     }
 
-        // LOGO WRAPPED
-        // "<g transform='translate(470 6) scale(0.2)' fill-opacity='0.89'>"
-        // "<a href='https://collect9.io' target='_blank'>"
-        // "</a>"
-        // "</g>"
+    //     // LOGO WRAPPED
+    //     // "<g transform='translate(470 6) scale(0.2)' fill-opacity='0.89'>"
+    //     // "<a href='https://collect9.io' target='_blank'>"
+    //     // "</a>"
+    //     // "</g>"
 
     address public immutable contractToken;
 
@@ -260,8 +267,8 @@ contract C9SVG is C9Context, C9Shared {
     function addAddress(address _address, bytes memory b) private pure {
         (bytes32 _a1, bytes8 _a2) = Helpers.addressToB32B8(_address);
         assembly {
-            mstore(add(b, 1792), _a1)
-            let dst := add(b, 1824)
+            mstore(add(b, 1678), _a1)
+            let dst := add(b, 1710)
             mstore(dst, or(and(mload(dst), not(shl(192, 0xFFFFFFFFFFFFFFFF))), _a2))
         }
     }
@@ -271,23 +278,22 @@ contract C9SVG is C9Context, C9Shared {
      * Note: this is done so that multiple 
      * SVGs may be displayed on the same page without CSS conflict.
      */
-    function addIds(bytes6 b6Tokenid, bytes memory b) private pure {
-        uint16[13] memory offsets = [223, 249, 275, 317, 392, 566, 934, 1004, 1258, 1343, 1536, 1893, 1955];
+    function addIds(bytes6 b6Tokenid, bytes memory b)
+    private pure {
         assembly {
-            let dst := 0
-            for {let i := 0} lt(i, 13) {i := add(i, 1)} {
-                dst := add(b, mload(add(offsets, mul(32, i))))
-                mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), b6Tokenid))
-            }
+            let dst := add(b, 375)
+            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), b6Tokenid))
+            dst := add(b, 869)
+            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), b6Tokenid))
         }
     }
 
     // /**
     //  * @dev Adds validity flag info to SVG output memory `b`.
     //  */
-    function addValidityInfo(uint256 tokenId, uint256 data, bytes memory b)
+    function addValidityInfo(uint256 tokenId, uint256 ownerData, bytes memory b)
     private view {
-        uint256 _validityIdx = _currentVId(data);
+        uint256 _validityIdx = _currentVId(ownerData);
 
         bytes3 color;
         bytes16 validityText = _vValidity[_validityIdx % 5];
@@ -300,7 +306,7 @@ contract C9SVG is C9Context, C9Shared {
             }
             else {
                 // If validity 0 and locked == getting reedemed
-                _locked = data>>MPOS_LOCKED & BOOL_MASK;
+                _locked = ownerData>>MPOS_LOCKED & BOOL_MASK;
                 if (_locked == 1) {
                     color = "b50"; // orange
                     validityText = "REDEEM PENDING  ";
@@ -314,29 +320,29 @@ contract C9SVG is C9Context, C9Shared {
             color = "b00"; // red, invalid
         }
         assembly {
-            let dst := add(b, 2519)
+            let dst := add(b, 1314)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), color))
             // VALID => INVALID
             if gt(_validityIdx, VALID) {
-                dst := add(b, 2524)
+                dst := add(b, 1319)
                 mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), "IN"))
             }
             // INVALID => LOCKED
             if eq(_locked, 1) {
-                dst := add(b, 2524)
+                dst := add(b, 1319)
                 mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), " LOCKED"))
             }
             // INVALID => DEAD (grayscaled)
             if gt(_validityIdx, 3) {
-                dst := add(b, 783)
+                dst := add(b, 797)
                 mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "0"))
-                dst := add(b, 2524)
+                dst := add(b, 1319)
                 mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), "   DEAD"))
             }
             // Add validity text next to status
-            dst := add(b, 2532)
+            dst := add(b, 1327)
             mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), ">>"))
-            dst := add(b, 2535)
+            dst := add(b, 1330)
             mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), validityText))
         }
     }
@@ -348,21 +354,21 @@ contract C9SVG is C9Context, C9Shared {
     function addNFTAge(uint256 data, bytes memory b)
     private view {
         bytes6 _periods = getNFTAge(
-            uint256(uint40(data>>UPOS_MINTSTAMP))
+            _viewPackedData(data, UPOS_MINTSTAMP, USZ_TIMESTAMP)
         );
         assembly {
             // Timestamps
-            let dst := add(b, 2828)
+            let dst := add(b, 1577)
             let mask := shl(208, 0xFFFF00000000)
             let srcpart := and(_periods, mask)
             let destpart := and(mload(dst), not(mask))
             mstore(dst, or(destpart, srcpart))
-            dst := add(b, 2831)
+            dst := add(b, 1580)
             mask := shl(208, 0x0000FFFF0000)
             srcpart := and(_periods, mask)
             destpart := and(mload(dst), not(mask))
             mstore(dst, or(destpart, srcpart))
-            dst := add(b, 2834)
+            dst := add(b, 1583)
             mask := shl(208, 0x00000000FFFF)
             srcpart := and(_periods, mask)
             destpart := and(mload(dst), not(mask))
@@ -370,7 +376,7 @@ contract C9SVG is C9Context, C9Shared {
         }
     }
 
-    function addTokenInfo(uint256 data, uint256 validity, string calldata _name, bytes memory b)
+    function addTokenInfo(uint256 ownerData, uint256 data, uint256 validity, string memory _name, bytes memory b)
     private view {
         bytes7 _tagtxt = genTagsToAscii(
             _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG),
@@ -382,11 +388,11 @@ contract C9SVG is C9Context, C9Shared {
         );
         bytes4 __mintid = Helpers.flip4Space(
             bytes4(Helpers.uintToBytes(
-                uint256(uint16(data>>UPOS_EDITION_MINT_ID))
+                _viewPackedData(data, UPOS_EDITION_MINT_ID, USZ_EDITION_MINT_ID)
             ))
         );
         bytes4 _royalty = Helpers.bpsToPercent(
-            _viewPackedData(data, UPOS_ROYALTY, USZ_ROYALTY)
+            _viewPackedData(ownerData, MPOS_ROYALTY, MSZ_ROYALTY)
         );
         bytes2 _edition = Helpers.flip2Space(
             Helpers.remove2Null(
@@ -405,31 +411,32 @@ contract C9SVG is C9Context, C9Shared {
     
         assembly {
             // Name Font Size
-            let dst := add(b, 334)
+            let dst := add(b, 309)
             mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _namesize))
             // Colors
-            dst := add(b, 525)
+            dst := add(b, 506)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _rgc2))
-            dst := add(b, 1609)
+            // Royalty
+            dst := add(b, 1385)
+            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _royalty))
+            // Classer
+            dst := add(b, 1471)
             mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _classer))
             // Edition
             let _edcheck := gt(_edition, 9)
             switch _edcheck case 0 {
-                dst := add(b, 1678)
+                dst := add(b, 1541)
             } default {
-                dst := add(b, 1677)
+                dst := add(b, 1540)
             }
             mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _edition))
             // Mintid
-            dst := add(b, 1680)
+            dst := add(b, 1543)
             mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), __mintid))
-            // Royalty
-            dst := add(b, 1475)
-            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _royalty))
             // Gen Country Text
-            dst := add(b, 1901)
+            dst := add(b, 1756)
             mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tagtxt))
-            dst := add(b, 1911)
+            dst := add(b, 1766)
             mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tushtxt))
         }
     }
@@ -444,9 +451,8 @@ contract C9SVG is C9Context, C9Shared {
     private view
     returns (bytes memory e) {
         if (markerTush > 0) {
-            e = "<g transform='translate(555 726)' style='opacity:0.8; font-family:\"Brush Script MT\", cursive; font-size:24px; font-weight:700'>"
-                "<text text-anchor='middle' fill='#222'>    </text>"
-                "</g>"; 
+            e = "<text x='555' y='726' class='c9Ts c9Tb' style='opacity:0.8;font-family:\"Brush Script MT\",cursive;fill:#222;' text-anchor='middle'>4L  </text>";
+
             bytes4 x = _vMarkers[markerTush-1];
             bytes4 y = x == bytes4("CE  ") ?
                 bytes4("c e ") :
@@ -455,16 +461,16 @@ contract C9SVG is C9Context, C9Shared {
                     x == bytes4("EMBS") ?
                         bytes4("embS") : x;
             assembly {
-                let dst := add(e, 198)
+                let dst := add(e, 162)
                 mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), y))
                 switch genTag case 0 {
-                    dst := add(e, 193)
+                    dst := add(e, 135)
                     mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), "eee"))
                 }
             }
-            if (markerTush > 4) {
+            if (markerTush > 4) { // Korean bs on hang tag
                 assembly {
-                    let dst := add(e, 56)
+                    let dst := add(e, 41)
                     mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), "75 "))
                 }
             }
@@ -514,9 +520,9 @@ contract C9SVG is C9Context, C9Shared {
             _viewPackedData(tokenData, UPOS_CNTRYTUSH, USZ_CNTRYTUSH)
         );
         fb = bytes.concat(
-            "<g transform='translate(20 621) scale(0.17)'>",
+            "<g transform='translate(20 580) scale(0.18)'>",
             _flagTag,
-            "<g transform='translate(481)'>",
+            "<g transform='translate(2648)'>",
             _flagTush,
             "</g></g>"
         );
@@ -526,17 +532,16 @@ contract C9SVG is C9Context, C9Shared {
      * @dev The SVG output memory `b` is finished off with the variable sized parts of `_token`.
      * This is a bit messy but bytes concat seems to get the job done.
      */
-    function addVariableBytes(uint256 tokenId, uint256 tokenData, uint256 barCodeData, uint256 qrCodeData, string calldata name)
+    function addVariableBytes(uint256 tokenId, uint256 tokenData, uint256 barCodeData, uint256 qrCodeData, string memory name)
     private pure
     returns(bytes memory vb) {
         
-        bytes memory _qrCodeSVG = qrCodeSVG(qrCodeData);
-        
-
+        // bytes memory _qrCodeSVG = qrCodeSVG(qrCodeData);
+    
         vb = bytes.concat(
-            bytes(name),
-            getFlagsGroup(tokenData),
-            getBarCodeGroup(tokenId, barCodeData)            
+            bytes(name), "</text></g>",
+            getFlagsGroup(tokenData)
+            //getBarCodeGroup(tokenId, barCodeData)            
         );
     }
 
@@ -547,11 +552,7 @@ contract C9SVG is C9Context, C9Shared {
     private pure
     returns (bytes memory upgradedText) {
         if (upgraded == UPGRADED) {
-            upgradedText = "<text x='190' y='58' style='font-family: \"Brush Script MT\", cursive;' font-size='22'>        </text>";
-            assembly {
-                let dst := add(upgradedText, 117)
-                mstore(dst, or(and(mload(dst), not(shl(192, 0xFFFFFFFFFFFFFFFF))), "upgraded"))
-            }
+            upgradedText = "<text x='320' y='92' style='font-family:\"Brush Script MT\",cursive;font-size:26px;fill:#050'>-Upgraded</text>";
         }
     }
 
@@ -675,69 +676,37 @@ contract C9SVG is C9Context, C9Shared {
      * @dev External function to call and return the SVG string built from `_token`  
      * and owner `_address`.
      */
-    function svgImage(uint256 tokenId, uint256 ownerData, uint256 tokenData, uint256 codeData, string calldata name)
+    function svgImage(uint256 tokenId, uint256 ownerData, uint256 tokenData, uint256 codeData)
     external view
     returns (string memory) {
-
+        string memory name = IC9Token(contractToken).getTokenParamsName(tokenId);
         bytes6 b6TokenId = Helpers.tokenIdToBytes(tokenId);
         (uint256 qrCodeData, uint256 barCodeData) = splitQRData(codeData);
 
-        bytes memory b = SVG_OPENER;
-        addIds(b6TokenId, b);
-        addTokenInfo(tokenData, _currentVId(ownerData), name, b);
-        addValidityInfo(tokenId, ownerData, b);
-        addAddress(IC9Token(contractToken).ownerOf(tokenId), b);
+        
 
-        checkForSpecialBg(_viewPackedData(tokenData, UPOS_SPECIAL, USZ_SPECIAL), b);
-
-        return string(
-            bytes.concat(b,
-                addVariableBytes(tokenId, tokenData, barCodeData, qrCodeData, name),
-                addTushMarker(
-                    _viewPackedData(tokenData, UPOS_MARKERTUSH, USZ_MARKERTUSH),
-                    _viewPackedData(tokenData, UPOS_GENTAG, USZ_GENTAG)
-                ),
-                addUpgradeText(ownerData>>MPOS_UPGRADED & BOOL_MASK)
-            )
+        bytes memory bSVG = SVG_OPENER;
+        addIds(b6TokenId, bSVG);
+        addTokenInfo(ownerData, tokenData, _currentVId(ownerData), name, bSVG);
+        addAddress(IC9Token(contractToken).ownerOf(tokenId), bSVG);
+        addNFTAge(tokenData, bSVG);
+        addValidityInfo(tokenId, ownerData, bSVG);
+        
+        bytes memory vB = addVariableBytes(tokenId, tokenData, barCodeData, qrCodeData, name);
+        bytes memory mT = addTushMarker(
+            _viewPackedData(tokenData, UPOS_MARKERTUSH, USZ_MARKERTUSH),
+            _viewPackedData(tokenData, UPOS_GENTAG, USZ_GENTAG)
         );
+        bytes memory uT = addUpgradeText(ownerData>>MPOS_UPGRADED & BOOL_MASK);
+
+
+        // checkForSpecialBg(_viewPackedData(tokenData, UPOS_SPECIAL, USZ_SPECIAL), b);
+
+        return string(bytes.concat(bSVG, vB, mT, uT, "</g></svg>"));
 
 
 
     }
-
-
-    // function returnSVG(address _address, uint256 _tokenId, uint256 _uTokenData, string calldata _sTokenData)
-    //     external view override
-    //     returns (string memory) {
-        
-    //     (uint256 _splitIndex1, uint256 _splitIndex2) = _getSliceIndices(_sTokenData);
-    //     bytes6 _id = Helpers.tokenIdToBytes(_tokenId);
-
-    //     bytes memory b = SVG_OPENER;
-    //     addIds(_id, b);
-    //     addTokenInfo(_uTokenData, _sTokenData[:_splitIndex1], b);
-    //     addValidityInfo(_tokenId, _uTokenData, b);
-    //     addAddress(_address, b);
-    //     checkForSpecialBg(uint256(uint8(_uTokenData>>POS_SPECIAL)), b);
-
-    //     string[3] memory _sDataInput = [
-    //         _sTokenData[:_splitIndex1],
-    //         _sTokenData[_splitIndex1+1:_splitIndex2],
-    //         _sTokenData[_splitIndex2+1:]
-    //     ];
-
-    //     return string(
-    //         bytes.concat(b,
-    //             addVariableBytes(_uTokenData, _sDataInput, _id),
-    //             addTushMarker(
-    //                 uint256(uint8(_uTokenData>>POS_MARKERTUSH)),
-    //                 uint256(uint8(_uTokenData>>POS_GENTAG))
-    //             ),
-    //             addUpgradeText(uint256(uint8(_uTokenData>>POS_UPGRADED))),
-    //             "</g></svg>"
-    //         )
-    //     );
-    // }
 
     function splitQRData(uint256 packed)
     public pure
@@ -745,9 +714,6 @@ contract C9SVG is C9Context, C9Shared {
         qrCodeData = uint256(uint168(packed));
         barCodeData = packed >> 170;
     }
-
-
-
 
     function getBoolean8(uint256 _packedBools, uint256 _boolNumber)
     public pure

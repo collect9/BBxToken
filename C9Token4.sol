@@ -215,7 +215,7 @@ contract C9Token is ERC721IdEnumBasic {
     function _preRedeemable(uint256 tokenData)
     private view
     returns (bool) {
-        uint256 _ds = block.timestamp - uint256(uint40(tokenData>>UPOS_MINTSTAMP));
+        uint256 _ds = block.timestamp - _viewPackedData(tokenData, UPOS_MINTSTAMP, USZ_TIMESTAMP);
         return _ds < _preRedeemablePeriod;
     }
 
