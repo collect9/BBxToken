@@ -405,7 +405,7 @@ contract C9SVG is C9Context, C9Shared {
             ))
         );
         bytes4 _royalty = Helpers.bpsToPercent(
-            _viewPackedData(ownerData, MPOS_ROYALTY, MSZ_ROYALTY)
+            _viewPackedData(ownerData, MPOS_ROYALTY, MSZ_ROYALTY)*10
         );
         bytes2 _edition = Helpers.flip2Space(
             Helpers.remove2Null(

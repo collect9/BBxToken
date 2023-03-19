@@ -422,7 +422,7 @@ contract C9Token is ERC721IdEnumBasic {
             _owners[tokenId] = _setTokenParam(
                 _owners[tokenId],
                 MPOS_ROYALTY,
-                royalty,
+                royalty/10,
                 M_MASK_ROYALTY
             );
         }
