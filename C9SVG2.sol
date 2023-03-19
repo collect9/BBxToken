@@ -91,7 +91,7 @@ contract C9SVG is C9Context, C9Shared {
             "<filter id='c9Nse'>"
                 "<feTurbulence type='turbulence' baseFrequency='0.002' numOctaves='8'/>"
                 "<feComposite in2='SourceGraphic' operator='in'/>"
-                "<feColorMatrix values='1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 .2 0'/>"
+                "<feColorMatrix values='1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 .0 .0 .0 .2 0'/>"
             "</filter>"
             "<filter id='c9Gs'>"
                 "<feColorMatrix type='saturate' values='1.0'/>"
@@ -249,12 +249,6 @@ contract C9SVG is C9Context, C9Shared {
         flag = bytes.concat(flag, "</svg>");
     }
 
-    //     // LOGO WRAPPED
-    //     // "<g transform='translate(470 6) scale(0.2)' fill-opacity='0.89'>"
-    //     // "<a href='https://collect9.io' target='_blank'>"
-    //     // "</a>"
-    //     // "</g>"
-
     address public immutable contractToken;
     address public contractLogo;
 
@@ -270,8 +264,8 @@ contract C9SVG is C9Context, C9Shared {
     function addAddress(address _address, bytes memory b) private pure {
         (bytes32 _a1, bytes8 _a2) = Helpers.addressToB32B8(_address);
         assembly {
-            mstore(add(b, 1705), _a1)
-            let dst := add(b, 1737)
+            mstore(add(b, 1708), _a1)
+            let dst := add(b, 1740)
             mstore(dst, or(and(mload(dst), not(shl(192, 0xFFFFFFFFFFFFFFFF))), _a2))
         }
     }
@@ -281,13 +275,13 @@ contract C9SVG is C9Context, C9Shared {
      * Note: this is done so that multiple 
      * SVGs may be displayed on the same page without CSS conflict.
      */
-    function addIds(bytes6 b6Tokenid, bytes memory b)
+    function addIds(bytes6 b6TokenId, bytes memory b)
     private pure {
         assembly {
             let dst := add(b, 364)
-            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), b6Tokenid))
-            dst := add(b, 872)
-            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), b6Tokenid))
+            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), b6TokenId))
+            dst := add(b, 875)
+            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), b6TokenId))
         }
     }
 
@@ -323,29 +317,29 @@ contract C9SVG is C9Context, C9Shared {
             color = "b00"; // red, invalid
         }
         assembly {
-            let dst := add(b, 1341)
+            let dst := add(b, 1344)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), color))
             // VALID => INVALID
             if gt(_validityIdx, VALID) {
-                dst := add(b, 1346)
+                dst := add(b, 1349)
                 mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), "IN"))
             }
             // INVALID => LOCKED
             if eq(_locked, 1) {
-                dst := add(b, 1346)
+                dst := add(b, 1349)
                 mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), " LOCKED"))
             }
             // INVALID => DEAD (grayscaled)
             if gt(_validityIdx, 3) {
-                dst := add(b, 787)
+                dst := add(b, 790)
                 mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "0"))
-                dst := add(b, 1346)
+                dst := add(b, 1349)
                 mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), "   DEAD"))
             }
             // Add validity text next to status
-            dst := add(b, 1354)
-            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), ">>"))
             dst := add(b, 1357)
+            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), ">>"))
+            dst := add(b, 1360)
             mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), validityText))
         }
     }
@@ -361,17 +355,17 @@ contract C9SVG is C9Context, C9Shared {
         );
         assembly {
             // Timestamps
-            let dst := add(b, 1604)
+            let dst := add(b, 1607)
             let mask := shl(208, 0xFFFF00000000)
             let srcpart := and(_periods, mask)
             let destpart := and(mload(dst), not(mask))
             mstore(dst, or(destpart, srcpart))
-            dst := add(b, 1607)
+            dst := add(b, 1610)
             mask := shl(208, 0x0000FFFF0000)
             srcpart := and(_periods, mask)
             destpart := and(mload(dst), not(mask))
             mstore(dst, or(destpart, srcpart))
-            dst := add(b, 1610)
+            dst := add(b, 1613)
             mask := shl(208, 0x00000000FFFF)
             srcpart := and(_periods, mask)
             destpart := and(mload(dst), not(mask))
@@ -379,12 +373,18 @@ contract C9SVG is C9Context, C9Shared {
         }
     }
 
-    function addTokenIdText(uint256 tokenId, bytes6 bTokenId)
+    function addTokenIdText(bytes6 bTokenId)
     private pure
     returns (bytes memory bT) {
-        bT = "<text x='50%' y='625' text-anchor='middle' style='font-family:\"Helvetica\";font-size:78px;fill#111;'>* 0895538 *</text>";
+        bT = "<text x='50%' y='625' text-anchor='middle' style='font-family:\"Helvetica\";font-size:78px;fill#111;'>* 0XXXXX  *</text>";
+        bytes1 tokenLead = bTokenId[0];
         assembly {
             let dst := add(bT, 135)
+            if eq(tokenLead, "0") {
+                dst := add(bT, 41)
+                mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "4"))
+                dst := add(bT, 134)
+            }
             mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), bTokenId))
         }
     }
@@ -430,26 +430,26 @@ contract C9SVG is C9Context, C9Shared {
             dst := add(b, 495)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _rgc2))
             // Royalty
-            dst := add(b, 1412)
+            dst := add(b, 1415)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _royalty))
             // Classer
-            dst := add(b, 1498)
+            dst := add(b, 1501)
             mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _classer))
             // Edition
             let _edcheck := gt(_edition, 9)
             switch _edcheck case 0 {
-                dst := add(b, 1568)
+                dst := add(b, 1571)
             } default {
-                dst := add(b, 1567)
+                dst := add(b, 1570)
             }
             mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _edition))
             // Mintid
-            dst := add(b, 1570)
+            dst := add(b, 1573)
             mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), __mintid))
             // Gen Country Text
-            dst := add(b, 1783)
+            dst := add(b, 1786)
             mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tagtxt))
-            dst := add(b, 1793)
+            dst := add(b, 1796)
             mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tushtxt))
         }
     }
@@ -490,10 +490,9 @@ contract C9SVG is C9Context, C9Shared {
         }
     }
 
-    function _href(uint256 tokenId)
+    function _href(bytes6 b6TokenId)
     private pure
     returns (bytes memory href) {
-        bytes6 b6TokenId =  Helpers.tokenIdToBytes(tokenId);
         href = "<a href='https://collect9.io/nft/XXXXXX' target='_blank'>";
         assembly {
             let dst := add(href, 65)
@@ -501,10 +500,10 @@ contract C9SVG is C9Context, C9Shared {
         }
     }
 
-    function _wrapInHref(uint256 tokenId, bytes memory b)
+    function _wrapInHref(bytes6 b6TokenId, bytes memory b)
     private pure
     returns (bytes memory) {
-        return bytes.concat(_href(tokenId), b, "</a>");
+        return bytes.concat(_href(b6TokenId), b, "</a>");
     }
 
     function getBarCodeGroup(uint256 tokenId, bytes6 b6TokenId, uint256 barCodeData)
@@ -518,17 +517,17 @@ contract C9SVG is C9Context, C9Shared {
         }
         gb = bytes.concat(
             gb,
-            barCodeSVG(tokenId, b6TokenId, barCodeData),
+            barCodeSVG(b6TokenId, barCodeData),
             "</g>"
         );
     }
 
-    function getLogoGroup()
+    function getLogoGroup(bytes6 bTokenId)
     private view
     returns (bytes memory) {
         return bytes.concat(
             "<g transform='translate(470 6) scale(0.2)' fill-opacity='0.89'>",
-            C9SVGLogo(contractLogo).getSVGLogo(),
+            _wrapInHref(bTokenId, C9SVGLogo(contractLogo).getSVGLogo()),
             "</g>"
         );
     }
@@ -587,27 +586,66 @@ contract C9SVG is C9Context, C9Shared {
      * but users should be able to fetch meta-data updates to see 
      * color changes.
      */
-    function setBackground(uint256 rarityTier, bytes memory b)
-    private view {
-        bytes32[3] memory bgs = [bytes32(
-            "1 1 0 0 0 1 0 0 0 0 0 1 0 0 0 0 "), //gen0, .8
-            "0 0 0 0 1 1 0 0 0 0 0 1 0 0 0 0 ", //gen2, .1
-            "0 0 0 0 0 1 0 0 0 0 0 1 1 1 0 0 "]; //gen1, .3
-        if (rarityTier == 0) {
-            assembly {
-                let dst := add(b, 603)
-                mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "4"))
-                dst := add(b, 715)
-                mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "9"))
-            }
-            // uint256 psrand = block.timestamp % 4;
-            // if (psrand < 4) {
-            //     bytes32 _colormod = bgs[psrand];
-            //     assembly {
-            //         let dst := add(b, 678)
-            //         mstore(dst, _colormod)
-            //     }
-            // }
+    function setBackground(uint256 genTag, uint256 specialTier, bytes memory b)
+    private pure {
+        bytes23[11] memory matrices = [
+            bytes23("1 0 0 0 1 0 1 0 0 1 1 0"), //g0
+            "1 1 0 0 1 1 1 0 0 1 1 1",  //g1
+            "0 0 0 0 1 0 1 0 0 1 1 0",  //g2
+            "1 0 0 0 1 0 0 0 0 1 0 0",  //g3
+            "0 0 0 0 1 0 0 0 0 1 0 0",  //g4
+            "0 0 0 0 1 0 0 0 0 1 0 0",  //g5
+            "0 0 0 0 1 1 0 0 0 1 1 1",  //spec
+            "1 0 0 1 1 1 0 0 0 1 1 0",  //emb
+            "0 0 0 0 1 0 0 0 0 1 0 0",  //odd
+            "1 0 0 0 1 0 0 0 0 1 1 0",  //finite
+            "0 1 0 0 1 0 0 1 0 1 1 0"   //proto
+        ];
+
+        bytes10[11] memory filters = [
+            bytes10("0 .0 .0 .9"), //g0
+            "1 .4 .1 .1", //g1
+            "5 .1 .1 .2", //g2
+            "2 .0 .0 .6", //g3
+            "0 .0 .0 .3", //g4
+            "0 .0 .0 .3", //g5
+            "9 .2 .2 .8", //spec
+            "5 .2 .8 .9", //emb
+            "9 .0 .0 .8", //odd
+            "8 .2 .8 .2", //finite
+            "9 .9 .9 .9" //proto
+        ];
+
+        bytes5[11] memory frequencies = [
+            bytes5("0.003"),
+            "0.006",
+            "0.002",
+            "0.004",
+            "0.206",
+            "2.006",
+            "0.002",
+            "0.001",
+            "0.008",
+            "0.001",
+            "0.003"
+        ];
+
+        bytes1[11] memory octaves = [bytes1("3"), "2", "1", "2", "1", "8", "1", "1", "1", "1", "8"];
+
+        bytes23 matrix = specialTier > 0 ? matrices[specialTier+5] : matrices[genTag];
+        bytes11 filter = specialTier > 0 ? filters[specialTier+5] : filters[genTag];
+        bytes5 freq = specialTier > 0 ? frequencies[specialTier+5] : frequencies[genTag];
+        bytes1 octave = specialTier > 0 ? octaves[specialTier+5] : octaves[genTag];
+
+        assembly {
+            let dst := add(b, 584)
+            mstore(dst, or(and(mload(dst), not(shl(216, 0xFFFFFFFFFF))), freq))
+            dst := add(b, 603)
+            mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), octave))
+            dst := add(b, 680)
+            mstore(dst, or(and(mload(dst), not(shl(72, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), matrix))
+            dst := add(b, 709)
+            mstore(dst, or(and(mload(dst), not(shl(176, 0xFFFFFFFFFFFFFFFFFFFF))), filter))
         }
     }
 
@@ -711,12 +749,13 @@ contract C9SVG is C9Context, C9Shared {
         addNFTAge(tokenData, bSVG);
         addValidityInfo(tokenId, ownerData, bSVG);
         setBackground(
-            _viewPackedData(tokenData, UPOS_ROYALTIES_DUE, USZ_RARITYTIER),
+            _viewPackedData(tokenData, UPOS_GENTAG, USZ_GENTAG),
+            _viewPackedData(tokenData, UPOS_SPECIAL, USZ_SPECIAL),
             bSVG
         );
 
         // Logo
-        bytes memory bL = getLogoGroup();
+        bytes memory bL = getLogoGroup(b6TokenId);
         // Variable bytes group
         bytes memory vB = addVariableBytes(tokenId, b6TokenId, tokenData, barCodeData, qrCodeData, name);
         // Tush marker group
@@ -912,10 +951,10 @@ contract C9SVG is C9Context, C9Shared {
         }
     }
 
-    function barCodeSVG(uint256 tokenId, bytes6 b6TokenId, uint256 barCodeData)
+    function barCodeSVG(bytes6 b6TokenId, uint256 barCodeData)
     public pure
     returns (bytes memory svg) {
-        bytes memory bT = addTokenIdText(tokenId, b6TokenId);
+        bytes memory bT = addTokenIdText(b6TokenId);
         svg = bytes.concat(
             BAR_CODE_BASE,
             barCodeRects(barCodeData),
