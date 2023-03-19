@@ -6,6 +6,7 @@ import "./interfaces/IC9SVG2.sol";
 import "./interfaces/IC9Token.sol";
 import "./utils/C9Context.sol";
 import "./utils/Helpers.sol";
+import "./svg/C9Logo.sol";
 
 
 
@@ -88,7 +89,7 @@ contract C9SVG is C9Context, C9Shared {
                 "<stop offset='1' stop-color='#101'/>"
             "</radialGradient>"
             "<filter id='c9Nse'>"
-                "<feTurbulence type='fractalNoise' baseFrequency='0.2' numOctaves='8'/>"
+                "<feTurbulence type='turbulence' baseFrequency='0.002' numOctaves='8'/>"
                 "<feComposite in2='SourceGraphic' operator='in'/>"
                 "<feColorMatrix values='1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 .2 0'/>"
             "</filter>"
@@ -255,9 +256,11 @@ contract C9SVG is C9Context, C9Shared {
     //     // "</g>"
 
     address public immutable contractToken;
+    address public contractLogo;
 
-    constructor (address _contractToken) {
+    constructor (address _contractLogo, address _contractToken) {
         contractToken = _contractToken;
+        contractLogo = _contractLogo;
     }
 
        /**
@@ -358,21 +361,31 @@ contract C9SVG is C9Context, C9Shared {
         );
         assembly {
             // Timestamps
-            let dst := add(b, 1605)
+            let dst := add(b, 1604)
             let mask := shl(208, 0xFFFF00000000)
             let srcpart := and(_periods, mask)
             let destpart := and(mload(dst), not(mask))
             mstore(dst, or(destpart, srcpart))
-            dst := add(b, 1608)
+            dst := add(b, 1607)
             mask := shl(208, 0x0000FFFF0000)
             srcpart := and(_periods, mask)
             destpart := and(mload(dst), not(mask))
             mstore(dst, or(destpart, srcpart))
-            dst := add(b, 1611)
+            dst := add(b, 1610)
             mask := shl(208, 0x00000000FFFF)
             srcpart := and(_periods, mask)
             destpart := and(mload(dst), not(mask))
             mstore(dst, or(destpart, srcpart))
+        }
+    }
+
+    function addTokenIdText(uint256 tokenId, bytes6 bTokenId)
+    private pure
+    returns (bytes memory bT) {
+        bT = "<text x='50%' y='625' text-anchor='middle' style='font-family:\"Helvetica\";font-size:78px;fill#111;'>* 0895538 *</text>";
+        assembly {
+            let dst := add(bT, 135)
+            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), bTokenId))
         }
     }
 
@@ -420,7 +433,7 @@ contract C9SVG is C9Context, C9Shared {
             dst := add(b, 1412)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _royalty))
             // Classer
-            dst := add(b, 1497)
+            dst := add(b, 1498)
             mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _classer))
             // Edition
             let _edcheck := gt(_edition, 9)
@@ -494,18 +507,28 @@ contract C9SVG is C9Context, C9Shared {
         return bytes.concat(_href(tokenId), b, "</a>");
     }
 
-    function getBarCodeGroup(uint256 tokenId, uint256 barCodeData)
+    function getBarCodeGroup(uint256 tokenId, bytes6 b6TokenId, uint256 barCodeData)
     private pure
     returns (bytes memory gb) {
         gb = "<g transform='translate(XXX 646) scale(0.33)'>";
-        bytes3 x = tokenId > 10**5 ? bytes3("425") : bytes3("440");
+        bytes3 x = tokenId > 10**5 ? bytes3("393") : bytes3("440");
         assembly {
             let dst := add(gb, 56)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), x))
         }
         gb = bytes.concat(
             gb,
-            barCodeSVG(barCodeData),
+            barCodeSVG(tokenId, b6TokenId, barCodeData),
+            "</g>"
+        );
+    }
+
+    function getLogoGroup()
+    private view
+    returns (bytes memory) {
+        return bytes.concat(
+            "<g transform='translate(470 6) scale(0.2)' fill-opacity='0.89'>",
+            C9SVGLogo(contractLogo).getSVGLogo(),
             "</g>"
         );
     }
@@ -532,7 +555,7 @@ contract C9SVG is C9Context, C9Shared {
      * @dev The SVG output memory `b` is finished off with the variable sized parts of `_token`.
      * This is a bit messy but bytes concat seems to get the job done.
      */
-    function addVariableBytes(uint256 tokenId, uint256 tokenData, uint256 barCodeData, uint256 qrCodeData, string memory name)
+    function addVariableBytes(uint256 tokenId, bytes6 b6TokenId, uint256 tokenData, uint256 barCodeData, uint256 qrCodeData, string memory name)
     private pure
     returns(bytes memory vb) {
         
@@ -542,7 +565,7 @@ contract C9SVG is C9Context, C9Shared {
             bytes(name), "</text></g>",
             qrCodeSVGGroup(qrCodeData),
             getFlagsGroup(tokenData),
-            getBarCodeGroup(tokenId, barCodeData)            
+            getBarCodeGroup(tokenId, b6TokenId, barCodeData)            
         );
     }
 
@@ -564,30 +587,27 @@ contract C9SVG is C9Context, C9Shared {
      * but users should be able to fetch meta-data updates to see 
      * color changes.
      */
-    function checkForGhostBg(uint256 rarityTier, bytes memory b)
+    function setBackground(uint256 rarityTier, bytes memory b)
     private view {
-        bytes32 _filter_mod = "turbulence' baseFrequency='0.002";
-        bytes32[3] memory mods = [bytes32(
-            "1 1 0 0 0 1 0 0 0 0 0 1 0 0 0 0 "),
-            "0 0 0 0 1 1 0 0 0 0 0 1 0 0 0 0 ",
-            "0 0 0 0 0 1 0 0 0 0 0 1 1 1 0 0 "];
+        bytes32[3] memory bgs = [bytes32(
+            "1 1 0 0 0 1 0 0 0 0 0 1 0 0 0 0 "), //gen0, .8
+            "0 0 0 0 1 1 0 0 0 0 0 1 0 0 0 0 ", //gen2, .1
+            "0 0 0 0 0 1 0 0 0 0 0 1 1 1 0 0 "]; //gen1, .3
         if (rarityTier == 0) {
             assembly {
-                let dst := add(b, 557)
-                mstore(dst, _filter_mod)
-                dst := add(b, 603)
+                let dst := add(b, 603)
                 mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "4"))
                 dst := add(b, 715)
                 mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "9"))
             }
-            uint256 psrand = block.timestamp % 4;
-            if (psrand < 4) {
-                bytes32 _colormod = mods[psrand];
-                assembly {
-                    let dst := add(b, 678)
-                    mstore(dst, _colormod)
-                }
-            }
+            // uint256 psrand = block.timestamp % 4;
+            // if (psrand < 4) {
+            //     bytes32 _colormod = bgs[psrand];
+            //     assembly {
+            //         let dst := add(b, 678)
+            //         mstore(dst, _colormod)
+            //     }
+            // }
         }
     }
 
@@ -690,22 +710,24 @@ contract C9SVG is C9Context, C9Shared {
         addAddress(IC9Token(contractToken).ownerOf(tokenId), bSVG);
         addNFTAge(tokenData, bSVG);
         addValidityInfo(tokenId, ownerData, bSVG);
-        checkForGhostBg(
+        setBackground(
             _viewPackedData(tokenData, UPOS_ROYALTIES_DUE, USZ_RARITYTIER),
             bSVG
         );
-        
-        bytes memory vB = addVariableBytes(tokenId, tokenData, barCodeData, qrCodeData, name);
+
+        // Logo
+        bytes memory bL = getLogoGroup();
+        // Variable bytes group
+        bytes memory vB = addVariableBytes(tokenId, b6TokenId, tokenData, barCodeData, qrCodeData, name);
+        // Tush marker group
         bytes memory mT = addTushMarker(
             _viewPackedData(tokenData, UPOS_MARKERTUSH, USZ_MARKERTUSH),
             _viewPackedData(tokenData, UPOS_GENTAG, USZ_GENTAG)
         );
+        // Upgraded text
         bytes memory uT = addUpgradeText(ownerData>>MPOS_UPGRADED & BOOL_MASK);
 
-        return string(bytes.concat(bSVG, vB, mT, uT, "</g></svg>"));
-
-
-
+        return string(bytes.concat(bSVG, vB, mT, uT, bL, "</g></svg>"));
     }
 
     function splitQRData(uint256 packed)
@@ -890,13 +912,15 @@ contract C9SVG is C9Context, C9Shared {
         }
     }
 
-    function barCodeSVG(uint256 barCodeData)
+    function barCodeSVG(uint256 tokenId, bytes6 b6TokenId, uint256 barCodeData)
     public pure
     returns (bytes memory svg) {
+        bytes memory bT = addTokenIdText(tokenId, b6TokenId);
         svg = bytes.concat(
             BAR_CODE_BASE,
             barCodeRects(barCodeData),
-            "</g></svg>"
+            "</g></svg>",
+            bT
         );
     }
 }
