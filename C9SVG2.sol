@@ -64,13 +64,13 @@ contract C9SVG is C9Context, C9Shared {
         "<svg version='1.1' xmlns='http://www.w3.org/2000/svg' class='c9BARcode' width='100%' height='100%' viewBox='30 0 270 100'>"
         "<style type='text/css'>"
             ".c9BARcode{opacity:0.89;} "
-            ".c9BARcode rect{height:1px;}"
+            ".c9BARcode rect{width:1px;height:1px;}"
         "</style>"
         "<g transform='scale(3 100)'>"
-            "<rect x='10' width='1'/>"
-            "<rect x='11' width='1'/>"
-            "<rect x='13' width='1'/>"
-            "<rect x='21' width='1'/>";
+            "<rect x='10'/>"
+            "<rect x='11'/>"
+            "<rect x='13'/>"
+            "<rect x='21'/>";
 
     bytes constant SVG_OPENER = ""
         "<svg version='1.1' xmlns='http://www.w3.org/2000/svg' class='c9Tsvg' width='100%' height='100%' viewBox='0 0 630 880'>"
@@ -500,7 +500,7 @@ contract C9SVG is C9Context, C9Shared {
         gb = "<g transform='translate(XXX 646) scale(0.33)'>";
         bytes3 x = tokenId > 10**5 ? bytes3("385") : bytes3("400");
         assembly {
-            let dst := add(gb, 64)
+            let dst := add(gb, 56)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), x))
         }
         gb = bytes.concat(
@@ -540,8 +540,8 @@ contract C9SVG is C9Context, C9Shared {
     
         vb = bytes.concat(
             bytes(name), "</text></g>",
-            getFlagsGroup(tokenData)
-            //getBarCodeGroup(tokenId, barCodeData)            
+            getFlagsGroup(tokenData),
+            getBarCodeGroup(tokenId, barCodeData)            
         );
     }
 
