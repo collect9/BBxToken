@@ -498,7 +498,7 @@ contract C9SVG is C9Context, C9Shared {
     private pure
     returns (bytes memory gb) {
         gb = "<g transform='translate(XXX 646) scale(0.33)'>";
-        bytes3 x = tokenId > 10**5 ? bytes3("385") : bytes3("400");
+        bytes3 x = tokenId > 10**5 ? bytes3("425") : bytes3("440");
         assembly {
             let dst := add(gb, 56)
             mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), x))
@@ -540,6 +540,7 @@ contract C9SVG is C9Context, C9Shared {
     
         vb = bytes.concat(
             bytes(name), "</text></g>",
+            qrCodeSVGGroup(qrCodeData),
             getFlagsGroup(tokenData),
             getBarCodeGroup(tokenId, barCodeData)            
         );
@@ -711,7 +712,7 @@ contract C9SVG is C9Context, C9Shared {
     public pure
     returns (uint256 qrCodeData, uint256 barCodeData) {
         qrCodeData = uint256(uint168(packed));
-        barCodeData = packed >> 170;
+        barCodeData = packed >> 168;
     }
 
     function getBoolean8(uint256 _packedBools, uint256 _boolNumber)
@@ -767,10 +768,23 @@ contract C9SVG is C9Context, C9Shared {
     public pure
     returns (uint256 y, uint256 x) {
         // Convert to true bit index
-        if (index > 3) {
-            unchecked {index += 10;}
-        }
         unchecked {index += 28;}
+        if (index > 31) {unchecked {index += 10;}}
+        if (index > 48) {unchecked {index += 10;}}
+        if (index > 67) {unchecked {index += 8;}}
+        if (index > 84) {unchecked {index += 9;}}
+        if (index > 97) {unchecked {index += 3;}}
+        if (index > 101) {unchecked {index += 8;}}
+        if (index > 114) {unchecked {index += 12;}}
+        if (index > 133) {unchecked {index += 6;}}
+        if (index > 142) {unchecked {index += 4;}}
+        if (index > 149) {unchecked {index += 4;}}
+        if (index > 183) {unchecked {index += 2;}}
+        if (index > 199) {unchecked {index += 3;}}
+        if (index > 214) {unchecked {index += 7;}}
+        if (index > 236) {unchecked {index += 2;}}
+        if (index > 252) {unchecked {index += 3;}}
+        if (index > 282) {unchecked {index += 2;}}
         unchecked {
             y = index / 17;
             x = index - y*17;
@@ -822,8 +836,8 @@ contract C9SVG is C9Context, C9Shared {
     public pure 
     returns (bytes memory rects) {
         uint256 bitSwitch;
-        for (uint256 i; i<251;) {
-            bitSwitch = getBoolean256(packed, (255-i));
+        for (uint256 i; i<168;) {
+            bitSwitch = getBoolean256(packed, i);
             if (bitSwitch == 1) {
                 rects = bytes.concat(
                     rects,
@@ -841,6 +855,16 @@ contract C9SVG is C9Context, C9Shared {
             QR_CODE_BASE,
             packedToRects(packed),
             "</svg>"
+        );
+    }
+
+    function qrCodeSVGGroup(uint256 packed)
+    public pure
+    returns (bytes memory svg) {
+        svg = bytes.concat(
+            "<g transform='translate(157.5 146) scale(0.5)'>",
+            qrCodeSVG(packed),
+            "</g>"
         );
     }
 

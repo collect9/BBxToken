@@ -590,6 +590,16 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
+     * @dev Returns view of the barCodeData.
+     */
+    function getQRData(uint256 tokenId)
+    external view
+    requireMinted(tokenId)
+    returns (uint256) {
+        return _cTokenData[tokenId];
+    }
+
+    /**
      * @dev Returns an unpacked view of the tokenData.
      */
     function getTokenParams(uint256 tokenId)
