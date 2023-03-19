@@ -837,7 +837,7 @@ contract C9SVG is C9Context, C9Shared {
     returns (bytes memory rects) {
         uint256 bitSwitch;
         for (uint256 i; i<168;) {
-            bitSwitch = getBoolean256(packed, i);
+            bitSwitch = getBoolean256(packed, (168-i));
             if (bitSwitch == 1) {
                 rects = bytes.concat(
                     rects,
