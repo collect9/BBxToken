@@ -89,6 +89,12 @@ library Helpers {
             }
             return bytes4(output);
     }
+    
+    function getBoolean256(uint256 _packedBools, uint256 _boolNumber)
+    internal pure
+    returns (uint256 flag) {
+        flag = (_packedBools >> _boolNumber) & uint256(1);
+    }
 
     //https://ethereum.stackexchange.com/questions/126899/convert-bytes-to-hexadecimal-string-in-solidity
     function iToHex(bytes memory buffer) public pure returns (string memory) {

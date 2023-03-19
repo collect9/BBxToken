@@ -131,9 +131,10 @@ contract C9SVG is C9Context, C9Shared {
 
        /**
      * @dev Adds the bytes32 + bytes8 representation of the address into the 
-     * SVG output memory.
+     * SVG output memory. The bytes8 part ensures no extra null bytes are
+     * added on.
      */
-    function addAddress(address _address, bytes memory b)
+    function _addAddress(address _address, bytes memory b)
     private pure {
         (bytes32 _a1, bytes8 _a2) = Helpers.addressToB32B8(_address);
         assembly {
@@ -145,10 +146,10 @@ contract C9SVG is C9Context, C9Shared {
 
     /**
      * @dev Adds the `_id` into the SVG output memory `b`. 
-     * Note: this is done so that multiple 
-     * SVGs may be displayed on the same page without CSS conflict.
+     * Note: this is done so that multiple SVGs
+     * may be displayed on the same page without CSS conflict.
      */
-    function addIds(bytes6 b6TokenId, bytes memory b)
+    function _addIds(bytes6 b6TokenId, bytes memory b)
     private pure {
         assembly {
             let dst := add(b, 364)
@@ -158,10 +159,175 @@ contract C9SVG is C9Context, C9Shared {
         }
     }
 
-    // /**
-    //  * @dev Adds validity flag info to SVG output memory `b`.
-    //  */
-    function addValidityInfo(uint256 tokenId, uint256 ownerData, bytes memory b)
+    /*
+     * @dev Adds the `_token` age information. The years, months, 
+     * and day may be 1 or 2 bytes long.
+     */
+    function _addNFTAge(uint256 data, bytes memory b)
+    private view {
+        bytes6 _periods = _getNFTAge(
+            _viewPackedData(data, UPOS_MINTSTAMP, USZ_TIMESTAMP)
+        );
+        assembly {
+            // Timestamps
+            let dst := add(b, 1607)
+            let mask := shl(208, 0xFFFF00000000)
+            let srcpart := and(_periods, mask)
+            let destpart := and(mload(dst), not(mask))
+            mstore(dst, or(destpart, srcpart))
+            dst := add(b, 1610)
+            mask := shl(208, 0x0000FFFF0000)
+            srcpart := and(_periods, mask)
+            destpart := and(mload(dst), not(mask))
+            mstore(dst, or(destpart, srcpart))
+            dst := add(b, 1613)
+            mask := shl(208, 0x00000000FFFF)
+            srcpart := and(_periods, mask)
+            destpart := and(mload(dst), not(mask))
+            mstore(dst, or(destpart, srcpart))
+        }
+    }
+
+    /*
+     * @dev Adds the tokenId text under the barcode.
+     */
+    function _addTokenIdText(bytes6 bTokenId)
+    private pure
+    returns (bytes memory bT) {
+        bT = "<text x='50%' y='625' text-anchor='middle' style='font-family:\"Helvetica\";font-size:78px;fill#111;'>* 0XXXXX  *</text>";
+        bytes1 tokenLead = bTokenId[0];
+        assembly {
+            let dst := add(bT, 135)
+            if eq(tokenLead, "0") {
+                dst := add(bT, 41)
+                mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "4"))
+                dst := add(bT, 134)
+            }
+            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), bTokenId))
+        }
+    }
+
+    /*
+     * @dev Adds various token info, and about as much as 
+     * possible until the stack is full in this method.
+     */
+    function _addTokenInfo(uint256 ownerData, uint256 data, uint256 validity, string memory _name, bytes memory b)
+    private view {
+        bytes7 _tagtxt = _genTagsToAscii(
+            _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG),
+            _viewPackedData(data, UPOS_CNTRYTAG, USZ_CNTRYTAG)
+        );
+        bytes7 _tushtxt = _genTagsToAscii(
+            _viewPackedData(data, UPOS_GENTUSH, USZ_GENTUSH),
+            _viewPackedData(data, UPOS_CNTRYTUSH, USZ_CNTRYTUSH)
+        );
+        bytes4 __mintid = Helpers.flip4Space(
+            bytes4(Helpers.uintToBytes(
+                _viewPackedData(data, UPOS_EDITION_MINT_ID, USZ_EDITION_MINT_ID)
+            ))
+        );
+        bytes4 _royalty = Helpers.bpsToPercent(
+            _viewPackedData(ownerData, MPOS_ROYALTY, MSZ_ROYALTY)*10
+        );
+        bytes2 _edition = Helpers.flip2Space(
+            Helpers.remove2Null(
+                bytes2(Helpers.uintToBytes(
+                    _viewPackedData(data, UPOS_EDITION, USZ_EDITION)
+                ))
+            )
+        );
+        (uint256 _bgidx, bytes16 _classer) = _getRarityTier(
+            _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG),
+            _viewPackedData(data, UPOS_RARITYTIER, USZ_RARITYTIER),
+            _viewPackedData(data, UPOS_SPECIAL, USZ_SPECIAL)
+        );
+        bytes3 _rgc2 = validity < 4 ? hex3[_bgidx] : bytes3("888");
+        bytes2 _namesize = _getNameSize(uint256(bytes(_name).length));
+    
+        assembly {
+            // Name Font Size
+            let dst := add(b, 298)
+            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _namesize))
+            // Colors
+            dst := add(b, 495)
+            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _rgc2))
+            // Royalty
+            dst := add(b, 1415)
+            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _royalty))
+            // Classer
+            dst := add(b, 1501)
+            mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _classer))
+            // Edition
+            let _edcheck := gt(_edition, 9)
+            switch _edcheck case 0 {
+                dst := add(b, 1571)
+            } default {
+                dst := add(b, 1570)
+            }
+            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _edition))
+            // Mintid
+            dst := add(b, 1573)
+            mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), __mintid))
+            // Gen Country Text
+            dst := add(b, 1786)
+            mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tagtxt))
+            dst := add(b, 1796)
+            mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tushtxt))
+        }
+    }
+
+    /** 
+     * @dev The Korea4L and embroidered tush tags have a marker added that 
+     * differentiates their display versus standard Korea5L and Canadian tush 
+     * tags. The provides the user with the information necessary to know 
+     * what type of tag is present based on the SVG display alone.
+     */
+    function _addTushMarker(uint256 markerTush, uint256 genTag)
+    private view
+    returns (bytes memory e) {
+        if (markerTush > 0) {
+            e = "<text x='555' y='726' class='c9Ts c9Tb' style='opacity:0.8;font-family:\"Brush Script MT\",cursive;fill:#222;' text-anchor='middle'>4L  </text>";
+
+            bytes4 x = _vMarkers[markerTush-1];
+            bytes4 y = x == bytes4("CE  ") ?
+                bytes4("c e ") :
+                x == bytes4("EMBF") ?
+                    bytes4("embF") :
+                    x == bytes4("EMBS") ?
+                        bytes4("embS") : x;
+            assembly {
+                let dst := add(e, 162)
+                mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), y))
+                switch genTag case 0 {
+                    dst := add(e, 135)
+                    mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), "eee"))
+                }
+            }
+            if (markerTush > 4) { // Korean bs on hang tag
+                assembly {
+                    let dst := add(e, 41)
+                    mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), "75 "))
+                }
+            }
+        }
+    }
+
+    /**
+     * @dev If token has been upgraded, add text that shows it has.
+     */
+    function _addUpgradeText(uint256 upgraded)
+    private pure
+    returns (bytes memory upgradedText) {
+        if (upgraded == UPGRADED) {
+            upgradedText = "<text x='320' y='92' style='font-family:\"Brush Script MT\",cursive;font-size:26px;fill:#050'>-Upgraded</text>";
+        }
+    }
+
+    /**
+     * @dev Adds validity text to SVG output memory `b`. This is 
+     * the text that displays after STATUS:
+     */
+    function _addValidityInfo(uint256 tokenId, uint256 ownerData, bytes memory b)
     private view {
         uint256 _validityIdx = _currentVId(ownerData);
 
@@ -217,169 +383,59 @@ contract C9SVG is C9Context, C9Shared {
         }
     }
 
-    /*
-     * @dev Adds the `_token` information of fixed sized fields to hardcoded 
-     * bytes `b`.
+    /**
+     * @dev The SVG output memory `b` is finished off with the variable sized parts of `_token`.
+     * This is a bit messy but bytes concat seems to get the job done.
      */
-    function addNFTAge(uint256 data, bytes memory b)
-    private view {
-        bytes6 _periods = getNFTAge(
-            _viewPackedData(data, UPOS_MINTSTAMP, USZ_TIMESTAMP)
-        );
-        assembly {
-            // Timestamps
-            let dst := add(b, 1607)
-            let mask := shl(208, 0xFFFF00000000)
-            let srcpart := and(_periods, mask)
-            let destpart := and(mload(dst), not(mask))
-            mstore(dst, or(destpart, srcpart))
-            dst := add(b, 1610)
-            mask := shl(208, 0x0000FFFF0000)
-            srcpart := and(_periods, mask)
-            destpart := and(mload(dst), not(mask))
-            mstore(dst, or(destpart, srcpart))
-            dst := add(b, 1613)
-            mask := shl(208, 0x00000000FFFF)
-            srcpart := and(_periods, mask)
-            destpart := and(mload(dst), not(mask))
-            mstore(dst, or(destpart, srcpart))
-        }
-    }
-
-    function addTokenIdText(bytes6 bTokenId)
-    private pure
-    returns (bytes memory bT) {
-        bT = "<text x='50%' y='625' text-anchor='middle' style='font-family:\"Helvetica\";font-size:78px;fill#111;'>* 0XXXXX  *</text>";
-        bytes1 tokenLead = bTokenId[0];
-        assembly {
-            let dst := add(bT, 135)
-            if eq(tokenLead, "0") {
-                dst := add(bT, 41)
-                mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "4"))
-                dst := add(bT, 134)
-            }
-            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), bTokenId))
-        }
-    }
-
-    function addTokenInfo(uint256 ownerData, uint256 data, uint256 validity, string memory _name, bytes memory b)
-    private view {
-        bytes7 _tagtxt = genTagsToAscii(
-            _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG),
-            _viewPackedData(data, UPOS_CNTRYTAG, USZ_CNTRYTAG)
-        );
-        bytes7 _tushtxt = genTagsToAscii(
-            _viewPackedData(data, UPOS_GENTUSH, USZ_GENTUSH),
-            _viewPackedData(data, UPOS_CNTRYTUSH, USZ_CNTRYTUSH)
-        );
-        bytes4 __mintid = Helpers.flip4Space(
-            bytes4(Helpers.uintToBytes(
-                _viewPackedData(data, UPOS_EDITION_MINT_ID, USZ_EDITION_MINT_ID)
-            ))
-        );
-        bytes4 _royalty = Helpers.bpsToPercent(
-            _viewPackedData(ownerData, MPOS_ROYALTY, MSZ_ROYALTY)*10
-        );
-        bytes2 _edition = Helpers.flip2Space(
-            Helpers.remove2Null(
-                bytes2(Helpers.uintToBytes(
-                    _viewPackedData(data, UPOS_EDITION, USZ_EDITION)
-                ))
-            )
-        );
-        (uint256 _bgidx, bytes16 _classer) = _getRarityTier(
-            _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG),
-            _viewPackedData(data, UPOS_RARITYTIER, USZ_RARITYTIER),
-            _viewPackedData(data, UPOS_SPECIAL, USZ_SPECIAL)
-        );
-        bytes3 _rgc2 = validity < 4 ? hex3[_bgidx] : bytes3("888");
-        bytes2 _namesize = getNameSize(uint256(bytes(_name).length));
-    
-        assembly {
-            // Name Font Size
-            let dst := add(b, 298)
-            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _namesize))
-            // Colors
-            dst := add(b, 495)
-            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _rgc2))
-            // Royalty
-            dst := add(b, 1415)
-            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _royalty))
-            // Classer
-            dst := add(b, 1501)
-            mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _classer))
-            // Edition
-            let _edcheck := gt(_edition, 9)
-            switch _edcheck case 0 {
-                dst := add(b, 1571)
-            } default {
-                dst := add(b, 1570)
-            }
-            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _edition))
-            // Mintid
-            dst := add(b, 1573)
-            mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), __mintid))
-            // Gen Country Text
-            dst := add(b, 1786)
-            mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tagtxt))
-            dst := add(b, 1796)
-            mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tushtxt))
-        }
-    }
-
-    /** 
-     * @dev The Korea4L and embroidered tush tags have a marker added that 
-     * differentiates their display versus standard Korea5L and Canadian tush 
-     * tags. The provides the user with the information necessary to know 
-     * what type of tag is present based on the SVG display alone.
-     */
-    function addTushMarker(uint256 markerTush, uint256 genTag)
+    function _addVariableBytes(uint256 tokenId, bytes6 b6TokenId, uint256 tokenData, uint256 barCodeData, uint256 qrCodeData, string memory name)
     private view
-    returns (bytes memory e) {
-        if (markerTush > 0) {
-            e = "<text x='555' y='726' class='c9Ts c9Tb' style='opacity:0.8;font-family:\"Brush Script MT\",cursive;fill:#222;' text-anchor='middle'>4L  </text>";
+    returns(bytes memory vb) {
+        
+        // bytes memory _qrCodeSVG = qrCodeSVG(qrCodeData);
+    
+        vb = bytes.concat(
+            bytes(name), "</text></g>",
+            _qrCodeSVGGroup(qrCodeData),
+            _getFlagsGroup(tokenData),
+            _getBarCodeGroup(tokenId, b6TokenId, barCodeData)            
+        );
+    }
 
-            bytes4 x = _vMarkers[markerTush-1];
-            bytes4 y = x == bytes4("CE  ") ?
-                bytes4("c e ") :
-                x == bytes4("EMBF") ?
-                    bytes4("embF") :
-                    x == bytes4("EMBS") ?
-                        bytes4("embS") : x;
-            assembly {
-                let dst := add(e, 162)
-                mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), y))
-                switch genTag case 0 {
-                    dst := add(e, 135)
-                    mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), "eee"))
+    function _barCodeRects(uint256 packed)
+    private pure
+    returns (bytes memory rects) {
+        uint256 j;
+        for (uint256 i; i<86;) {
+            j = 1;
+            if (Helpers.getBoolean256(packed, i) == 1) {
+                for (j; j<4;) {                    
+                    if (Helpers.getBoolean256(packed, i+j) == 0) {
+                        break;
+                    }
+                    unchecked {++j;}
                 }
+                rects = bytes.concat(
+                    rects,
+                    _toBar(i+14, j)
+                );
             }
-            if (markerTush > 4) { // Korean bs on hang tag
-                assembly {
-                    let dst := add(e, 41)
-                    mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), "75 "))
-                }
-            }
+            unchecked {i += j;}
         }
     }
 
-    function _href(bytes6 b6TokenId)
+    function _barCodeSVG(bytes6 b6TokenId, uint256 barCodeData)
     private pure
-    returns (bytes memory href) {
-        href = "<a href='https://collect9.io/nft/XXXXXX' target='_blank'>";
-        assembly {
-            let dst := add(href, 65)
-            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), b6TokenId))
-        }
+    returns (bytes memory svg) {
+        bytes memory bT = _addTokenIdText(b6TokenId);
+        svg = bytes.concat(
+            BAR_CODE_BASE,
+            _barCodeRects(barCodeData),
+            "</g></svg>",
+            bT
+        );
     }
 
-    function _wrapInHref(bytes6 b6TokenId, bytes memory b)
-    private pure
-    returns (bytes memory) {
-        return bytes.concat(_href(b6TokenId), b, "</a>");
-    }
-
-    function getBarCodeGroup(uint256 tokenId, bytes6 b6TokenId, uint256 barCodeData)
+    function _getBarCodeGroup(uint256 tokenId, bytes6 b6TokenId, uint256 barCodeData)
     private pure
     returns (bytes memory gb) {
         gb = "<g transform='translate(XXX 646) scale(0.33)'>";
@@ -390,12 +446,12 @@ contract C9SVG is C9Context, C9Shared {
         }
         gb = bytes.concat(
             gb,
-            barCodeSVG(b6TokenId, barCodeData),
+            _barCodeSVG(b6TokenId, barCodeData),
             "</g>"
         );
     }
 
-    function getLogoGroup(bytes6 bTokenId)
+    function _getLogoGroup(bytes6 bTokenId)
     private view
     returns (bytes memory) {
         return bytes.concat(
@@ -405,7 +461,7 @@ contract C9SVG is C9Context, C9Shared {
         );
     }
 
-    function getFlagsGroup(uint256 tokenData)
+    function _getFlagsGroup(uint256 tokenData)
     public view
     returns (bytes memory fb) {
         bytes memory _flagTag = C9SVGFlags(contractFlags).getSVGFlag(
@@ -424,42 +480,123 @@ contract C9SVG is C9Context, C9Shared {
     }
 
     /**
-     * @dev The SVG output memory `b` is finished off with the variable sized parts of `_token`.
-     * This is a bit messy but bytes concat seems to get the job done.
+     * @dev Converts integer inputs to the ordinal country ascii text representation 
+     * based on input params `_gentag` and `_tag`.
      */
-    function addVariableBytes(uint256 tokenId, bytes6 b6TokenId, uint256 tokenData, uint256 barCodeData, uint256 qrCodeData, string memory name)
-    private view
-    returns(bytes memory vb) {
-        
-        // bytes memory _qrCodeSVG = qrCodeSVG(qrCodeData);
-    
-        vb = bytes.concat(
-            bytes(name), "</text></g>",
-            qrCodeSVGGroup(qrCodeData),
-            getFlagsGroup(tokenData),
-            getBarCodeGroup(tokenId, b6TokenId, barCodeData)            
-        );
+    function _genTagsToAscii(uint256 _gentag, uint256 _tag)
+    private view returns(bytes7) {
+        bytes3 __gentag = Helpers.uintToOrdinal(_gentag);
+        bytes3 _cntrytag = _vFlags[_tag];
+        bytes memory _tmpout = "       ";
+        assembly {
+            let dst := add(_tmpout, 32)
+            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), __gentag))
+            if lt(_tag, 7) {
+                dst := add(_tmpout, 36)
+                mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _cntrytag))
+            }
+        }
+        return bytes7(_tmpout);
     }
 
     /**
-     * @dev If token has been upgraded, add text that shows it has.
+     * @dev Since SVG text does not automatically contain itself to bounds, 
+     * this function returns the font size of text depending on input `len` 
+     * so that it stays contained.
      */
-    function addUpgradeText(uint256 upgraded)
-    private pure
-    returns (bytes memory upgradedText) {
-        if (upgraded == UPGRADED) {
-            upgradedText = "<text x='320' y='92' style='font-family:\"Brush Script MT\",cursive;font-size:26px;fill:#050'>-Upgraded</text>";
+    function _getNameSize(uint256 len)
+    private pure returns(bytes2) {
+        if (len < 11) {
+            return "52";
+        }
+        else if (len > 17) {
+            return "30";
+        }
+        else {
+            uint256 adjuster = (len-10)*3;
+            uint256 fontsize = 52 - adjuster;
+            return bytes2(Helpers.uintToBytes(fontsize));
         }
     }
 
     /**
-     * @dev Ghost tiers get a little more fun. They get a nebula-like background 
-     * that's one of 4 color templates chosen pseudo-random to the viewer 
-     * at each call. OpenSea, Rarible etc. will cache one at random, 
-     * but users should be able to fetch meta-data updates to see 
-     * color changes.
+     * @dev Returns the age of the NFT in a packed bytes6 array that is 
+     * years, months, days 2 bytes each. Note: Due to precision errors on 
+     * number of seconds of per year, month, etc. There's a 
+     * chance that the number of days can be negative which causes VM revert. 
+     * To get around that, just display as zero. Just in case this can 
+     * happen for months as well, that has been implemented too.
      */
-    function setBackground(uint256 genTag, uint256 specialTier, bytes memory b)
+    function _getNFTAge(uint256 _mintstamp)
+    private view returns(bytes6) {
+        uint256 _ds = block.timestamp - _mintstamp;
+        uint256 _nyrs = _ds/31556926;
+
+        uint256 _nmonths = 0;
+        uint256 _nmonthsp1 = _ds/2629743;
+        uint256 _nmonthsp2 = 12*_nyrs;
+        if (_nmonthsp1 > _nmonthsp2) {
+            _nmonths = _nmonthsp1 - _nmonthsp2;
+        }
+        
+        uint256 _ndays = 0;
+        uint256 _ndaysp1 = _ds/86400;
+        uint256 _ndaysp2 = (3652500*_nyrs + 304375*_nmonths)/10000;
+        if (_ndaysp1 > _ndaysp2) {
+            _ndays = _ndaysp1 - _ndaysp2;
+        }
+
+        bytes32 _byrs = Helpers.uintToBytes(_nyrs);
+        bytes32 _bmonths = Helpers.uintToBytes(_nmonths);
+        bytes32 _bdays = Helpers.uintToBytes(_ndays);
+        bytes memory _periods = new bytes(6);
+        assembly {
+            let dst := add(_periods, 32)
+            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _byrs))
+            dst := add(_periods, 34)
+            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _bmonths))
+            dst := add(_periods, 36)
+            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _bdays))
+        }
+        Helpers.flipSpace(_periods, 0);
+        Helpers.flipSpace(_periods, 2);
+        Helpers.flipSpace(_periods, 4);
+        return bytes6(_periods);
+    }
+
+    /* @dev 
+     * Returns a href html link based on input tokenId.
+     */
+    function _href(bytes6 b6TokenId)
+    private pure
+    returns (bytes memory href) {
+        href = "<a href='https://collect9.io/nft/XXXXXX' target='_blank'>";
+        assembly {
+            let dst := add(href, 65)
+            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), b6TokenId))
+        }
+    }
+
+    function _packedToRects(uint256 packed)
+    private pure 
+    returns (bytes memory rects) {
+        uint256 bitSwitch;
+        for (uint256 i; i<168;) {
+            bitSwitch = Helpers.getBoolean256(packed, (168-i));
+            if (bitSwitch == 1) {
+                rects = bytes.concat(
+                    rects,
+                    _toRect(i)
+                );
+            }
+            unchecked {++i;}
+        }
+    }
+
+    /**
+     * @dev Sets the background color and style based on inputs.
+     */
+    function _setBackground(uint256 genTag, uint256 specialTier, bytes memory b)
     private pure {
         bytes23[11] memory matrices = [
             bytes23("1 0 0 0 1 0 1 0 0 1 1 0"), //g0
@@ -522,169 +659,74 @@ contract C9SVG is C9Context, C9Shared {
         }
     }
 
-    /**
-     * @dev Converts integer inputs to the ordinal country ascii text representation 
-     * based on input params `_gentag` and `_tag`.
-     */
-    function genTagsToAscii(uint256 _gentag, uint256 _tag)
-    private view returns(bytes7) {
-        bytes3 __gentag = Helpers.uintToOrdinal(_gentag);
-        bytes3 _cntrytag = _vFlags[_tag];
-        bytes memory _tmpout = "       ";
-        assembly {
-            let dst := add(_tmpout, 32)
-            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), __gentag))
-            if lt(_tag, 7) {
-                dst := add(_tmpout, 36)
-                mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _cntrytag))
-            }
-        }
-        return bytes7(_tmpout);
-    }
-
-    /**
-     * @dev Since SVG text does not automatically contain itself to bounds, 
-     * this function returns the font size of text depending on input `len` 
-     * so that it stays contained.
-     */
-    function getNameSize(uint256 len)
-    private pure returns(bytes2) {
-        if (len < 11) {
-            return "52";
-        }
-        else if (len > 17) {
-            return "30";
-        }
-        else {
-            uint256 adjuster = (len-10)*3;
-            uint256 fontsize = 52 - adjuster;
-            return bytes2(Helpers.uintToBytes(fontsize));
-        }
-    }
-
-    /**
-     * @dev Returns the age of the NFT in a packed bytes6 array that is 
-     * years, months, days 2 bytes each. Note: Due to precision errors on 
-     * number of seconds of per year, month, etc. There's a 
-     * chance that the number of days can be negative which causes VM revert. 
-     * To get around that, just display as zero. Just in case this can 
-     * happen for months as well, that has been implemented too.
-     */
-    function getNFTAge(uint256 _mintstamp)
-    private view returns(bytes6) {
-        uint256 _ds = block.timestamp - _mintstamp;
-        uint256 _nyrs = _ds/31556926;
-
-        uint256 _nmonths = 0;
-        uint256 _nmonthsp1 = _ds/2629743;
-        uint256 _nmonthsp2 = 12*_nyrs;
-        if (_nmonthsp1 > _nmonthsp2) {
-            _nmonths = _nmonthsp1 - _nmonthsp2;
-        }
-        
-        uint256 _ndays = 0;
-        uint256 _ndaysp1 = _ds/86400;
-        uint256 _ndaysp2 = (3652500*_nyrs + 304375*_nmonths)/10000;
-        if (_ndaysp1 > _ndaysp2) {
-            _ndays = _ndaysp1 - _ndaysp2;
-        }
-
-        bytes32 _byrs = Helpers.uintToBytes(_nyrs);
-        bytes32 _bmonths = Helpers.uintToBytes(_nmonths);
-        bytes32 _bdays = Helpers.uintToBytes(_ndays);
-        bytes memory _periods = new bytes(6);
-        assembly {
-            let dst := add(_periods, 32)
-            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _byrs))
-            dst := add(_periods, 34)
-            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _bmonths))
-            dst := add(_periods, 36)
-            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _bdays))
-        }
-        Helpers.flipSpace(_periods, 0);
-        Helpers.flipSpace(_periods, 2);
-        Helpers.flipSpace(_periods, 4);
-        return bytes6(_periods);
-    }
-
-    /**
-     * @dev External function to call and return the SVG string built from `_token`  
-     * and owner `_address`.
-     */
-    function svgImage(uint256 tokenId, uint256 ownerData, uint256 tokenData, uint256 codeData)
-    external view
-    returns (string memory) {
-        string memory name = IC9Token(contractToken).getTokenParamsName(tokenId);
-        bytes6 b6TokenId = Helpers.tokenIdToBytes(tokenId);
-        (uint256 qrCodeData, uint256 barCodeData) = splitQRData(codeData);
-
-        bytes memory bSVG = SVG_OPENER;
-        addIds(b6TokenId, bSVG);
-        addTokenInfo(ownerData, tokenData, _currentVId(ownerData), name, bSVG);
-        addAddress(IC9Token(contractToken).ownerOf(tokenId), bSVG);
-        addNFTAge(tokenData, bSVG);
-        addValidityInfo(tokenId, ownerData, bSVG);
-        setBackground(
-            _viewPackedData(tokenData, UPOS_GENTAG, USZ_GENTAG),
-            _viewPackedData(tokenData, UPOS_SPECIAL, USZ_SPECIAL),
-            bSVG
+    function _qrCodeSVGGroup(uint256 packed)
+    private pure
+    returns (bytes memory svg) {
+        svg = bytes.concat(
+            "<g transform='translate(157.5 146) scale(0.5)'>",
+            qrCodeSVG(packed),
+            "</g>"
         );
-
-        // Logo
-        bytes memory bL = getLogoGroup(b6TokenId);
-        // Variable bytes group
-        bytes memory vB = addVariableBytes(tokenId, b6TokenId, tokenData, barCodeData, qrCodeData, name);
-        // Tush marker group
-        bytes memory mT = addTushMarker(
-            _viewPackedData(tokenData, UPOS_MARKERTUSH, USZ_MARKERTUSH),
-            _viewPackedData(tokenData, UPOS_GENTAG, USZ_GENTAG)
-        );
-        // Upgraded text
-        bytes memory uT = addUpgradeText(ownerData>>MPOS_UPGRADED & BOOL_MASK);
-
-        return string(bytes.concat(bSVG, vB, mT, uT, bL, "</g></svg>"));
     }
 
-    function splitQRData(uint256 packed)
+    /*
+     * @dev Splits the packed data into separate QR and
+     * barcode data.
+     */
+    function _splitQRData(uint256 packed)
     private pure
     returns (uint256 qrCodeData, uint256 barCodeData) {
         qrCodeData = uint256(uint168(packed));
         barCodeData = packed >> 168;
     }
 
-    function getBoolean256(uint256 _packedBools, uint256 _boolNumber)
+    /*
+     * @dev Returns rect based on input x, and multi (width).
+     */
+    function _toBar(uint256 x, uint256 multi)
     private pure
-    returns (uint256 flag)
-    {
-        flag = (_packedBools >> _boolNumber) & uint256(1);
+    returns (bytes memory b) {
+        b = bytes.concat(
+            "<rect x='",
+            _uintToStr(x),
+            "' width='",
+            _uintToDigit(multi),
+            "'/>"
+        );
     }
 
-    function uintToBytes(uint256 v)
+    /*
+     * @dev Returns rect based on input x and y.
+     */
+    function _toRect(uint256 index)
     private pure
-    returns (bytes32 ret) {
-        if (v == 0) {
-            ret = '0';
-        }
-        else {
-            while (v > 0) {
-                ret = bytes32(uint256(ret) / (2 ** 8));
-                ret |= bytes32(((v % 10) + 48) * 2 ** (8 * 31));
-                v /= 10;
-            }
-        }
-        return ret;
+    returns (bytes memory) {
+        (uint256 y, uint256 x) = _toXY(index);
+        return bytes.concat(
+            "<rect x='",
+            _uintToStr(x),
+            "' y='",
+            _uintToStr(y),
+            "'/>"
+        );
     }
 
-    function uintToDigit(uint256 input)
+    /*
+     * @dev Converts uint to bytes1 digit.
+     */
+    function _uintToDigit(uint256 input)
     private pure
     returns (bytes1) {
-        return bytes1(uintToBytes(input));
+        return bytes1(Helpers.uintToBytes(input));
     }
 
-    function uintToStr(uint256 input)
+    /*
+     * @dev Converts uint to bytes2 digit.
+     */
+    function _uintToStr(uint256 input)
     private pure
     returns (bytes2) {
-        bytes32 b32Input = uintToBytes(input);
+        bytes32 b32Input = Helpers.uintToBytes(input);
         bytes memory output = new bytes(2);
         output[0] = b32Input[0];
         output[1] = b32Input[1];
@@ -694,7 +736,19 @@ contract C9SVG is C9Context, C9Shared {
         return bytes2(output);
     }
 
-    function toXY(uint256 index)
+    /* @dev 
+     * Wraps input bytes memory in html link _href.
+     */
+    function _wrapInHref(bytes6 b6TokenId, bytes memory b)
+    private pure
+    returns (bytes memory) {
+        return bytes.concat(_href(b6TokenId), b, "</a>");
+    }
+
+    /* @dev 
+     * Converts index into x, y coordinates.
+     */
+    function _toXY(uint256 index)
     private pure
     returns (uint256 y, uint256 x) {
         // Convert to true bit index
@@ -721,51 +775,42 @@ contract C9SVG is C9Context, C9Shared {
         }
     }
 
-    function _toRect(uint256 x, uint256 y)
-    private pure
-    returns (bytes memory) {
-        return bytes.concat(
-            "<rect x='",
-            uintToStr(x),
-            "' y='",
-            uintToStr(y),
-            "'/>"
+    /**
+     * @dev External function to call and return the SVG string built from `_token`  
+     * and owner `_address`.
+     */
+    function svgImage(uint256 tokenId, uint256 ownerData, uint256 tokenData, uint256 codeData)
+    external view
+    returns (string memory) {
+        string memory name = IC9Token(contractToken).getTokenParamsName(tokenId);
+        bytes6 b6TokenId = Helpers.tokenIdToBytes(tokenId);
+        (uint256 qrCodeData, uint256 barCodeData) = _splitQRData(codeData);
+
+        bytes memory bSVG = SVG_OPENER;
+        _addIds(b6TokenId, bSVG);
+        _addTokenInfo(ownerData, tokenData, _currentVId(ownerData), name, bSVG);
+        _addAddress(IC9Token(contractToken).ownerOf(tokenId), bSVG);
+        _addNFTAge(tokenData, bSVG);
+        _addValidityInfo(tokenId, ownerData, bSVG);
+        _setBackground(
+            _viewPackedData(tokenData, UPOS_GENTAG, USZ_GENTAG),
+            _viewPackedData(tokenData, UPOS_SPECIAL, USZ_SPECIAL),
+            bSVG
         );
-    }
 
-    function _toBar(uint256 x, uint256 multi)
-    private pure
-    returns (bytes memory b) {
-        b = bytes.concat(
-            "<rect x='",
-            uintToStr(x),
-            "' width='",
-            uintToDigit(multi),
-            "'/>"
+        // Logo
+        bytes memory bL = _getLogoGroup(b6TokenId);
+        // Variable bytes group
+        bytes memory vB = _addVariableBytes(tokenId, b6TokenId, tokenData, barCodeData, qrCodeData, name);
+        // Tush marker group
+        bytes memory mT = _addTushMarker(
+            _viewPackedData(tokenData, UPOS_MARKERTUSH, USZ_MARKERTUSH),
+            _viewPackedData(tokenData, UPOS_GENTAG, USZ_GENTAG)
         );
-    }
+        // Upgraded text
+        bytes memory uT = _addUpgradeText(ownerData>>MPOS_UPGRADED & BOOL_MASK);
 
-    function toRect(uint256 index)
-    private pure
-    returns (bytes memory) {
-        (uint256 y, uint256 x) = toXY(index);
-        return _toRect(x, y);
-    }
-
-    function packedToRects(uint256 packed)
-    private pure 
-    returns (bytes memory rects) {
-        uint256 bitSwitch;
-        for (uint256 i; i<168;) {
-            bitSwitch = getBoolean256(packed, (168-i));
-            if (bitSwitch == 1) {
-                rects = bytes.concat(
-                    rects,
-                    toRect(i)
-                );
-            }
-            unchecked {++i;}
-        }
+        return string(bytes.concat(bSVG, vB, mT, uT, bL, "</g></svg>"));
     }
 
     function qrCodeSVG(uint256 packed)
@@ -773,52 +818,8 @@ contract C9SVG is C9Context, C9Shared {
     returns (bytes memory svg) {
         svg = bytes.concat(
             QR_CODE_BASE,
-            packedToRects(packed),
+            _packedToRects(packed),
             "</svg>"
-        );
-    }
-
-    function qrCodeSVGGroup(uint256 packed)
-    private pure
-    returns (bytes memory svg) {
-        svg = bytes.concat(
-            "<g transform='translate(157.5 146) scale(0.5)'>",
-            qrCodeSVG(packed),
-            "</g>"
-        );
-    }
-
-    function barCodeRects(uint256 packed)
-    private pure
-    returns (bytes memory rects) {
-        uint256 j;
-        for (uint256 i; i<86;) {
-            j = 1;
-            if (getBoolean256(packed, i) == 1) {
-                for (j; j<4;) {                    
-                    if (getBoolean256(packed, i+j) == 0) {
-                        break;
-                    }
-                    unchecked {++j;}
-                }
-                rects = bytes.concat(
-                    rects,
-                    _toBar(i+14, j)
-                );
-            }
-            unchecked {i += j;}
-        }
-    }
-
-    function barCodeSVG(bytes6 b6TokenId, uint256 barCodeData)
-    private pure
-    returns (bytes memory svg) {
-        bytes memory bT = addTokenIdText(b6TokenId);
-        svg = bytes.concat(
-            BAR_CODE_BASE,
-            barCodeRects(barCodeData),
-            "</g></svg>",
-            bT
         );
     }
 }
