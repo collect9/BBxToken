@@ -12,6 +12,16 @@ import "./utils/C9ERC721EnumBasic.sol";
 
 contract C9Token is ERC721IdEnumBasic {
     /**
+     * @dev https://docs.opensea.io/docs/metadata-standards.
+     * While there is no definitive EIP yet for token staking or locking, OpenSea 
+     * does support several events to help signal that a token should not be eligible 
+     * for trading. This helps prevent "execution reverted" errors for your users 
+     * if transfers are disabled while in a staked or locked state.
+     */
+    event TokenLocked(uint256 indexed tokenId, address indexed approvedContract);
+    event TokenUnlocked(uint256 indexed tokenId, address indexed approvedContract);
+
+    /**
      * @dev Contract access roles.
      */
     bytes32 public constant REDEEMER_ROLE = keccak256("REDEEMER_ROLE");
@@ -246,12 +256,7 @@ contract C9Token is ERC721IdEnumBasic {
                 revert TokenIsLocked(_tokenId);
             }
             // 5. All checks pass, so lock the token
-            _tokenData = _setTokenParam(
-                _tokenData,
-                MPOS_LOCKED,
-                LOCKED,
-                BOOL_MASK
-            );
+            _tokenData = _lockToken(_tokenId, _tokenData);
             // 6. Save to storage
             _owners[_tokenId] = _tokenData;
             unchecked {++i;}
@@ -373,23 +378,30 @@ contract C9Token is ERC721IdEnumBasic {
         return votes;
     }
 
+    function _lockToken(uint256 tokenId, uint256 tokenData)
+    private
+    returns (uint256) {
+        emit TokenLocked(tokenId, address(this));
+        return _setTokenParam(
+            tokenData,
+            MPOS_LOCKED,
+            LOCKED,
+            BOOL_MASK
+        );
+    }
+
     /**
      * @dev Updates the token validity status.
      */
     function _setTokenValidity(uint256 tokenId, uint256 vId)
     private {
-        uint256 _tokenData = _owners[tokenId];
-        _tokenData = _setDataValidity(_tokenData, vId);
+        uint256 tokenData = _owners[tokenId];
+        tokenData = _setDataValidity(tokenData, vId);
         // Lock if changing to a dead status (forever lock)
         if (vId >= REDEEMED) {
-            _tokenData = _setTokenParam(
-                _tokenData,
-                MPOS_LOCKED,
-                LOCKED,
-                BOOL_MASK
-            );
+            tokenData = _lockToken(tokenId, tokenData);
         }
-        _owners[tokenId] = _tokenData;
+        _owners[tokenId] = tokenData;
         emit MetadataUpdate(tokenId);
     }
 
@@ -440,6 +452,7 @@ contract C9Token is ERC721IdEnumBasic {
             UNLOCKED,
             BOOL_MASK
         );
+        emit TokenUnlocked(_tokenId, address(this));
     }
 
     /**
