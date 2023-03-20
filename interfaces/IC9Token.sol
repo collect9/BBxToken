@@ -5,6 +5,14 @@ import "./../utils/interfaces/IC9ERC721.sol";
 
 interface IC9Token is IC9ERC721, IERC2981 {
 
+    function baseURIArray(uint256 index)
+    external view
+    returns (string memory);
+
+    function getEditionMaxMintId(uint256 edition)
+    external view
+    returns (uint256);
+
     function getTokenParams(uint256 _tokenId) external view returns(uint256[19] memory params);
 
     function getTokenParamsName(uint256 tokenId)
@@ -28,4 +36,6 @@ interface IC9Token is IC9ERC721, IERC2981 {
     function setTokenUpgraded(uint256 _tokenId) external;
 
     function setTokenValidity(uint256 _tokenId, uint256 _vId) external;
+
+    function svgOnly() external view returns (bool);
 }

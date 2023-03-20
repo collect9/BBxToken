@@ -30,7 +30,7 @@ abstract contract C9Context is C9Struct {
             packedData,
             MPOS_VALIDITY,
             validity,
-            MASK_VALIDITY
+            M_MASK_VALIDITY
         );
     }
 

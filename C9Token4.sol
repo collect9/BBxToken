@@ -4,7 +4,6 @@ import "./interfaces/IC9MetaData.sol";
 import "./interfaces/IC9SVG2.sol";
 import "./interfaces/IC9Redeemer24.sol";
 import "./interfaces/IC9Token.sol";
-import "./utils/Base64.sol";
 import "./utils/Helpers.sol";
 
 
@@ -46,7 +45,7 @@ contract C9Token is ERC721IdEnumBasic {
      * for inactive.
      */
     bool private _svgOnly;
-    string[2] public _baseURIArray;
+    string[2] private _baseURIArray;
 
     /**
      * @dev Contract-level meta data for OpenSea.
@@ -471,12 +470,18 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-      Temp function testing only.
+      * @dev Returns the baseURI at given index.
       */
     function baseURIArray(uint256 index)
     external view
     returns (string memory) {
         return _baseURIArray[index];
+    }
+
+    function svgOnly()
+    external view
+    returns (bool) {
+        return _svgOnly;
     }
 
     /**
@@ -576,12 +581,12 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Returns the list of redeemed tokens.
+     * @dev Returns the latest minted Id of the edition number.
      */
-    function getRedeemed()
+    function getEditionMaxMintId(uint256 edition)
     external view
-    returns (uint24[] memory redeemedTokens) {
-        redeemedTokens = _redeemedTokens;
+    returns (uint256) {
+        return _mintId[edition];
     }
 
     /**
@@ -610,6 +615,15 @@ contract C9Token is ERC721IdEnumBasic {
     requireMinted(tokenId)
     returns (uint256) {
         return _cTokenData[tokenId];
+    }
+
+    /**
+     * @dev Returns the list of redeemed tokens.
+     */
+    function getRedeemed()
+    external view
+    returns (uint24[] memory redeemedTokens) {
+        redeemedTokens = _redeemedTokens;
     }
 
     /**
@@ -1079,11 +1093,13 @@ contract C9Token is ERC721IdEnumBasic {
     public view
     requireMinted(tokenId)
     returns (string memory) {
-        return IC9SVG(contractSVG).svgImage(
-            tokenId,
-            _owners[tokenId],
-            _uTokenData[tokenId],
-            _cTokenData[tokenId]
+        return string(
+            IC9MetaData(contractMeta).svgImage(
+                tokenId,
+                _owners[tokenId],
+                _uTokenData[tokenId],
+                _cTokenData[tokenId]
+            )
         );
     }
 
@@ -1125,45 +1141,20 @@ contract C9Token is ERC721IdEnumBasic {
      * It seems like if the baseURI method fails after upgrade, OpenSea
      * still displays the cached on-chain version.
      */
-    function tokenURI(uint256 _tokenId)
+    function tokenURI(uint256 tokenId)
     public view
     override(ERC721)
-    requireMinted(_tokenId)
+    requireMinted(tokenId)
     returns (string memory) {
-        uint256 _tokenData = _owners[_tokenId];
-        bool _externalView = (_tokenData>>MPOS_DISPLAY & BOOL_MASK) == EXTERNAL_IMG;
-        bytes memory image;
-        if (_svgOnly || !_externalView) {
-            // Onchain SVG
-            image = abi.encodePacked(
-                ',"image":"data:image/svg+xml;base64,',
-                Base64.encode(bytes(svgImage(_tokenId)))
-            );
-        }
+        return string(
+            IC9MetaData(contractMeta).metaData(
+                tokenId,
+                _owners[tokenId],
+                _uTokenData[tokenId],
+                _cTokenData[tokenId]
+            )
+        );
     }
-    //     else {
-    //         // Token upgraded, get view URI based on if redeemed or not
-    //         uint256 _viewIdx = _currentVId(_tokenData) >= REDEEMED ? URI1 : URI0;
-    //         image = abi.encodePacked(
-    //             ',"image":"',
-    //             _baseURIArray[_viewIdx],
-    //             Helpers.tokenIdToBytes(_tokenId),
-    //             '.png'
-    //         );
-    //     }
-    //     return string(
-    //         abi.encodePacked(
-    //             'data:application/json;base64,',
-    //             Base64.encode(
-    //                 abi.encodePacked(
-    //                     IC9MetaData(contractMeta).metaNameDesc(_tokenId, _tokenData, _sTokenData[_tokenId]),
-    //                     image,
-    //                     IC9MetaData(contractMeta).metaAttributes(_tokenData)
-    //                 )
-    //             )
-    //         )
-    //     );
-    // }
 
     /**
      * @dev Returns the number of burned tokens.

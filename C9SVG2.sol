@@ -129,7 +129,7 @@ contract C9SVG is C9Context, C9Shared {
         contractLogo = _contractLogo;
     }
 
-       /**
+    /**
      * @dev Adds the bytes32 + bytes8 representation of the address into the 
      * SVG output memory. The bytes8 part ensures no extra null bytes are
      * added on.
@@ -221,7 +221,7 @@ contract C9SVG is C9Context, C9Shared {
             _viewPackedData(data, UPOS_GENTUSH, USZ_GENTUSH),
             _viewPackedData(data, UPOS_CNTRYTUSH, USZ_CNTRYTUSH)
         );
-        bytes4 __mintid = Helpers.flip4Space(
+        bytes4 __mintid = Helpers.remove4Null(
             bytes4(Helpers.uintToBytes(
                 _viewPackedData(data, UPOS_EDITION_MINT_ID, USZ_EDITION_MINT_ID)
             ))
@@ -781,7 +781,7 @@ contract C9SVG is C9Context, C9Shared {
      */
     function svgImage(uint256 tokenId, uint256 ownerData, uint256 tokenData, uint256 codeData)
     external view
-    returns (string memory) {
+    returns (bytes memory) {
         string memory name = IC9Token(contractToken).getTokenParamsName(tokenId);
         bytes6 b6TokenId = Helpers.tokenIdToBytes(tokenId);
         (uint256 qrCodeData, uint256 barCodeData) = _splitQRData(codeData);
@@ -810,7 +810,7 @@ contract C9SVG is C9Context, C9Shared {
         // Upgraded text
         bytes memory uT = _addUpgradeText(ownerData>>MPOS_UPGRADED & BOOL_MASK);
 
-        return string(bytes.concat(bSVG, vB, mT, uT, bL, "</g></svg>"));
+        return bytes.concat(bSVG, vB, mT, uT, bL, "</g></svg>");
     }
 
     function qrCodeSVG(uint256 packed)

@@ -1,0 +1,83 @@
+"Physical_Descriptors":[
+	{
+		"trait_type":"Hang Tag Gen",
+		"value":"   "
+	},
+	{
+		"trait_type":"Hang Tag Country",
+		"value":"   "
+	},
+	{
+		"trait_type":"Hang Tag Combo",
+		"value":"       "
+	},
+	{
+		"trait_type":"Tush Tag Gen",
+		"value":"   "
+	},
+	{
+		"trait_type":"Tush Tag Country",
+		"value":"   "
+	},
+	{
+		"trait_type":"Tush Modifier",
+		"value":"NONE"
+	},
+	{
+		"trait_type":"Tush Tag Combo",
+		"value":"            "
+	},
+	{
+		"trait_type":"Full Tag Combo",
+		"value":"                      "
+	},
+	{
+		"trait_type":"C9 Type Class",
+		"value":" "
+	}
+],
+"Token_Properties":[
+	{
+		"trait_type":"Background",
+		"value":"          "
+	},
+	{
+		"trait_type":"Redeemed",
+		"value":"   "
+	},
+	{
+		"trait_type":"Upgraded",
+		"value":"   "
+	},
+	{
+		"trait_type":"C9 Rarity Tier",
+		"value": ,
+		"max_value":9
+	},
+	{
+		"trait_type":"Class Rarity Combo",
+		"value":"  "
+	},
+	{
+		"trait_type":"Edition",
+		"display_type":"number",
+		"value":  ,
+		"max_value":99
+	},
+	{
+		"trait_type":"Edition Mint ID",
+		"display_type":"number",
+		"value":     
+	},
+	{
+		"trait_type":"Votes",
+		"display_type":"boost_number",
+		"value":  ,
+		"max_value":15
+	},
+	{
+		"trait_type":"Transfer Count",
+		"value":000000,
+		"max_value":1048575
+	}
+]

@@ -1,20 +1,272 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
 import "./abstract/C9Shared.sol";
-import "./interfaces/IC9MetaData.sol";
+import "./interfaces/IC9SVG2.sol";
+import "./interfaces/IC9Token.sol";
 
+import "./utils/Base64.sol";
 import "./utils/C9Context.sol";
 import "./utils/Helpers.sol";
 
 contract C9MetaData is C9Shared, C9Context {
 
+    address public contractSVG;
+    address public immutable contractToken;
+
+    constructor (address _contractSVG, address _contractToken) {
+        contractSVG = _contractSVG;
+        contractToken = _contractToken;
+    }
+
+    /**
+     * @dev Constructs the json string containing the attributes of the token.
+     * Bytes2, 3, etc are reused to save on stack space.
+     */
+    function _metaAttributes(uint256 data, uint256 ownerData)
+    private view
+    returns (bytes memory b) {
+        b = '","attributes":['
+            '{"trait_type":"Hang Tag","value":"       "},'
+            '{"trait_type":"Hang Tag Gen","value":  },'
+            '{"trait_type":"Hang Tag Country","value":"   "},'
+            '{"trait_type":"Tush Tag","value":"            "},'
+            '{"trait_type":"Tush Tag Gen","value":  },'
+            '{"trait_type":"Tush Tag Country","value":"   "},'
+            '{"trait_type":"Tush Tag Modifier","value":"NORM"},'
+            '{"trait_type":"Full Tag Combo","value":"                      "},'
+            '{"trait_type":"Mint Date","display_type":"date","value":          },'
+            '{"trait_type":"Upgraded","value":"   "},'
+            '{"trait_type":"Redeemed","value":"   "},'
+            '{"trait_type":"C9 Rarity Tier","value": ,"max_value":9},'
+            '{"trait_type":"C9 Type Class","value":" "},'
+            '{"trait_type":"C9 Class Rarity Combo","value":"  "},'
+            '{"trait_type":"Background","value":"          "},'
+            '{"trait_type":"Edition","display_type":"number","value":  ,"max_value":99},'
+            '{"trait_type":"Edition Mint Id","display_type":"number","value":    ,"max_value":    },'
+            '{"trait_type":"Votes","display_type":"boost_number","value":  ,"max_value":15},'
+            '{"trait_type":"Transfer Count","value":       ,"max_value":1048575}],';
+
+        // 1. All 2 byte attributes
+
+        // Edition number
+        uint256 edition = _viewPackedData(data, UPOS_EDITION, USZ_EDITION);
+        bytes2 attribute2 = Helpers.remove2Null(
+            bytes2(Helpers.uintToBytes(
+                edition
+            ))
+        );
+        assembly {
+            let dst := add(b, 838)
+            mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), attribute2))
+        }
+
+        // Hang tag gen number
+        attribute2 = Helpers.remove2Null(
+            bytes2(Helpers.uintToBytes(
+                _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG)
+            ))
+        );
+        assembly {
+            let dst := add(b, 129)
+            mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), attribute2))
+        }
+
+        // Tush tag gen number
+        attribute2 = Helpers.remove2Null(
+            bytes2(Helpers.uintToBytes(
+                _viewPackedData(data, UPOS_GENTUSH, USZ_GENTUSH)
+            ))
+        );
+        assembly {
+            let dst := add(b, 267)
+            mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), attribute2))
+        }
+
+        // Number of votes
+        attribute2 = Helpers.remove2Null(
+            bytes2(Helpers.uintToBytes(
+                _viewPackedData(ownerData, MPOS_VOTES, MSZ_VOTES)
+            ))
+        );
+        assembly {
+            let dst := add(b, 1004)
+            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), attribute2))
+        }
+
+        // 2. All 3 byte attributes
+
+        // Country tag
+        bytes3 attribute3 = _vFlags[_viewPackedData(data, UPOS_CNTRYTAG, USZ_CNTRYTAG)];
+        uint256 _offset = attribute3[2] == 0x20 ? 0 : 1;
+        assembly {
+            let mask := not(shl(232, 0xFFFFFF))
+            let dst := add(b, 86)
+            mstore(dst, or(and(mload(dst), mask), attribute3))
+            dst := add(b, 175)
+            mstore(dst, or(and(mload(dst), mask), attribute3))
+            dst := add(b, 413)
+            mstore(dst, or(and(mload(dst), mask), attribute3))
+        }
+        
+        // Country tush
+        attribute3 = _vFlags[_viewPackedData(data, UPOS_CNTRYTUSH, USZ_CNTRYTUSH)];
+        assembly {
+            let mask := not(shl(232, 0xFFFFFF))
+            let dst := add(b, 219)
+            mstore(dst, or(and(mload(dst), mask), attribute3))
+            dst := add(b, 313)
+            mstore(dst, or(and(mload(dst), mask), attribute3))
+            dst := add(add(b, 422), _offset)
+            mstore(dst, or(and(mload(dst), mask), attribute3))
+        }
+
+        // Hang tag gen ordinal
+        attribute3 = Helpers.uintToOrdinal(
+            _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG)
+        );
+        assembly {
+            let mask := not(shl(232, 0xFFFFFF))
+            let dst := add(b, 82)
+            mstore(dst, or(and(mload(dst), mask), attribute3))
+            dst := add(b, 409)
+            mstore(dst, or(and(mload(dst), mask), attribute3))
+        }
+
+        // Tush tag gen ordinal
+        attribute3 =  Helpers.uintToOrdinal(
+            _viewPackedData(data, UPOS_GENTUSH, USZ_GENTUSH)
+        );
+        assembly {
+            let mask := not(shl(232, 0xFFFFFF))
+            let dst := add(b, 215)
+            mstore(dst, or(and(mload(dst), mask), attribute3))
+            dst := add(add(b, 418), _offset)
+            mstore(dst, or(and(mload(dst), mask), attribute3))
+        }
+
+        // Upgraded status
+        attribute3 = (
+            ownerData>>MPOS_UPGRADED & BOOL_MASK
+        ) == UPGRADED ? bytes3("YES") : bytes3("NO ");
+        assembly {
+            let dst := add(b, 536)
+            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), attribute3))
+        }
+
+        // Redeemed status
+        attribute3 = _viewPackedData(
+            ownerData,
+            MPOS_VALIDITY,
+            MSZ_VALIDITY
+        ) == REDEEMED ? bytes3("YES") : bytes3("NO ");
+        assembly {
+            let dst := add(b, 576)
+            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), attribute3))
+        }
+
+        // 3. All 4 byte attributes
+
+        // Edition mint id
+        bytes4 attribute4 = Helpers.remove4Null(
+            bytes4(Helpers.uintToBytes(
+                _viewPackedData(data, UPOS_EDITION_MINT_ID, USZ_EDITION_MINT_ID)
+            ))
+        );
+        assembly {
+            let dst := add(b, 921)
+            mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), attribute4))
+        }
+
+        // Max mint id (so far) of this edition
+        attribute4 = Helpers.remove4Null(
+            bytes4(Helpers.uintToBytes(
+                IC9Token(contractToken).getEditionMaxMintId(edition)
+            ))
+        );
+        assembly {
+            let dst := add(b, 938)
+            mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), attribute4))
+        }
+
+        uint256 _markerTush = _viewPackedData(data, UPOS_MARKERTUSH, USZ_MARKERTUSH);
+        if (_markerTush > 0 && _markerTush < 5) {
+            attribute4 = _vMarkers[_markerTush-1];
+            assembly {
+                let mask := not(shl(224, 0xFFFFFFFF))
+                let dst := add(b, 223)
+                mstore(dst, or(and(mload(dst), mask), attribute4))
+                dst := add(b, 362)
+                mstore(dst, or(and(mload(dst), mask), attribute4))
+                dst := add(add(b, 426), _offset)
+                mstore(dst, or(and(mload(dst), mask), attribute4))
+            }
+        }
+
+        // 4. All 1 byte attributes
+
+        // Type class and rarity tier
+        (uint256 _bgidx, bytes16 _rclass) = _getRarityTier(
+            _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG),
+            _viewPackedData(data, UPOS_RARITYTIER, USZ_RARITYTIER),
+            _viewPackedData(data, UPOS_SPECIAL, USZ_SPECIAL)
+        );
+
+        // Rarity tier
+        bytes1 attribute1 = _rclass[1];
+        assembly {
+            let mask := not(shl(248, 0xFF))
+            let dst := add(add(b, 416), _offset)
+            mstore(dst, or(and(mload(dst), mask), "/"))
+            dst := add(b, 621)
+            mstore(dst, or(and(mload(dst), mask), attribute1))
+            dst := add(b, 729)
+            mstore(dst, or(and(mload(dst), mask), attribute1))
+        }
+
+        // Type class
+        attribute1 = _rclass[0];
+        assembly {
+            let mask := not(shl(248, 0xFF))
+            let dst := add(b, 677)
+            mstore(dst, or(and(mload(dst), mask), attribute1))
+            dst := add(b, 728)
+            mstore(dst, or(and(mload(dst), mask), attribute1))
+        }
+
+        // 5. Remaining attributes
+
+        bytes10 attribute10 = hex3ToColor[hex3[_bgidx]];
+        assembly {
+            let dst := add(b, 769)
+            mstore(dst, or(and(mload(dst), not(shl(176, 0xFFFFFFFFFFFFFFFFFFFF))), attribute10))
+        }
+
+        attribute10 = bytes10(Helpers.uintToBytes(
+            _viewPackedData(data, UPOS_MINTSTAMP, USZ_TIMESTAMP)
+        ));
+        assembly {
+            let dst := add(b, 490)
+            mstore(dst, or(and(mload(dst), not(shl(176, 0xFFFFFFFFFFFFFFFFFFFF))), attribute10))
+        }
+
+        bytes7 bXferCounter = Helpers.remove7Null(
+            bytes7(Helpers.uintToBytes(
+                _viewPackedData(ownerData, MPOS_XFER_COUNTER, MSZ_XFER_COUNTER)
+            ))
+        );
+        assembly {
+            let dst := add(b, 1062)
+            mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), bXferCounter))
+        }
+    }
+
     /**
      * @dev Constructs the json string portion containing the external_url, description, 
      * and name parts.
      */
-    function metaNameDesc(uint256 tokenId)
-    external pure
-    returns(string memory) {
+    function _metaDesc(uint256 tokenId)
+    private pure
+    returns(bytes memory) {
         bytes6 b6TokenId = Helpers.tokenIdToBytes(tokenId);
 
         bytes memory _datap1 = '{'
@@ -63,184 +315,67 @@ contract C9MetaData is C9Shared, C9Context {
             mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), b6TokenId))
         }
 
-        return string(bytes.concat(
+        return bytes.concat(
             _datap1,
             sTokenId,
             _datap2,
             sTokenId,
             _datap3
-        ));
+        );
     }
 
-    /**
-     * @dev Constructs the json string containing the attributes of the token.
-     * Bytes2, 3, etc are reused to save on stack space.
-     */
-    function metaAttributes(uint256 data, uint256 ownerData)
+    function b64Image(uint256 tokenId, uint256 ownerData, uint256 tokenData, uint256 codeData)
+    public view
+    returns (bytes memory) {
+        return Base64.encode(svgImage(tokenId, ownerData, tokenData, codeData));
+    }
+
+    function _svgMetaData(uint256 tokenId, uint256 ownerData, uint256 tokenData, uint256 codeData)
+    private view
+    returns (bytes memory) {
+        return Base64.encode(
+            bytes.concat(
+                _metaDesc(tokenId),
+                _metaAttributes(tokenData, ownerData),
+                '"image":"data:image/svg+xml;base64,',
+                b64Image(tokenId, ownerData, tokenData, codeData),
+                '"}'
+            )
+        );
+    }
+
+    function _imgMetaData(uint256 tokenId, uint256 ownerData, uint256 tokenData)
+    private view
+    returns (bytes memory) {
+        uint256 viewIndex = _currentVId(tokenData) >= REDEEMED ? URI1 : URI0;
+        bytes memory image = abi.encodePacked(
+            ',"image":"',
+            IC9Token(contractToken).baseURIArray(viewIndex),
+            Helpers.tokenIdToBytes(tokenId),
+            '.png"}'
+        );
+        return bytes.concat(
+            _metaDesc(tokenId),
+            _metaAttributes(tokenData, ownerData),
+            image
+        );
+    }
+
+    function metaData(uint256 tokenId, uint256 ownerData, uint256 tokenData, uint256 codeData)
     external view
-    returns (bytes memory b) {
-        b = '","attributes":['
-            '{"trait_type":"Hang Tag Gen","value":"   "},'
-            '{"trait_type":"Hang Tag Country","value":"   "},'
-            '{"trait_type":"Hang Combo","value":"       "},'
-            '{"trait_type":"Tush Tag Gen","value":"   "},'
-            '{"trait_type":"Tush Tag Country","value":"   "},'
-            '{"trait_type":"Tush Special","value":"NONE"},'
-            '{"trait_type":"Tush Combo","value":"            "},'
-            '{"trait_type":"Hang Tush Combo","value":"                      "},'
-            '{"trait_type":"C9 Rarity Class","value":"  "},'
-            '{"display_type":"number","trait_type":"Edition","value":  ,"max_value":99},'
-            '{"display_type":"number","trait_type":"Edition Mint ID","value":     },'
-            '{"trait_type":"Upgraded","value":"   "},'
-            '{"trait_type":"Background","value":"          "},'
-            '{"trait_type":"Redeemed","value":"   "},'
-            '{"display_type":"boost_number","trait_type":"Votes","value":  },'
-            '{"trait_type":"Transfer Count","value":      ,"max_value":1048575},'
+    returns (bytes memory) {
+        // If SVG only, return SVG
+        if (IC9Token(contractToken).svgOnly()) return _svgMetaData(tokenId, ownerData, tokenData, codeData);
+        // If upgraded, but not set to external view, return SVG
+        bool _externalView = (tokenData>>MPOS_DISPLAY & BOOL_MASK) == EXTERNAL_IMG;
+        if (!_externalView) return _svgMetaData(tokenId, ownerData, tokenData, codeData); 
+        // If upgraded and set to external, return external image
+        return _imgMetaData(tokenId, ownerData, tokenData);
+    }
 
-            ']}';
-
-        // 1. All the 3 byte attributes
-        
-        bytes3 attribute3 = Helpers.uintToOrdinal(
-            _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG)
-        );
-        assembly {
-            let dst := add(b, 86)
-            let mask := not(shl(232, 0xFFFFFF))
-            mstore(dst, or(and(mload(dst), mask), attribute3))
-            dst := add(b, 176)
-            mstore(dst, or(and(mload(dst), mask), attribute3))
-            dst := add(b, 415)
-            mstore(dst, or(and(mload(dst), mask), attribute3))
-        }
-
-        attribute3 = _vFlags[_viewPackedData(data, UPOS_CNTRYTAG, USZ_CNTRYTAG)];
-        uint256 _offset = attribute3[2] == 0x20 ? 0 : 1;
-        assembly {
-            let dst := add(b, 134)
-            let mask := not(shl(232, 0xFFFFFF))
-            mstore(dst, or(and(mload(dst), mask), attribute3))
-            dst := add(b, 180)
-            mstore(dst, or(and(mload(dst), mask), attribute3))
-            dst := add(b, 419)
-            mstore(dst, or(and(mload(dst), mask), attribute3))
-        }
-
-        attribute3 =  Helpers.uintToOrdinal(
-            _viewPackedData(data, UPOS_GENTUSH, USZ_GENTUSH)
-        );
-        assembly {
-            let dst := add(b, 224)
-            let mask := not(shl(232, 0xFFFFFF))
-            mstore(dst, or(and(mload(dst), mask), attribute3))
-            dst := add(b, 359)
-            mstore(dst, or(and(mload(dst), mask), attribute3))
-            dst := add(add(b, 424), _offset)
-            mstore(dst, or(and(mload(dst), mask), attribute3))
-        }
-
-        attribute3 = _vFlags[_viewPackedData(data, UPOS_CNTRYTUSH, USZ_CNTRYTUSH)];
-        assembly {
-            let dst := add(b, 272)
-            let mask := not(shl(232, 0xFFFFFF))
-            mstore(dst, or(and(mload(dst), mask), attribute3))
-            dst := add(b, 363)
-            mstore(dst, or(and(mload(dst), mask), attribute3))
-            dst := add(add(b, 428), _offset)
-            mstore(dst, or(and(mload(dst), mask), attribute3))
-        }
-
-        attribute3 = (
-            ownerData>>MPOS_UPGRADED & BOOL_MASK
-        ) == UPGRADED ? bytes3("YES") : bytes3("NO ");
-        assembly {
-            let dst := add(b, 650)
-            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), attribute3))
-        }
-
-        attribute3 = _viewPackedData(
-            ownerData,
-            MPOS_VALIDITY,
-            MSZ_VALIDITY
-        ) == REDEEMED ? bytes3("YES") : bytes3("NO ");
-        assembly {
-            let dst := add(b, 739)
-            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), attribute3))
-        }
-
-        // 2. All the 4 byte attributes
-
-        bytes4 attribute4 = Helpers.flip4Space(bytes4(Helpers.uintToBytes(
-            _viewPackedData(data, UPOS_EDITION_MINT_ID, USZ_EDITION_MINT_ID)
-        )));
-        assembly {
-            let dst := add(b, 610)
-            mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), attribute4))
-        }
-
-        uint256 _markerTush = _viewPackedData(data, UPOS_MARKERTUSH, USZ_MARKERTUSH);
-        if (_markerTush > 0 && _markerTush < 5) {
-            attribute4 = _vMarkers[_markerTush-1];
-            assembly {
-                let dst := add(b, 316)
-                let mask := not(shl(224, 0xFFFFFFFF))
-                mstore(dst, or(and(mload(dst), mask), attribute4))
-                dst := add(b, 367)
-                mstore(dst, or(and(mload(dst), mask), attribute4))
-                dst := add(add(b, 432), _offset)
-                mstore(dst, or(and(mload(dst), mask), attribute4))
-            }
-        }
-
-        // 3. All the 2 byte attributes
-
-        bytes2 attribute2 = Helpers.remove2Null(bytes2(Helpers.uintToBytes(
-            _viewPackedData(data, UPOS_EDITION, USZ_EDITION)
-        )));
-        assembly {
-            let dst := add(b, 542)
-            mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), attribute2))
-        }
-
-        attribute2 = bytes2(Helpers.uintToBytes(_viewPackedData(ownerData, MPOS_VOTES, MSZ_VOTES)));
-        assembly {
-            let dst := add(b, 810)
-            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), attribute2))
-        }
-
-        // 4. Remaining attributes
-
-        (uint256 _bgidx, bytes16 rclass) = _getRarityTier(
-            _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG),
-            _viewPackedData(data, UPOS_RARITYTIER, USZ_RARITYTIER),
-            _viewPackedData(data, UPOS_SPECIAL, USZ_SPECIAL)
-        );
-        bytes10 bgcolor = hex3ToColor[hex3[_bgidx]];
-
-        bytes32 _bXferCounter = Helpers.uintToBytes(
-            _viewPackedData(ownerData, MPOS_XFER_COUNTER, MSZ_XFER_COUNTER)
-        );
-        bytes memory xferCounter = "      ";
-        for (uint256 i; i<6;) {
-            if (_bXferCounter[i] == 0x00) {
-                break;
-            }
-            xferCounter[i] = _bXferCounter[i];
-            unchecked {++i;}
-        }
-
-        assembly {
-            let dst := add(add(b, 422), _offset)
-            mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "/"))
-            dst := add(b, 481)
-            let mask := shl(240, 0xFFFF)
-            let srcpart := and(rclass, mask)
-            let destpart := and(mload(dst), not(mask))
-            mstore(dst, or(destpart, srcpart))
-            dst := add(b, 692)
-            mstore(dst, or(and(mload(dst), not(shl(176, 0xFFFFFFFFFFFFFFFFFFFF))), bgcolor))
-            dst := add(b, 853)
-            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), xferCounter))
-        }
+    function svgImage(uint256 tokenId, uint256 ownerData, uint256 tokenData, uint256 codeData)
+    public view
+    returns (bytes memory) {
+        return IC9SVG(contractSVG).svgImage(tokenId, ownerData, tokenData, codeData);
     }
 }

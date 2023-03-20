@@ -5,19 +5,19 @@ pragma solidity >=0.8.17;
 /// @author Brecht Devos - <brecht@loopring.org>
 /// @notice Provides a function for encoding some bytes in base64
 library Base64 {
-    string internal constant TABLE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    bytes internal constant TABLE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
-    function encode(bytes memory data) internal pure returns (string memory) {
+    function encode(bytes memory data) internal pure returns (bytes memory) {
         if (data.length == 0) return '';
         
         // load the table into memory
-        string memory table = TABLE;
+        bytes memory table = TABLE;
 
         // multiply by 4/3 rounded up
         uint256 encodedLen = 4 * ((data.length + 2) / 3);
 
         // add some extra buffer at the end required for the writing
-        string memory result = new string(encodedLen + 32);
+        bytes memory result = new bytes(encodedLen + 32);
 
         assembly {
             // set the actual output length
