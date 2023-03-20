@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
+import "./abstract/C9Errors.sol";
 import "./abstract/C9Shared.sol";
 import "./interfaces/IC9SVG2.sol";
 import "./interfaces/IC9Token.sol";
@@ -10,12 +11,31 @@ import "./utils/Helpers.sol";
 
 contract C9MetaData is C9Shared, C9Context {
 
+    address private _owner;
     address public contractSVG;
     address public immutable contractToken;
 
     constructor (address _contractSVG, address _contractToken) {
+        _owner = msg.sender;
         contractSVG = _contractSVG;
         contractToken = _contractToken;
+    }
+
+    function _imgMetaData(uint256 tokenId, uint256 ownerData, uint256 tokenData)
+    private view
+    returns (bytes memory) {
+        uint256 viewIndex = _currentVId(tokenData) >= REDEEMED ? URI1 : URI0;
+        bytes memory image = abi.encodePacked(
+            ',"image":"',
+            IC9Token(contractToken).baseURIArray(viewIndex),
+            Helpers.tokenIdToBytes(tokenId),
+            '.png"}'
+        );
+        return bytes.concat(
+            _metaDesc(tokenId),
+            _metaAttributes(tokenData, ownerData),
+            image
+        );
     }
 
     /**
@@ -324,12 +344,6 @@ contract C9MetaData is C9Shared, C9Context {
         );
     }
 
-    function b64Image(uint256 tokenId, uint256 ownerData, uint256 tokenData, uint256 codeData)
-    public view
-    returns (bytes memory) {
-        return Base64.encode(svgImage(tokenId, ownerData, tokenData, codeData));
-    }
-
     function _svgMetaData(uint256 tokenId, uint256 ownerData, uint256 tokenData, uint256 codeData)
     private view
     returns (bytes memory) {
@@ -344,21 +358,10 @@ contract C9MetaData is C9Shared, C9Context {
         );
     }
 
-    function _imgMetaData(uint256 tokenId, uint256 ownerData, uint256 tokenData)
-    private view
+    function b64Image(uint256 tokenId, uint256 ownerData, uint256 tokenData, uint256 codeData)
+    public view
     returns (bytes memory) {
-        uint256 viewIndex = _currentVId(tokenData) >= REDEEMED ? URI1 : URI0;
-        bytes memory image = abi.encodePacked(
-            ',"image":"',
-            IC9Token(contractToken).baseURIArray(viewIndex),
-            Helpers.tokenIdToBytes(tokenId),
-            '.png"}'
-        );
-        return bytes.concat(
-            _metaDesc(tokenId),
-            _metaAttributes(tokenData, ownerData),
-            image
-        );
+        return Base64.encode(svgImage(tokenId, ownerData, tokenData, codeData));
     }
 
     function metaData(uint256 tokenId, uint256 ownerData, uint256 tokenData, uint256 codeData)
@@ -371,6 +374,17 @@ contract C9MetaData is C9Shared, C9Context {
         if (!_externalView) return _svgMetaData(tokenId, ownerData, tokenData, codeData); 
         // If upgraded and set to external, return external image
         return _imgMetaData(tokenId, ownerData, tokenData);
+    }
+
+    /**
+     * @dev Sets the SVG display contract address.
+     */
+    function setContractSVG(address _contractSVG)
+    external {
+        if (msg.sender != _owner) {
+            revert Unauthorized();
+        }
+        contractSVG = _contractSVG;
     }
 
     function svgImage(uint256 tokenId, uint256 ownerData, uint256 tokenData, uint256 codeData)

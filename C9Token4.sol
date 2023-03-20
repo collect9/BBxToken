@@ -34,7 +34,6 @@ contract C9Token is ERC721IdEnumBasic {
      */
     address private contractMeta;
     address private contractRedeemer;
-    address private contractSVG;
     address private contractUpgrader;
     address private contractVH;
 
@@ -478,12 +477,6 @@ contract C9Token is ERC721IdEnumBasic {
         return _baseURIArray[index];
     }
 
-    function svgOnly()
-    external view
-    returns (bool) {
-        return _svgOnly;
-    }
-
     /**
      * @dev Token burning. This option is not available for live 
      * tokens, or with those that have a status below REDEEMED.
@@ -572,10 +565,9 @@ contract C9Token is ERC721IdEnumBasic {
      */
     function getContracts()
     external view
-    returns(address meta, address redeemer, address svg, address upgrader, address vH) {
+    returns(address meta, address redeemer, address upgrader, address vH) {
         meta = contractMeta;
         redeemer = contractRedeemer;
-        svg = contractSVG;
         upgrader = contractUpgrader;
         vH = contractVH;
     }
@@ -904,16 +896,6 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Sets the SVG display contract address.
-     */
-    function setContractSVG(address _address)
-    external
-    onlyRole(DEFAULT_ADMIN_ROLE)
-    addressNotSame(contractSVG, _address) {
-        contractSVG = _address;
-    }
-
-    /**
      * @dev Sets the upgrader contract address.
      */
     function setContractUpgrader(address _address)
@@ -1082,6 +1064,15 @@ contract C9Token is ERC721IdEnumBasic {
             BOOL_MASK
         );
         emit MetadataUpdate(tokenId);
+    }
+
+    /**
+     * @dev Returns if the contract is set to SVGonly mode.
+     */
+    function svgOnly()
+    external view
+    returns (bool) {
+        return _svgOnly;
     }
 
     /**
