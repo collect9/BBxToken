@@ -60,11 +60,6 @@ contract C9Token is ERC721IdEnumBasic {
     uint24[] private _burnedTokens;
     uint256 private _preRedeemablePeriod; //seconds
     uint24[] private _redeemedTokens;
-
-    /**
-     * @dev Flag to enable or disable reserved space storage.
-     */
-    bool private _reservedOpen;
     
     /**
      * @dev Mappings that hold all of the token info required to 
@@ -1092,20 +1087,6 @@ contract C9Token is ERC721IdEnumBasic {
                 _cTokenData[tokenId]
             )
         );
-    }
-
-    /**
-     * @dev Flag that sets global toggle to freeze redemption. 
-     * Users may still cancel redemption and unlock their 
-     * token if in the process.
-     */
-    function toggleReserved(bool toggle)
-    external
-    onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (_reservedOpen == toggle) {
-            revert BoolAlreadySet();
-        }
-        _reservedOpen = toggle;
     }
 
     /**
