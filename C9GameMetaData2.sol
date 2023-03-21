@@ -2,6 +2,7 @@
 pragma solidity >=0.8.17;
 import "./abstract/C9Errors.sol";
 import "./abstract/C9Shared.sol";
+import "./interfaces/IC9MetaData.sol";
 import "./interfaces/IC9SVG2.sol";
 import "./interfaces/IC9Token.sol";
 
@@ -9,7 +10,7 @@ import "./utils/Base64.sol";
 import "./utils/C9Context.sol";
 import "./utils/Helpers.sol";
 
-contract C9MetaData is C9Shared, C9Context {
+contract C9MetaData is IC9MetaData, C9Shared, C9Context {
 
     address private _owner;
     address public contractSVG;
@@ -45,6 +46,7 @@ contract C9MetaData is C9Shared, C9Context {
     function _metaAttributes(uint256 data, uint256 ownerData)
     private view
     returns (bytes memory b) {
+        uint256 mask;
         b = '","attributes":['
             '{"trait_type":"Hang Tag","value":"       "},'
             '{"trait_type":"Hang Tag Gen","value":  },'
@@ -67,7 +69,7 @@ contract C9MetaData is C9Shared, C9Context {
             '{"trait_type":"Transfer Count","value":       ,"max_value":1048575}],';
 
         // 1. All 2 byte attributes
-
+    
         // Edition number
         uint256 edition = _viewPackedData(data, UPOS_EDITION, USZ_EDITION);
         bytes2 attribute2 = Helpers.remove2Null(
@@ -76,8 +78,9 @@ contract C9MetaData is C9Shared, C9Context {
             ))
         );
         assembly {
+            mask := not(shl(240, 0xFFFF))
             let dst := add(b, 838)
-            mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), attribute2))
+            mstore(dst, or(and(mload(dst), mask), attribute2))
         }
 
         // Hang tag gen number
@@ -88,7 +91,7 @@ contract C9MetaData is C9Shared, C9Context {
         );
         assembly {
             let dst := add(b, 129)
-            mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), attribute2))
+            mstore(dst, or(and(mload(dst), mask), attribute2))
         }
 
         // Tush tag gen number
@@ -99,7 +102,7 @@ contract C9MetaData is C9Shared, C9Context {
         );
         assembly {
             let dst := add(b, 267)
-            mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), attribute2))
+            mstore(dst, or(and(mload(dst), mask), attribute2))
         }
 
         // Number of votes
@@ -110,7 +113,7 @@ contract C9MetaData is C9Shared, C9Context {
         );
         assembly {
             let dst := add(b, 1004)
-            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), attribute2))
+            mstore(dst, or(and(mload(dst), mask), attribute2))
         }
 
         // 2. All 3 byte attributes
@@ -119,7 +122,7 @@ contract C9MetaData is C9Shared, C9Context {
         bytes3 attribute3 = _vFlags[_viewPackedData(data, UPOS_CNTRYTAG, USZ_CNTRYTAG)];
         uint256 _offset = attribute3[2] == 0x20 ? 0 : 1;
         assembly {
-            let mask := not(shl(232, 0xFFFFFF))
+            mask := not(shl(232, 0xFFFFFF))
             let dst := add(b, 86)
             mstore(dst, or(and(mload(dst), mask), attribute3))
             dst := add(b, 175)
@@ -131,7 +134,6 @@ contract C9MetaData is C9Shared, C9Context {
         // Country tush
         attribute3 = _vFlags[_viewPackedData(data, UPOS_CNTRYTUSH, USZ_CNTRYTUSH)];
         assembly {
-            let mask := not(shl(232, 0xFFFFFF))
             let dst := add(b, 219)
             mstore(dst, or(and(mload(dst), mask), attribute3))
             dst := add(b, 313)
@@ -145,7 +147,6 @@ contract C9MetaData is C9Shared, C9Context {
             _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG)
         );
         assembly {
-            let mask := not(shl(232, 0xFFFFFF))
             let dst := add(b, 82)
             mstore(dst, or(and(mload(dst), mask), attribute3))
             dst := add(b, 409)
@@ -157,7 +158,6 @@ contract C9MetaData is C9Shared, C9Context {
             _viewPackedData(data, UPOS_GENTUSH, USZ_GENTUSH)
         );
         assembly {
-            let mask := not(shl(232, 0xFFFFFF))
             let dst := add(b, 215)
             mstore(dst, or(and(mload(dst), mask), attribute3))
             dst := add(add(b, 418), _offset)
@@ -170,7 +170,7 @@ contract C9MetaData is C9Shared, C9Context {
         ) == UPGRADED ? bytes3("YES") : bytes3("NO ");
         assembly {
             let dst := add(b, 536)
-            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), attribute3))
+            mstore(dst, or(and(mload(dst), mask), attribute3))
         }
 
         // Redeemed status
@@ -181,7 +181,7 @@ contract C9MetaData is C9Shared, C9Context {
         ) == REDEEMED ? bytes3("YES") : bytes3("NO ");
         assembly {
             let dst := add(b, 576)
-            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), attribute3))
+            mstore(dst, or(and(mload(dst), mask), attribute3))
         }
 
         // 3. All 4 byte attributes
@@ -193,8 +193,9 @@ contract C9MetaData is C9Shared, C9Context {
             ))
         );
         assembly {
+            mask := not(shl(224, 0xFFFFFFFF))
             let dst := add(b, 921)
-            mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), attribute4))
+            mstore(dst, or(and(mload(dst), mask), attribute4))
         }
 
         // Max mint id (so far) of this edition
@@ -205,14 +206,14 @@ contract C9MetaData is C9Shared, C9Context {
         );
         assembly {
             let dst := add(b, 938)
-            mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), attribute4))
+            mstore(dst, or(and(mload(dst), mask), attribute4))
         }
 
+        // Marker tush if present
         uint256 _markerTush = _viewPackedData(data, UPOS_MARKERTUSH, USZ_MARKERTUSH);
         if (_markerTush > 0 && _markerTush < 5) {
             attribute4 = _vMarkers[_markerTush-1];
             assembly {
-                let mask := not(shl(224, 0xFFFFFFFF))
                 let dst := add(b, 223)
                 mstore(dst, or(and(mload(dst), mask), attribute4))
                 dst := add(b, 362)
@@ -222,7 +223,7 @@ contract C9MetaData is C9Shared, C9Context {
             }
         }
 
-        // 4. All 1 byte attributes
+         // 4. Remaining attributes
 
         // Type class and rarity tier
         (uint256 _bgidx, bytes16 _rclass) = _getRarityTier(
@@ -231,10 +232,38 @@ contract C9MetaData is C9Shared, C9Context {
             _viewPackedData(data, UPOS_SPECIAL, USZ_SPECIAL)
         );
 
+        // Background
+        bytes10 attribute10 = hex3ToColor[hex3[_bgidx]];
+        assembly {
+            mask := not(shl(176, 0xFFFFFFFFFFFFFFFFFFFF))
+            let dst := add(b, 769)
+            mstore(dst, or(and(mload(dst), mask), attribute10))
+        }
+
+        // Minting timestamp
+        attribute10 = bytes10(Helpers.uintToBytes(
+            _viewPackedData(data, UPOS_MINTSTAMP, USZ_TIMESTAMP)
+        ));
+        assembly {
+            let dst := add(b, 490)
+            mstore(dst, or(and(mload(dst), mask), attribute10))
+        }
+        
+        // Transfer counter
+        bytes7 bXferCounter = Helpers.remove7Null(
+            bytes7(Helpers.uintToBytes(
+                _viewPackedData(ownerData, MPOS_XFER_COUNTER, MSZ_XFER_COUNTER)
+            ))
+        );
+        assembly {
+            let dst := add(b, 1062)
+            mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), bXferCounter))
+        }
+
         // Rarity tier
         bytes1 attribute1 = _rclass[1];
         assembly {
-            let mask := not(shl(248, 0xFF))
+            mask := not(shl(248, 0xFF))
             let dst := add(add(b, 416), _offset)
             mstore(dst, or(and(mload(dst), mask), "/"))
             dst := add(b, 621)
@@ -246,38 +275,11 @@ contract C9MetaData is C9Shared, C9Context {
         // Type class
         attribute1 = _rclass[0];
         assembly {
-            let mask := not(shl(248, 0xFF))
             let dst := add(b, 677)
             mstore(dst, or(and(mload(dst), mask), attribute1))
             dst := add(b, 728)
             mstore(dst, or(and(mload(dst), mask), attribute1))
-        }
-
-        // 5. Remaining attributes
-
-        bytes10 attribute10 = hex3ToColor[hex3[_bgidx]];
-        assembly {
-            let dst := add(b, 769)
-            mstore(dst, or(and(mload(dst), not(shl(176, 0xFFFFFFFFFFFFFFFFFFFF))), attribute10))
-        }
-
-        attribute10 = bytes10(Helpers.uintToBytes(
-            _viewPackedData(data, UPOS_MINTSTAMP, USZ_TIMESTAMP)
-        ));
-        assembly {
-            let dst := add(b, 490)
-            mstore(dst, or(and(mload(dst), not(shl(176, 0xFFFFFFFFFFFFFFFFFFFF))), attribute10))
-        }
-
-        bytes7 bXferCounter = Helpers.remove7Null(
-            bytes7(Helpers.uintToBytes(
-                _viewPackedData(ownerData, MPOS_XFER_COUNTER, MSZ_XFER_COUNTER)
-            ))
-        );
-        assembly {
-            let dst := add(b, 1062)
-            mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), bXferCounter))
-        }
+        }  
     }
 
     /**
@@ -360,12 +362,14 @@ contract C9MetaData is C9Shared, C9Context {
 
     function b64Image(uint256 tokenId, uint256 ownerData, uint256 tokenData, uint256 codeData)
     public view
+    override
     returns (bytes memory) {
         return Base64.encode(svgImage(tokenId, ownerData, tokenData, codeData));
     }
 
     function metaData(uint256 tokenId, uint256 ownerData, uint256 tokenData, uint256 codeData)
     external view
+    override
     returns (bytes memory) {
         // If SVG only, return SVG
         if (IC9Token(contractToken).svgOnly()) return _svgMetaData(tokenId, ownerData, tokenData, codeData);
@@ -389,6 +393,7 @@ contract C9MetaData is C9Shared, C9Context {
 
     function svgImage(uint256 tokenId, uint256 ownerData, uint256 tokenData, uint256 codeData)
     public view
+    override
     returns (bytes memory) {
         return IC9SVG(contractSVG).svgImage(tokenId, ownerData, tokenData, codeData);
     }

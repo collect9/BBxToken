@@ -152,10 +152,11 @@ contract C9SVG is C9Context, C9Shared {
     function _addIds(bytes6 b6TokenId, bytes memory b)
     private pure {
         assembly {
+            let mask := not(shl(208, 0xFFFFFFFFFFFF))
             let dst := add(b, 364)
-            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), b6TokenId))
+            mstore(dst, or(and(mload(dst), mask), b6TokenId))
             dst := add(b, 875)
-            mstore(dst, or(and(mload(dst), not(shl(208, 0xFFFFFFFFFFFF))), b6TokenId))
+            mstore(dst, or(and(mload(dst), mask), b6TokenId))
         }
     }
 
@@ -249,11 +250,12 @@ contract C9SVG is C9Context, C9Shared {
             let dst := add(b, 298)
             mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _namesize))
             // Colors
+            let mask := not(shl(232, 0xFFFFFF))
             dst := add(b, 495)
-            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _rgc2))
+            mstore(dst, or(and(mload(dst), mask), _rgc2))
             // Royalty
             dst := add(b, 1415)
-            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _royalty))
+            mstore(dst, or(and(mload(dst), mask), _royalty))
             // Classer
             dst := add(b, 1501)
             mstore(dst, or(and(mload(dst), not(shl(128, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), _classer))
@@ -269,10 +271,11 @@ contract C9SVG is C9Context, C9Shared {
             dst := add(b, 1573)
             mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), __mintid))
             // Gen Country Text
+            mask := not(shl(200, 0xFFFFFFFFFFFFFF))
             dst := add(b, 1786)
-            mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tagtxt))
+            mstore(dst, or(and(mload(dst), mask), _tagtxt))
             dst := add(b, 1796)
-            mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), _tushtxt))
+            mstore(dst, or(and(mload(dst), mask), _tushtxt))
         }
     }
 
@@ -287,7 +290,6 @@ contract C9SVG is C9Context, C9Shared {
     returns (bytes memory e) {
         if (markerTush > 0) {
             e = "<text x='555' y='726' class='c9Ts c9Tb' style='opacity:0.8;font-family:\"Brush Script MT\",cursive;fill:#222;' text-anchor='middle'>4L  </text>";
-
             bytes4 x = _vMarkers[markerTush-1];
             bytes4 y = x == bytes4("CE  ") ?
                 bytes4("c e ") :
@@ -330,7 +332,6 @@ contract C9SVG is C9Context, C9Shared {
     function _addValidityInfo(uint256 tokenId, uint256 ownerData, bytes memory b)
     private view {
         uint256 _validityIdx = _currentVId(ownerData);
-
         bytes3 color;
         bytes16 validityText = _vValidity[_validityIdx % 5];
         uint256 _locked;
@@ -364,16 +365,17 @@ contract C9SVG is C9Context, C9Shared {
                 mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), "IN"))
             }
             // INVALID => LOCKED
+            let mask := not(shl(200, 0xFFFFFFFFFFFFFF))
             if eq(_locked, 1) {
                 dst := add(b, 1349)
-                mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), " LOCKED"))
+                mstore(dst, or(and(mload(dst), mask), " LOCKED"))
             }
             // INVALID => DEAD (grayscaled)
             if gt(_validityIdx, 3) {
                 dst := add(b, 790)
                 mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), "0"))
                 dst := add(b, 1349)
-                mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), "   DEAD"))
+                mstore(dst, or(and(mload(dst), mask), "   DEAD"))
             }
             // Add validity text next to status
             dst := add(b, 1357)
@@ -390,9 +392,6 @@ contract C9SVG is C9Context, C9Shared {
     function _addVariableBytes(uint256 tokenId, bytes6 b6TokenId, uint256 tokenData, uint256 barCodeData, uint256 qrCodeData, string memory name)
     private view
     returns(bytes memory vb) {
-        
-        // bytes memory _qrCodeSVG = qrCodeSVG(qrCodeData);
-    
         vb = bytes.concat(
             bytes(name), "</text></g>",
             _qrCodeSVGGroup(qrCodeData),
@@ -489,11 +488,12 @@ contract C9SVG is C9Context, C9Shared {
         bytes3 _cntrytag = _vFlags[_tag];
         bytes memory _tmpout = "       ";
         assembly {
+            let mask := not(shl(232, 0xFFFFFF))
             let dst := add(_tmpout, 32)
-            mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), __gentag))
+            mstore(dst, or(and(mload(dst), mask), __gentag))
             if lt(_tag, 7) {
                 dst := add(_tmpout, 36)
-                mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), _cntrytag))
+                mstore(dst, or(and(mload(dst), mask), _cntrytag))
             }
         }
         return bytes7(_tmpout);
@@ -551,12 +551,13 @@ contract C9SVG is C9Context, C9Shared {
         bytes32 _bdays = Helpers.uintToBytes(_ndays);
         bytes memory _periods = new bytes(6);
         assembly {
+            let mask := not(shl(240, 0xFFFF))
             let dst := add(_periods, 32)
-            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _byrs))
+            mstore(dst, or(and(mload(dst), mask), _byrs))
             dst := add(_periods, 34)
-            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _bmonths))
+            mstore(dst, or(and(mload(dst), mask), _bmonths))
             dst := add(_periods, 36)
-            mstore(dst, or(and(mload(dst), not(shl(240, 0xFFFF))), _bdays))
+            mstore(dst, or(and(mload(dst), mask), _bdays))
         }
         Helpers.flipSpace(_periods, 0);
         Helpers.flipSpace(_periods, 2);
