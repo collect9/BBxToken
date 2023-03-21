@@ -5,6 +5,7 @@ import "./interfaces/IC9Token.sol";
 import "./utils/C9Context.sol";
 import "./utils/Helpers.sol";
 
+import "./svg/C9Backgrounds.sol";
 import "./svg/C9Logo.sol";
 import "./svg/C9Flags.sol";
 
@@ -120,11 +121,13 @@ contract C9SVG is C9Context, C9Shared {
                 "<text y='122' class='c9Tl c9Tb'>";
 
     address public immutable contractToken;
+    address private contractBackgrounds;
     address private contractFlags;
     address private contractLogo;
 
-    constructor (address _contractFlags, address _contractLogo, address _contractToken) {
+    constructor (address _contractBackgrounds, address _contractFlags, address _contractLogo, address _contractToken) {
         contractToken = _contractToken;
+        contractBackgrounds = _contractLogo;
         contractFlags = _contractFlags;
         contractLogo = _contractLogo;
     }
@@ -598,56 +601,9 @@ contract C9SVG is C9Context, C9Shared {
      * @dev Sets the background color and style based on inputs.
      */
     function _setBackground(uint256 genTag, uint256 specialTier, bytes memory b)
-    private pure {
-        bytes23[11] memory matrices = [
-            bytes23("1 0 0 0 1 0 1 0 0 1 1 0"), //g0
-            "1 1 0 0 1 1 1 0 0 1 1 1",  //g1
-            "0 0 0 0 1 0 1 0 0 1 1 0",  //g2
-            "1 0 0 0 1 0 0 0 0 1 0 0",  //g3
-            "0 0 0 0 1 0 0 0 0 1 0 0",  //g4
-            "0 0 0 0 1 0 0 0 0 1 0 0",  //g5
-            "0 0 0 0 1 1 0 0 0 1 1 1",  //spec
-            "1 0 0 1 1 1 0 0 0 1 1 0",  //emb
-            "0 0 0 0 1 0 0 0 0 1 0 0",  //odd
-            "1 0 0 0 1 0 0 0 0 1 1 0",  //finite
-            "0 1 0 0 1 0 0 1 0 1 1 0"   //proto
-        ];
-
-        bytes10[11] memory filters = [
-            bytes10("0 .0 .0 .9"), //g0
-            "1 .4 .1 .1", //g1
-            "5 .1 .1 .2", //g2
-            "2 .0 .0 .6", //g3
-            "0 .0 .0 .3", //g4
-            "0 .0 .0 .3", //g5
-            "9 .2 .2 .8", //spec
-            "5 .2 .8 .9", //emb
-            "9 .0 .0 .8", //odd
-            "8 .2 .8 .2", //finite
-            "9 .9 .9 .9" //proto
-        ];
-
-        bytes5[11] memory frequencies = [
-            bytes5("0.003"),
-            "0.006",
-            "0.002",
-            "0.004",
-            "0.206",
-            "2.006",
-            "0.002",
-            "0.001",
-            "0.008",
-            "0.001",
-            "0.003"
-        ];
-
-        bytes1[11] memory octaves = [bytes1("3"), "2", "1", "2", "1", "8", "1", "1", "1", "1", "8"];
-
-        bytes23 matrix = specialTier > 0 ? matrices[specialTier+5] : matrices[genTag];
-        bytes11 filter = specialTier > 0 ? filters[specialTier+5] : filters[genTag];
-        bytes5 freq = specialTier > 0 ? frequencies[specialTier+5] : frequencies[genTag];
-        bytes1 octave = specialTier > 0 ? octaves[specialTier+5] : octaves[genTag];
-
+    private view {
+        (bytes23 matrix, bytes11 filter, bytes5 freq, bytes1 octave) = 
+        C9Backgrounds(contractBackgrounds).getBackground(genTag, specialTier);
         assembly {
             let dst := add(b, 584)
             mstore(dst, or(and(mload(dst), not(shl(216, 0xFFFFFFFFFF))), freq))

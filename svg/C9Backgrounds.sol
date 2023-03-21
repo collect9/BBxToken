@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
 
+import "./../abstract/C9Errors.sol";
 import "./../utils/Helpers.sol";
 
 contract C9Backgrounds {
@@ -17,6 +18,23 @@ contract C9Backgrounds {
         _frequencyMaps = 3804199413314552966035659560963;
         _octaveMaps = 8869401141539;
         _owner = msg.sender;
+    }
+
+    modifier onlyOwner() {
+        if (msg.sender != _owner) {
+            revert Unauthorized();
+        }
+        _;
+    }
+
+    modifier newValueCheck(uint256 oldValue, uint256 newValue) {
+        if (newValue == 0) {
+            revert ZeroValueError();
+        }
+        if (newValue == oldValue) {
+            revert ValueAlreadySet();
+        }
+        _;
     }
 
     function _matrix(uint256 index)
@@ -96,5 +114,33 @@ contract C9Backgrounds {
         filter = bytes11(_filter(colorIndex));
         freq = bytes5(_frequency(colorIndex));
         octave = bytes1(_octave(colorIndex));
+    }
+
+    function setFilterMaps(uint256 value)
+    external
+    onlyOwner()
+    newValueCheck(_filterMaps, value) {
+        _filterMaps = value;
+    }
+
+    function setFrequencies(uint256 value)
+    external
+    onlyOwner()
+    newValueCheck(_frequencyMaps, value) {
+        _frequencyMaps = value;
+    }
+
+    function setMatrix(uint256 value)
+    external
+    onlyOwner()
+    newValueCheck(_bitMaps, value) {
+        _bitMaps = value;
+    }
+
+    function setOctave(uint256 value)
+    external
+    onlyOwner()
+    newValueCheck(_octaveMaps, value) {
+        _octaveMaps = value;
     }
 }
