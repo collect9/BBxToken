@@ -128,7 +128,7 @@ contract C9TestContract is C9Struct {
     function _checkOwnerParams(uint256 mintId)
     internal {
         (uint256 tokenId,) = _getTokenIdVotes(mintId);
-        uint256[8] memory _ownerParams = c9t.getOwnersParams(tokenId);
+        uint256[9] memory _ownerParams = c9t.getOwnersParams(tokenId);
         TokenData memory rawdata = _rawData[mintId];
 
         Assert.equal(0, _ownerParams[0], "Invalid xfer counter");
@@ -138,7 +138,8 @@ contract C9TestContract is C9Struct {
         Assert.equal(rawdata.display, _ownerParams[4], "Invalid display");
         Assert.equal(rawdata.locked, _ownerParams[5], "Invalid locked");
         Assert.equal(rawdata.insurance, _ownerParams[6], "Invalid insurance");
-        Assert.equal(rawdata.votes, _ownerParams[7], "Invalid votes");
+        Assert.equal(rawdata.royalty*10, _ownerParams[7], "Invalid royalty");
+        Assert.equal(rawdata.votes, _ownerParams[8], "Invalid votes");
     }
 
     /* @dev Returns number of votes for the minted token.

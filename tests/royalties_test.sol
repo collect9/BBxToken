@@ -10,7 +10,7 @@ contract RoyaltiesTest is C9TestContract {
     private {
         (address receiver, uint256 royalty) = c9t.royaltyInfo(tokenId, 10000);
         Assert.equal(receiver, royaltyReceiver, "Invalid royalty receiver");
-        Assert.equal(royalty, royaltyAmt*10, "Invalid royalty");
+        Assert.equal(royalty, royaltyAmt, "Invalid royalty");
     }
 
     function _checkRoyaltyInfo2(uint256 tokenId, uint256 royaltyAmt)
@@ -35,12 +35,12 @@ contract RoyaltiesTest is C9TestContract {
         (uint256 tokenId,) = _getTokenIdVotes(mintId);
 
         // Check initial royalties are correct
-        _checkRoyaltyInfo(tokenId, _rawData[mintId].royalty, c9tOwner);
-        _checkRoyaltyInfo2(tokenId, _rawData[mintId].royalty);
+        _checkRoyaltyInfo(tokenId, _rawData[mintId].royalty*10, c9tOwner);
+        _checkRoyaltyInfo2(tokenId, _rawData[mintId].royalty*10);
 
 
         address newReceiver = TestsAccounts.getAccount(3);
-        uint256 newRoyaltyAmt = 80;
+        uint256 newRoyaltyAmt = 800;
 
         // Set the new royalty for the tokens
         c9t.setTokenRoyalty(tokenId, newRoyaltyAmt, newReceiver);
