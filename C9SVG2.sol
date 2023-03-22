@@ -120,16 +120,25 @@ contract C9SVG is C9Context, C9Shared {
                 "<text y='69' class='c9Tm c9Tb'>        |        </text>"
                 "<text y='122' class='c9Tl c9Tb'>";
 
-    address public immutable contractToken;
+    address private _owner;
     address private contractBackgrounds;
     address private contractFlags;
     address private contractLogo;
+    address public immutable contractToken;
 
     constructor (address _contractBackgrounds, address _contractFlags, address _contractLogo, address _contractToken) {
-        contractToken = _contractToken;
-        contractBackgrounds = _contractLogo;
+        contractBackgrounds = _contractBackgrounds;
         contractFlags = _contractFlags;
         contractLogo = _contractLogo;
+        contractToken = _contractToken;
+        _owner = msg.sender;
+    }
+
+    modifier onlyOwner() {
+        if (msg.sender != _owner) {
+            revert Unauthorized();
+        }
+        _;
     }
 
     /**
@@ -215,8 +224,8 @@ contract C9SVG is C9Context, C9Shared {
      * @dev Adds various token info, and about as much as 
      * possible until the stack is full in this method.
      */
-    function _addTokenInfo(uint256 ownerData, uint256 data, uint256 validity, string memory _name, bytes memory b)
-    private view {
+    function _addTokenInfo(uint256 ownerData, uint256 data, string memory _name, bytes memory b)
+    private pure {
         bytes7 _tagtxt = _genTagsToAscii(
             _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG),
             _viewPackedData(data, UPOS_CNTRYTAG, USZ_CNTRYTAG)
@@ -245,7 +254,8 @@ contract C9SVG is C9Context, C9Shared {
             _viewPackedData(data, UPOS_RARITYTIER, USZ_RARITYTIER),
             _viewPackedData(data, UPOS_SPECIAL, USZ_SPECIAL)
         );
-        bytes3 _rgc2 = validity < 4 ? hex3[_bgidx] : bytes3("888");
+        unchecked {_bgidx *= 3;}
+        bytes3 _rgc2 = _currentVId(ownerData) < 4 ? _getHex3(_bgidx) : bytes3("888");
         bytes2 _namesize = _getNameSize(uint256(bytes(_name).length));
     
         assembly {
@@ -255,7 +265,7 @@ contract C9SVG is C9Context, C9Shared {
             // Colors
             let mask := not(shl(232, 0xFFFFFF))
             dst := add(b, 495)
-            mstore(dst, or(and(mload(dst), mask), _rgc2))
+            mstore(dst, or(and(_rgc2, not(mask)), mload(dst)))
             // Royalty
             dst := add(b, 1415)
             mstore(dst, or(and(mload(dst), mask), _royalty))
@@ -289,29 +299,31 @@ contract C9SVG is C9Context, C9Shared {
      * what type of tag is present based on the SVG display alone.
      */
     function _addTushMarker(uint256 markerTush, uint256 genTag)
-    private view
+    private pure
     returns (bytes memory e) {
         if (markerTush > 0) {
             e = "<text x='555' y='726' class='c9Ts c9Tb' style='opacity:0.8;font-family:\"Brush Script MT\",cursive;fill:#222;' text-anchor='middle'>4L  </text>";
-            bytes4 x = _vMarkers[markerTush-1];
+            bytes4 x = _getMarkerText(markerTush);
             bytes4 y = x == bytes4("CE  ") ?
                 bytes4("c e ") :
                 x == bytes4("EMBF") ?
                     bytes4("embF") :
                     x == bytes4("EMBS") ?
                         bytes4("embS") : x;
+            uint256 mask;
             assembly {
+                mask := not(shl(232, 0xFFFFFF))
                 let dst := add(e, 162)
                 mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), y))
                 switch genTag case 0 {
                     dst := add(e, 135)
-                    mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), "eee"))
+                    mstore(dst, or(and(mload(dst), mask), "eee"))
                 }
             }
             if (markerTush > 4) { // Korean bs on hang tag
                 assembly {
                     let dst := add(e, 41)
-                    mstore(dst, or(and(mload(dst), not(shl(232, 0xFFFFFF))), "75 "))
+                    mstore(dst, or(and(mload(dst), mask), "75 "))
                 }
             }
         }
@@ -336,7 +348,7 @@ contract C9SVG is C9Context, C9Shared {
     private view {
         uint256 _validityIdx = _currentVId(ownerData);
         bytes3 color;
-        bytes16 validityText = _vValidity[_validityIdx % 5];
+        bytes16 validityText = _getValidityText(_validityIdx % 5);
         uint256 _locked;
         if (_validityIdx == VALID) {
             bool _preRedeemable = IC9Token(contractToken).preRedeemable(tokenId);
@@ -486,9 +498,9 @@ contract C9SVG is C9Context, C9Shared {
      * based on input params `_gentag` and `_tag`.
      */
     function _genTagsToAscii(uint256 _gentag, uint256 _tag)
-    private view returns(bytes7) {
+    private pure returns(bytes7) {
         bytes3 __gentag = Helpers.uintToOrdinal(_gentag);
-        bytes3 _cntrytag = _vFlags[_tag];
+        bytes3 _cntrytag = _getFlagText(_tag);
         bytes memory _tmpout = "       ";
         assembly {
             let mask := not(shl(232, 0xFFFFFF))
@@ -602,17 +614,18 @@ contract C9SVG is C9Context, C9Shared {
      */
     function _setBackground(uint256 genTag, uint256 specialTier, bytes memory b)
     private view {
-        (bytes23 matrix, bytes11 filter, bytes5 freq, bytes1 octave) = 
+        (bytes32 matrix, bytes32 filter, bytes32 freq, bytes32 _octave) = 
         C9Backgrounds(contractBackgrounds).getBackground(genTag, specialTier);
+        bytes1 ocatave = bytes1(_octave);
         assembly {
             let dst := add(b, 584)
-            mstore(dst, or(and(mload(dst), not(shl(216, 0xFFFFFFFFFF))), freq))
+            mstore(dst, freq)
             dst := add(b, 603)
-            mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), octave))
-            dst := add(b, 680)
-            mstore(dst, or(and(mload(dst), not(shl(72, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF))), matrix))
+            mstore(dst, or(and(mload(dst), not(shl(248, 0xFF))), ocatave))
+            dst := add(b, 678)
+            mstore(dst, matrix)
             dst := add(b, 709)
-            mstore(dst, or(and(mload(dst), not(shl(176, 0xFFFFFFFFFFFFFFFFFFFF))), filter))
+            mstore(dst, filter)
         }
     }
 
@@ -733,6 +746,33 @@ contract C9SVG is C9Context, C9Shared {
     }
 
     /**
+     * @dev Sets the meta data contract address.
+     */
+    function setContractBackgrounds(address _address)
+    external
+    onlyOwner() {
+        contractBackgrounds = _address;
+    }
+
+    /**
+     * @dev Sets the meta data contract address.
+     */
+    function setContractFlags(address _address)
+    external
+    onlyOwner() {
+        contractFlags = _address;
+    }
+
+    /**
+     * @dev Sets the meta data contract address.
+     */
+    function setContractLogo(address _address)
+    external
+    onlyOwner() {
+        contractLogo = _address;
+    }
+
+    /**
      * @dev External function to call and return the SVG string built from `_token`  
      * and owner `_address`.
      */
@@ -745,7 +785,7 @@ contract C9SVG is C9Context, C9Shared {
 
         bytes memory bSVG = SVG_OPENER;
         _addIds(b6TokenId, bSVG);
-        _addTokenInfo(ownerData, tokenData, _currentVId(ownerData), name, bSVG);
+        _addTokenInfo(ownerData, tokenData, name, bSVG);
         _addAddress(IC9Token(contractToken).ownerOf(tokenId), bSVG);
         _addNFTAge(tokenData, bSVG);
         _addValidityInfo(tokenId, ownerData, bSVG);

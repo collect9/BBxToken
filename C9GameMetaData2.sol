@@ -119,7 +119,7 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
         // 2. All 3 byte attributes
 
         // Country tag
-        bytes3 attribute3 = _vFlags[_viewPackedData(data, UPOS_CNTRYTAG, USZ_CNTRYTAG)];
+        bytes3 attribute3 = bytes3(_getFlagText(_viewPackedData(data, UPOS_CNTRYTAG, USZ_CNTRYTAG)));
         uint256 _offset = attribute3[2] == 0x20 ? 0 : 1;
         assembly {
             mask := not(shl(232, 0xFFFFFF))
@@ -132,7 +132,7 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
         }
         
         // Country tush
-        attribute3 = _vFlags[_viewPackedData(data, UPOS_CNTRYTUSH, USZ_CNTRYTUSH)];
+        attribute3 = bytes3(_getFlagText(_viewPackedData(data, UPOS_CNTRYTUSH, USZ_CNTRYTUSH)));
         assembly {
             let dst := add(b, 219)
             mstore(dst, or(and(mload(dst), mask), attribute3))
@@ -212,7 +212,8 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
         // Marker tush if present
         uint256 _markerTush = _viewPackedData(data, UPOS_MARKERTUSH, USZ_MARKERTUSH);
         if (_markerTush > 0 && _markerTush < 5) {
-            attribute4 = _vMarkers[_markerTush-1];
+            // attribute4 = _vMarkers[_markerTush-1];
+            attribute4 = bytes4(_getMarkerText(_markerTush));
             assembly {
                 let dst := add(b, 223)
                 mstore(dst, or(and(mload(dst), mask), attribute4))
@@ -233,7 +234,7 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
         );
 
         // Background
-        bytes10 attribute10 = hex3ToColor[hex3[_bgidx]];
+        bytes10 attribute10 = _getColorText(_bgidx);
         assembly {
             mask := not(shl(176, 0xFFFFFFFFFFFFFFFFFFFF))
             let dst := add(b, 769)

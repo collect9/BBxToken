@@ -4,19 +4,24 @@ pragma solidity >=0.8.17;
 import "./../abstract/C9Errors.sol";
 import "./../utils/Helpers.sol";
 
+/*
+ * @dev Contract that controls background colors and filter 
+ * parameters of the SVG.
+ */
 contract C9Backgrounds {
 
-    address private _owner;
-    uint256 private _bitMaps;
+    uint256 private _rgbMaps;
     uint256 private _filterMaps;
     uint256 private _frequencyMaps;
-    uint256 private _octaveMaps;
+    
+    address private _owner;
+    uint96 private _octaveMaps;
 
     constructor() {
-        _bitMaps = 2236265508087360095996762626638876194385;
+        _rgbMaps = 2236265508087360095996762626638876194385;
         _filterMaps = 57467935144302711919470905843006094509963670152384512;
         _frequencyMaps = 3804199413314552966035659560963;
-        _octaveMaps = 8869401141539;
+        _octaveMaps = uint96(8869401141539);
         _owner = msg.sender;
     }
 
@@ -37,61 +42,43 @@ contract C9Backgrounds {
         _;
     }
 
-    function _matrix(uint256 index)
-    private view
-    returns(bytes memory matrix) {
-        matrix = "0 0 0 0 0 0 0 0 0 0 0 0";
-        uint256 _bM = _bitMaps;
-        uint256 bitMapOffset;
-        unchecked {bitMapOffset = 12*index;}
-        for (uint256 i; i<12;) {
-            if ((_bM>>bitMapOffset & uint256(1)) == 1) {
-                matrix[2*i] = "1";
-            }
-            unchecked {
-                ++i;
-                ++bitMapOffset;
-            }
-        }
-    }
-
+    /*
+     * @dev Filter params. The fifth one is omitted because 
+     * it seems to cause undesirable effects outside of 
+     * the viewBox when set due to the filter type.
+     */
     function _filter(uint256 index)
     private view
-    returns(bytes memory filter) {
-        filter = "0 .0 .0 .0";
+    returns(bytes32) {
+        bytes memory filter = "2 .0 .0 .6 0'/></filter><filter ";
         uint256 _fM = _filterMaps;
         uint256 filterMapOffset;
         unchecked {filterMapOffset = 16*index;}
         for (uint256 i; i<4;) {
             filter[3*i] = bytes1(
                 Helpers.uintToBytes(
-                    _fM>>(filterMapOffset+4*i) & uint256(15)
+                    _fM>>filterMapOffset & uint256(15)
                 )
             );
             unchecked {
                 ++i;
+                filterMapOffset += 4;
             }
         }
-    }
-
-    function _octave(uint256 index)
-    private view
-    returns(bytes32) {
-        return Helpers.uintToBytes(
-            _octaveMaps>>(4*index) & uint256(15)
-        );
+        return bytes32(filter);
     }
 
     function _frequency(uint256 index)
     private view
-    returns(bytes memory frequency) {
-        frequency = "0.001";
+    returns(bytes32) {
+        bytes memory frequency = "0.001' numOctaves='2'/><feCompos";
         uint256 _fInt = _frequencyMaps>>(10*index) & uint256(1023);
         bytes3 _fB = bytes3(
             Helpers.uintToBytes(
                 _fInt
             )
         );
+        // Depending on length, null bytes may be returned.
         if (_fInt < 10) {
             frequency[4] = _fB[0];
         }
@@ -104,16 +91,49 @@ contract C9Backgrounds {
             frequency[3] = _fB[1];
             frequency[4] = _fB[2];
         }
+        return bytes32(frequency);
+    }
+
+    /*
+     * @dev RGB matrix. Each one has 5 values, ie: r1, r2... r5,
+     * that may be set.
+     */
+    function _matrix(uint256 index)
+    private view
+    returns(bytes32) {
+        bytes memory matrix = "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .0";
+        uint256 _rgbM = _rgbMaps;
+        uint256 bitMapOffset;
+        unchecked {bitMapOffset = 15*index;}
+        for (uint256 i; i<15;) {
+            if ((_rgbM>>bitMapOffset & uint256(1)) == 1) {
+                matrix[2*i] = "1";
+            }
+            unchecked {
+                ++i;
+                ++bitMapOffset;
+            }
+        }
+        return bytes32(matrix);
+    }
+
+    function _octave(uint256 index)
+    private view
+    returns(bytes32) {
+        return Helpers.uintToBytes(
+            _octaveMaps>>(4*index) & uint256(15)
+        );
     }
 
     function getBackground(uint256 genTag, uint256 specialTier)
     external view
-    returns (bytes23 matrix, bytes11 filter, bytes5 freq, bytes1 octave) {
-        uint256 colorIndex = specialTier > 0 ? specialTier+5 : genTag;
-        matrix = bytes23(_matrix(colorIndex));
-        filter = bytes11(_filter(colorIndex));
-        freq = bytes5(_frequency(colorIndex));
-        octave = bytes1(_octave(colorIndex));
+    returns (bytes32 matrix, bytes32 filter, bytes32 freq, bytes32 octave) {
+        uint256 colorIndex;
+        unchecked {colorIndex = specialTier > 0 ? specialTier+5 : genTag;}
+        matrix = _matrix(colorIndex);
+        filter = _filter(colorIndex);
+        freq = _frequency(colorIndex);
+        octave = _octave(colorIndex);
     }
 
     function setFilterMaps(uint256 value)
@@ -133,14 +153,14 @@ contract C9Backgrounds {
     function setMatrix(uint256 value)
     external
     onlyOwner()
-    newValueCheck(_bitMaps, value) {
-        _bitMaps = value;
+    newValueCheck(_rgbMaps, value) {
+        _rgbMaps = value;
     }
 
     function setOctave(uint256 value)
     external
     onlyOwner()
-    newValueCheck(_octaveMaps, value) {
-        _octaveMaps = value;
+    newValueCheck(uint256(_octaveMaps), value) {
+        _octaveMaps = uint96(value);
     }
 }
