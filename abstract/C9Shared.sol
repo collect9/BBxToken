@@ -5,17 +5,18 @@ abstract contract C9Shared {
 
     function _getHex3(uint256 colorId)
     internal pure
-    returns (bytes3) {
+    returns (bytes32) {
         bytes32 _hex3 = "101fc3bbba74cb8eeec0fc000a00cfff";
-        return bytes3(_hex3<<(colorId*3*8));
+        return _hex3<<(colorId*3*8);
     }
 
     function _getColorText(uint256 colorId)
     internal pure
     returns (bytes10) {
-        bytes10[10] memory _colors = [bytes10("ONYX      "),
+        bytes10[11] memory _colors = [bytes10("ONYX      "),
             "GOLD      ",
             "SILVER    ",
+            "BRONZE    ",
             "CARDBOARD ",
             "PAPER     ",
             "AMETHYST  ",
@@ -29,17 +30,17 @@ abstract contract C9Shared {
 
     function _getFlagText(uint256 flagId)
     internal pure
-    returns (bytes3) {
+    returns (bytes32) {
         bytes32 _vFlags = "CANCHNGERINDKORUK US UNQ      ";
-        return bytes3(_vFlags<<(flagId*3*8));
+        return _vFlags<<(flagId*3*8);
     }
 
 
     function _getMarkerText(uint256 markerId)
     internal pure
-    returns (bytes4) {
+    returns (bytes32) {
         bytes32 _vMarkers = "    4L  EMBSEMBFCE  ks  Bs      ";
-        return bytes4(_vMarkers<<(markerId*4*8));
+        return _vMarkers<<(markerId*4*8);
     }
 
     /*

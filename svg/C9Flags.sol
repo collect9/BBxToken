@@ -2,12 +2,10 @@
 pragma solidity >=0.8.17;
 
 contract C9SVGFlags {
-    /**// SPDX-License-Identifier: MIT
-pragma solidity >=0.8.17;
-
-contract C9SVGFlags {
     /**
-     * @dev Optimized SVG flags. Storage of these would cost around ~2.2M gas.
+     * @dev Optimized SVG flags.
+     * Storing in the bytecode using constant (method here): ~975K gas.
+     * Storing in storage: ~2.2M gas not including methods that could update them.
      */
     bytes constant FLG_BLK = ""
         "<pattern id='ptrn' width='.1' height='.1'>"
@@ -108,7 +106,7 @@ contract C9SVGFlags {
     function getSVGFlag(uint256 flagId)
     external pure
     returns(bytes memory flag) {
-        flag = "<svg version='1.1' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 480'>";
+        flag = "<svg version='1.1' xmlns='http://www.w3.org/2000/svg' width='100%' height='100%' viewBox='0 0 640 480'>";
         if (flagId == 0) {
             flag = bytes.concat(flag, FLG_CAN);
         }

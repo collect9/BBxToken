@@ -124,22 +124,22 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
         assembly {
             mask := not(shl(232, 0xFFFFFF))
             let dst := add(b, 86)
-            mstore(dst, or(and(mload(dst), mask), attribute3))
+            mstore(dst, or(and(mload(dst), mask), and(attribute3, not(mask))))
             dst := add(b, 175)
-            mstore(dst, or(and(mload(dst), mask), attribute3))
+            mstore(dst, or(and(mload(dst), mask), and(attribute3, not(mask))))
             dst := add(b, 413)
-            mstore(dst, or(and(mload(dst), mask), attribute3))
+            mstore(dst, or(and(mload(dst), mask), and(attribute3, not(mask))))
         }
         
         // Country tush
         attribute3 = bytes3(_getFlagText(_viewPackedData(data, UPOS_CNTRYTUSH, USZ_CNTRYTUSH)));
         assembly {
             let dst := add(b, 219)
-            mstore(dst, or(and(mload(dst), mask), attribute3))
+            mstore(dst, or(and(mload(dst), mask), and(attribute3, not(mask))))
             dst := add(b, 313)
-            mstore(dst, or(and(mload(dst), mask), attribute3))
+            mstore(dst, or(and(mload(dst), mask), and(attribute3, not(mask))))
             dst := add(add(b, 422), _offset)
-            mstore(dst, or(and(mload(dst), mask), attribute3))
+            mstore(dst, or(and(mload(dst), mask), and(attribute3, not(mask))))
         }
 
         // Hang tag gen ordinal
@@ -216,11 +216,11 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
             attribute4 = bytes4(_getMarkerText(_markerTush));
             assembly {
                 let dst := add(b, 223)
-                mstore(dst, or(and(mload(dst), mask), attribute4))
+                mstore(dst, or(and(mload(dst), mask), and(attribute4, not(mask))))
                 dst := add(b, 362)
-                mstore(dst, or(and(mload(dst), mask), attribute4))
+                mstore(dst, or(and(mload(dst), mask), and(attribute4, not(mask))))
                 dst := add(add(b, 426), _offset)
-                mstore(dst, or(and(mload(dst), mask), attribute4))
+                mstore(dst, or(and(mload(dst), mask), and(attribute4, not(mask))))
             }
         }
 

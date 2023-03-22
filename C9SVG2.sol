@@ -254,8 +254,7 @@ contract C9SVG is C9Context, C9Shared {
             _viewPackedData(data, UPOS_RARITYTIER, USZ_RARITYTIER),
             _viewPackedData(data, UPOS_SPECIAL, USZ_SPECIAL)
         );
-        unchecked {_bgidx *= 3;}
-        bytes3 _rgc2 = _currentVId(ownerData) < 4 ? _getHex3(_bgidx) : bytes3("888");
+        bytes3 _rgc2 = _currentVId(ownerData) < 4 ? bytes3(_getHex3(_bgidx)) : bytes3("888");
         bytes2 _namesize = _getNameSize(uint256(bytes(_name).length));
     
         assembly {
@@ -265,7 +264,7 @@ contract C9SVG is C9Context, C9Shared {
             // Colors
             let mask := not(shl(232, 0xFFFFFF))
             dst := add(b, 495)
-            mstore(dst, or(and(_rgc2, not(mask)), mload(dst)))
+            mstore(dst, or(and(mload(dst), mask), and(_rgc2, not(mask))))
             // Royalty
             dst := add(b, 1415)
             mstore(dst, or(and(mload(dst), mask), _royalty))
@@ -303,7 +302,7 @@ contract C9SVG is C9Context, C9Shared {
     returns (bytes memory e) {
         if (markerTush > 0) {
             e = "<text x='555' y='726' class='c9Ts c9Tb' style='opacity:0.8;font-family:\"Brush Script MT\",cursive;fill:#222;' text-anchor='middle'>4L  </text>";
-            bytes4 x = _getMarkerText(markerTush);
+            bytes4 x = bytes4(_getMarkerText(markerTush));
             bytes4 y = x == bytes4("CE  ") ?
                 bytes4("c e ") :
                 x == bytes4("EMBF") ?
@@ -312,9 +311,10 @@ contract C9SVG is C9Context, C9Shared {
                         bytes4("embS") : x;
             uint256 mask;
             assembly {
-                mask := not(shl(232, 0xFFFFFF))
+                mask := shl(224, 0xFFFFFFFF)
                 let dst := add(e, 162)
-                mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), y))
+                mstore(dst, or(and(mload(dst), not(mask)), and(y, mask)))
+                mask := not(shl(232, 0xFFFFFF))
                 switch genTag case 0 {
                     dst := add(e, 135)
                     mstore(dst, or(and(mload(dst), mask), "eee"))
@@ -485,7 +485,7 @@ contract C9SVG is C9Context, C9Shared {
             _viewPackedData(tokenData, UPOS_CNTRYTUSH, USZ_CNTRYTUSH)
         );
         fb = bytes.concat(
-            "<g transform='translate(20 580) scale(0.18)'>",
+            "<g transform='translate(20 580) scale(0.18)' style='opacity:0.9'>",
             _flagTag,
             "<g transform='translate(2648)'>",
             _flagTush,
@@ -500,7 +500,7 @@ contract C9SVG is C9Context, C9Shared {
     function _genTagsToAscii(uint256 _gentag, uint256 _tag)
     private pure returns(bytes7) {
         bytes3 __gentag = Helpers.uintToOrdinal(_gentag);
-        bytes3 _cntrytag = _getFlagText(_tag);
+        bytes3 _cntrytag = bytes3(_getFlagText(_tag));
         bytes memory _tmpout = "       ";
         assembly {
             let mask := not(shl(232, 0xFFFFFF))
@@ -508,7 +508,7 @@ contract C9SVG is C9Context, C9Shared {
             mstore(dst, or(and(mload(dst), mask), __gentag))
             if lt(_tag, 7) {
                 dst := add(_tmpout, 36)
-                mstore(dst, or(and(mload(dst), mask), _cntrytag))
+                mstore(dst, or(and(mload(dst), mask), and(_cntrytag, not(mask))))
             }
         }
         return bytes7(_tmpout);
