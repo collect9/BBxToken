@@ -10,7 +10,13 @@ contract RoyaltiesTest is C9TestContract {
     private {
         (address receiver, uint256 royalty) = c9t.royaltyInfo(tokenId, 10000);
         Assert.equal(receiver, royaltyReceiver, "Invalid royalty receiver");
-        Assert.equal(royalty, royaltyAmt, "Invalid royalty");
+        Assert.equal(royalty, royaltyAmt*10, "Invalid royalty");
+    }
+
+    function _checkRoyaltyInfo2(uint256 tokenId, uint256 royaltyAmt)
+    private {
+        uint256 royalty = c9t.getOwnersParams(tokenId)[7];
+        Assert.equal(royalty, royaltyAmt, "Invalid royalty2");
     }
 
     /* @dev 1. Royalties testing - global.
@@ -27,14 +33,21 @@ contract RoyaltiesTest is C9TestContract {
     public {
         uint256 mintId = _timestamp % _rawData.length;
         (uint256 tokenId,) = _getTokenIdVotes(mintId);
+
+        // Check initial royalties are correct
+        _checkRoyaltyInfo(tokenId, _rawData[mintId].royalty, c9tOwner);
+        _checkRoyaltyInfo2(tokenId, _rawData[mintId].royalty);
+
+
         address newReceiver = TestsAccounts.getAccount(3);
-        uint256 newRoyaltyAmt = 800;
+        uint256 newRoyaltyAmt = 80;
 
         // Set the new royalty for the tokens
         c9t.setTokenRoyalty(tokenId, newRoyaltyAmt, newReceiver);
 
         // Check to make sure updated info is read correctly
         _checkRoyaltyInfo(tokenId, newRoyaltyAmt, newReceiver);
+        _checkRoyaltyInfo2(tokenId, newRoyaltyAmt);
     }
 
     /* @dev 3. Royalties testing - reset at token level.
@@ -57,7 +70,7 @@ contract RoyaltiesTest is C9TestContract {
         
         c9t.setTokenValidity(tokenId, ROYALTIES);
         c9t.setRoyaltiesDue(tokenId, royaltiesDue);
-        uint256 royaltiesDueSet = c9t.getTokenParams(tokenId)[20];
+        uint256 royaltiesDueSet = c9t.getTokenParams(tokenId)[10];
         Assert.equal(royaltiesDueSet, royaltiesDue, "Invalid royalties due");
     }
 }

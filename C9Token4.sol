@@ -582,7 +582,7 @@ contract C9Token is ERC721IdEnumBasic {
     function getOwnersParams(uint256 tokenId)
     external view
     requireMinted(tokenId)
-    returns (uint[8] memory xParams) {
+    returns (uint[9] memory xParams) {
         uint256 data = _owners[tokenId];
         xParams[0] = _viewPackedData(data, MPOS_XFER_COUNTER, MSZ_XFER_COUNTER);
         xParams[1] = _viewPackedData(data, MPOS_VALIDITYSTAMP, USZ_TIMESTAMP);
@@ -591,7 +591,8 @@ contract C9Token is ERC721IdEnumBasic {
         xParams[4] = data>>MPOS_DISPLAY & BOOL_MASK;
         xParams[5] = data>>MPOS_LOCKED & BOOL_MASK;
         xParams[6] = _viewPackedData(data, MPOS_INSURANCE, MSZ_INSURANCE);
-        xParams[7] = _viewPackedData(data, MPOS_VOTES, MSZ_VOTES);
+        xParams[7] = _viewPackedData(data, MPOS_ROYALTY, MSZ_ROYALTY);
+        xParams[8] = _viewPackedData(data, MPOS_VOTES, MSZ_VOTES);
     }
 
     /**
@@ -659,6 +660,17 @@ contract C9Token is ERC721IdEnumBasic {
             unchecked {++j;}
         }
         return string(bName);
+    }
+
+    /**
+     * @dev Returns view of the barCodeData.
+     */
+    function isLocked(uint256 tokenId)
+    external view
+    requireMinted(tokenId)
+    returns (bool) {
+        uint256 data = _owners[tokenId];
+        return data>>MPOS_LOCKED & BOOL_MASK == 1 ? true : false;
     }
 
     /**
@@ -1144,6 +1156,17 @@ contract C9Token is ERC721IdEnumBasic {
     external view
     returns (uint256) {
         return _redeemedTokens.length;
+    }
+
+    /**
+     * @dev Returns the number of redeemed tokens.
+     */
+    function validityStatus(uint256 tokenId)
+    external view
+    requireMinted(tokenId)
+    returns (uint256) {
+        uint256 data = _owners[tokenId];
+        return _currentVId(data);
     }
 
     /**

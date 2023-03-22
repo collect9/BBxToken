@@ -5,14 +5,16 @@ import "./C9BaseDeploy_test.sol";
 
 // File name has to end with '_test.sol', this file can contain more than one testSuite contracts
 contract LockersTest is C9TestContract {
-
-    function _unlockToken(uint256 _mintId)
-    private returns (uint256) {
-        (uint256 tokenId,) = _getTokenIdVotes(_mintId);
-        c9t.adminUnlock(tokenId);
-        return c9t.getTokenParams(tokenId)[5];
-    }
     
+    function _adminUnlock(uint256 tokenId)
+    private {
+        c9t.adminUnlock(tokenId);
+        bool locked = c9t.isLocked(tokenId);
+        Assert.equal(locked, false, "Invalid token unlock1");
+        uint256 iLocked = c9t.getOwnersParams(tokenId)[5];
+        Assert.equal(iLocked, UNLOCKED, "Invalid token unlock2");
+    }
+
     /* @dev 1. Check account lockers.
      */
     function checkAccountLockers()
@@ -34,14 +36,14 @@ contract LockersTest is C9TestContract {
     function checkTokenUnlockers()
     public {
         uint256 mintId = 28;
-        Assert.equal(_rawData[mintId].locked, LOCKED, "Invalid token lock");
-        uint256 locked = _unlockToken(mintId);
-        Assert.equal(locked, UNLOCKED, "Invalid token unlock");
+        (uint256 tokenId,) = _getTokenIdVotes(mintId);
+        Assert.equal(_rawData[mintId].locked, LOCKED, "Invalid token lock1");
+        _adminUnlock(tokenId);
 
         mintId = 29;
-        Assert.equal(_rawData[mintId].locked, LOCKED, "Invalid token lock");
-        locked = _unlockToken(mintId);
-        Assert.equal(locked, UNLOCKED, "Invalid token unlock");
+        (tokenId,) = _getTokenIdVotes(mintId);
+        Assert.equal(_rawData[mintId].locked, LOCKED, "Invalid token lock2");
+        _adminUnlock(tokenId);
     }
 
 
