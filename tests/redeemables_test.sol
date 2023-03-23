@@ -41,7 +41,7 @@ contract RedeemablesTest is C9TestContract {
     /* @dev 1. Checks if preredeemable is working properly
      * for existing valid tokens.
      */ 
-    function _checkValidRedeemable()
+    function checkValidRedeemable()
     public {
         // Test preRedeemPeriod
         uint256 mintId = _timestamp % (_rawData.length - 4);

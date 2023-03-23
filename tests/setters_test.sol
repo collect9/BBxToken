@@ -12,22 +12,19 @@ contract SettersTest is C9TestContract {
     public {
         address contract1 = TestsAccounts.getAccount(1);
         address contract2 = TestsAccounts.getAccount(2);
-        address contract3 = TestsAccounts.getAccount(3);
         address contract4 = TestsAccounts.getAccount(4);
         address contract5 = TestsAccounts.getAccount(5);
 
         c9t.setContractMeta(contract1);
         c9t.setContractRedeemer(contract2);
-        c9t.setContractSVG(contract3);
         c9t.setContractUpgrader(contract4);
         c9t.setContractVH(contract5);
 
-        (address contractMeta, address contractRedeemer, address contractSVG, address contractUpgrader, address contractVH) = c9t.getContracts();
+        (address contractMeta, address contractRedeemer, address contractUpgrader, address contractVH) = c9t.getContracts();
 
         // Check contracts
         Assert.equal(contractMeta, contract1, "Invalid meta contract");
         Assert.equal(contractRedeemer, contract2, "Invalid redeemer contract");
-        Assert.equal(contractSVG, contract3, "Invalid svg contract");
         Assert.equal(contractUpgrader, contract4, "Invalid upgrader contract");
         Assert.equal(contractVH, contract5, "Invalid vh contract");
 
@@ -46,15 +43,15 @@ contract SettersTest is C9TestContract {
         (uint256 tokenId,) = _getTokenIdVotes(mintId);
         
         c9t.setTokenUpgraded(tokenId);
-        uint256 upgradedSet = c9t.getTokenParams(tokenId)[3];
+        uint256 upgradedSet = c9t.getOwnersParams(tokenId)[3];
         Assert.equal(upgradedSet, 1, "Invalid upgraded value");
 
         c9t.setTokenDisplay(tokenId, true);
-        uint256 displaySet = c9t.getTokenParams(tokenId)[4];
+        uint256 displaySet = c9t.getOwnersParams(tokenId)[4];
         Assert.equal(displaySet, 1, "Invalid display1 set");
 
         c9t.setTokenDisplay(tokenId, false);
-        displaySet = c9t.getTokenParams(tokenId)[4];
+        displaySet = c9t.getOwnersParams(tokenId)[4];
         Assert.equal(displaySet, 0, "Invalid display set");
     }
 
@@ -76,31 +73,7 @@ contract SettersTest is C9TestContract {
         Assert.equal(string.concat("https://", contractURI, ".json"), c9t.contractURI(), "Invalid contractURI");
     }
 
-    /* @dev 4. Tests reserved space setters.
-     */
-    function checkReserved()
-    public {
-        uint256 mintId = _timestamp % _rawData.length;
-        (uint256 tokenId,) = _getTokenIdVotes(mintId);
-
-        // Must enable reserved space
-        c9t.toggleReserved(true);
-
-        c9t.setReserved(tokenId, _timestamp);
-        uint256 reservedResult = c9t.getReserved(tokenId);
-        Assert.equal(reservedResult, _timestamp, "Invalid reserved 1");
-
-        uint256 randomness = uint256(uint120(uint256(keccak256(abi.encodePacked(_timestamp)))));
-        c9t.setReserved(tokenId, randomness);
-        reservedResult = c9t.getReserved(tokenId);
-        Assert.equal(reservedResult, randomness, "Invalid reserved 2");
-
-        c9t.setReserved(tokenId, _timestamp);
-        reservedResult = c9t.getReserved(tokenId);
-        Assert.equal(reservedResult, _timestamp, "Invalid reserved 3");
-    }
-
-    /* @dev 5. Tests for account reserved space setters.
+    /* @dev 4. Tests for account reserved space setters.
      */
     function checkAccountReserved()
     public {

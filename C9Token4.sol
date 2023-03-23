@@ -591,7 +591,7 @@ contract C9Token is ERC721IdEnumBasic {
         xParams[4] = data>>MPOS_DISPLAY & BOOL_MASK;
         xParams[5] = data>>MPOS_LOCKED & BOOL_MASK;
         xParams[6] = _viewPackedData(data, MPOS_INSURANCE, MSZ_INSURANCE);
-        xParams[7] = _viewPackedData(data, MPOS_ROYALTY, MSZ_ROYALTY);
+        xParams[7] = _viewPackedData(data, MPOS_ROYALTY, MSZ_ROYALTY) * 10;
         xParams[8] = _viewPackedData(data, MPOS_VOTES, MSZ_VOTES);
     }
 
