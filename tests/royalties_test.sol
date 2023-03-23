@@ -68,6 +68,7 @@ contract RoyaltiesTest is C9TestContract {
         (uint256 tokenId,) = _getTokenIdVotes(mintId);
         uint256 royaltiesDue = 8791;
         
+        _grantRole(keccak256("VALIDITY_ROLE"), c9tOwner);
         c9t.setTokenValidity(tokenId, ROYALTIES);
         c9t.setRoyaltiesDue(tokenId, royaltiesDue);
         uint256 royaltiesDueSet = c9t.getTokenParams(tokenId)[10];

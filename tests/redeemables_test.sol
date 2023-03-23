@@ -22,6 +22,7 @@ contract RedeemablesTest is C9TestContract {
         
         // Set and make sure validity status is correct
         if (status > 0) {
+            _grantRole(keccak256("VALIDITY_ROLE"), c9tOwner);
             _setValidityStatus(tokenId, status);
         }
 
@@ -65,6 +66,7 @@ contract RedeemablesTest is C9TestContract {
         // Cannot change from valid to dead, so must change to invalid (1-3) first
         uint256 preStatus = (_timestamp % 3) + 1; // 1-3
         uint256 deadStatus = (_timestamp % 4) + 5; // 4-8
+        _grantRole(keccak256("VALIDITY_ROLE"), c9tOwner);
         _setValidityStatus(tokenId, preStatus);
         _checkRedeemable(tokenId, deadStatus, false);
     }

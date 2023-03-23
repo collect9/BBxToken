@@ -24,19 +24,17 @@ contract RegistrationTest is C9TestContract {
         Assert.equal(regData, uint96(bytes12(ksig)), "regData error");
     }
 
-    function checkRegistration2()
-    public {
-        _grantRole(keccak256("REDEEMER_ROLE"), c9tOwner);
-        bytes32 ksig = keccak256(abi.encodePacked("some random data"));
-        _checkRegistration(ksig, false);
-    }
-
-    
     function checkRegistration1()
     public {
         // Grant redeemer role to get registration data
         _grantRole(keccak256("REDEEMER_ROLE"), c9tOwner);
         bytes32 ksig = keccak256(abi.encodePacked(block.timestamp));
+        _checkRegistration(ksig, false);
+    }
+
+    function checkRegistration2()
+    public {
+        bytes32 ksig = keccak256(abi.encodePacked("some random data"));
         _checkRegistration(ksig, true);
     }
 
