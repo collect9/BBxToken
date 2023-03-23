@@ -23,8 +23,6 @@ contract C9Token is ERC721IdEnumBasic {
     /**
      * @dev Contract access roles.
      */
-    bytes32 public constant REDEEMER_ROLE = keccak256("REDEEMER_ROLE");
-    bytes32 public constant RESERVED_ROLE = keccak256("RESERVED_ROLE");
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
     bytes32 public constant UPDATER_ROLE  = keccak256("UPDATER_ROLE");
     bytes32 public constant VALIDITY_ROLE = keccak256("VALIDITY_ROLE");

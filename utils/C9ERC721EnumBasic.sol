@@ -3,7 +3,7 @@
 pragma solidity >=0.8.17;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
-import "./C9ERC721Base3.sol";
+import "./C9ERC721Base4.sol";
 
 /**
  * @dev A very basic implementation of {ERC721Enumerable} that only includes 

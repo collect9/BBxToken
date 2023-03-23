@@ -164,6 +164,12 @@ contract C9TestContract is C9Struct {
         }
     }
 
+    function _grantRole(bytes32 role, address account)
+        internal {
+            c9t.grantRole(role, account);
+            Assert.equal(c9t.hasRole(role, account), true, "Role grant failure");
+    }
+
     function _setValidityStatus(uint256 tokenId, uint256 status)
     internal {
         c9t.setTokenValidity(tokenId, status);
