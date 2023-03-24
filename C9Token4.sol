@@ -69,7 +69,6 @@ contract C9Token is ERC721IdEnumBasic {
     mapping(uint256 => uint256) private _cTokenData;
     mapping(uint256 => uint256) private _uTokenData;
     
-    
     /**
      * @dev Mapping that checks whether or not some combination of 
      * TokenData has already been minted. The boolean determines
@@ -150,22 +149,6 @@ contract C9Token is ERC721IdEnumBasic {
             MPOS_OWNER,
             uint256(0),
             type(uint160).max
-        );
-    }
-
-    /**
-     * @dev Returns a unique hash depending on certain token `_input` attributes. 
-     * This helps keep track the `_edition` number of a particular set of attributes. 
-     * Note that if the token is burned, the edition cannot be replaced but 
-     * instead will keep incrementing.
-     */
-    function _getPhysicalHashFromTokenData(TokenData calldata input, uint256 edition)
-    private pure
-    returns (bytes32) {
-        return _physicalHash(edition,
-            input.cntrytag, input.cntrytush, input.gentag,
-            input.gentush, input.markertush, input.special,
-            input.name
         );
     }
 
@@ -284,7 +267,10 @@ contract C9Token is ERC721IdEnumBasic {
                 for (edition; edition<98;) {
                     unchecked {
                         ++edition;
-                        _data = _getPhysicalHashFromTokenData(_input, edition);
+                        _data = _physicalHash(edition,
+                            _input.cntrytag, _input.cntrytush, _input.gentag,
+                            _input.gentush, _input.markertush, _input.special,
+                            _input.name);
                     }
                     if (!_tokenComboExists[_data]) {
                         // Store token attribute combo
@@ -314,7 +300,7 @@ contract C9Token is ERC721IdEnumBasic {
             if (edition == 0) {
                 revert ZeroEdition();
             }
-            if (edition > 98) {
+            if (edition > 99) {
                 revert EditionOverflow(edition);
             }
             if (editionMintId == 0) {
@@ -1033,8 +1019,8 @@ contract C9Token is ERC721IdEnumBasic {
      */
     function setTokenValidity(uint256 tokenId, uint256 vId)
     external
-    //onlyRole(VALIDITY_ROLE)
-    //isContract()
+    onlyRole(VALIDITY_ROLE)
+    isContract()
     requireMinted(tokenId)
     notDead(tokenId) {
         uint256 _tokenValidity = _currentVId(_owners[tokenId]);
@@ -1054,8 +1040,8 @@ contract C9Token is ERC721IdEnumBasic {
      */
     function setTokenUpgraded(uint256 tokenId)
     external
-    //onlyRole(UPGRADER_ROLE)
-    //isContract()
+    onlyRole(UPGRADER_ROLE)
+    isContract()
     requireMinted(tokenId)
     notDead(tokenId) {
         uint256 _tokenData = _owners[tokenId];
@@ -1123,6 +1109,7 @@ contract C9Token is ERC721IdEnumBasic {
      * It seems like if the baseURI method fails after upgrade, OpenSea
      * still displays the cached on-chain version.
      */
+     
     function tokenURI(uint256 tokenId)
     public view
     override(ERC721)

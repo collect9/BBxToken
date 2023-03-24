@@ -350,13 +350,16 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
     function _svgMetaData(uint256 tokenId, uint256 ownerData, uint256 tokenData, uint256 codeData)
     private view
     returns (bytes memory) {
-        return Base64.encode(
-            bytes.concat(
-                _metaDesc(tokenId),
-                _metaAttributes(tokenData, ownerData),
-                '"image":"data:image/svg+xml;base64,',
-                b64Image(tokenId, ownerData, tokenData, codeData),
-                '"}'
+        return bytes.concat(
+            "data:application/json;base64,",
+            Base64.encode(
+                bytes.concat(
+                    _metaDesc(tokenId),
+                    _metaAttributes(tokenData, ownerData),
+                    '"image":"data:image/svg+xml;base64,',
+                    b64Image(tokenId, ownerData, tokenData, codeData),
+                    '"}'
+                )
             )
         );
     }

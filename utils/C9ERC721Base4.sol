@@ -621,7 +621,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     external view
     returns (uint256) {
         uint256 balanceData = _balances[account];
-        return uint256(uint104(balanceData>>APOS_RESERVED));
+        return uint256(uint8(balanceData>>APOS_RESERVED));
     }
 
     /**
@@ -795,7 +795,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
      * later. Such features will only be available to 
      * external contracts, as this contract will have no
      * built-in parsing.
-     * 104 bits remain in the reserved storage space.
+     * 8 bits remain in the reserved storage space.
      */
     function setReservedBalanceSpace(uint256 data)
     external {
@@ -806,7 +806,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
             _balances[_msgSender()],
             APOS_RESERVED,
             data,
-            type(uint104).max
+            type(uint8).max
         );
     }
 

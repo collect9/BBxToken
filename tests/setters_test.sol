@@ -42,6 +42,7 @@ contract SettersTest is C9TestContract {
         uint256 mintId = _timestamp % _rawData.length;
         (uint256 tokenId,) = _getTokenIdVotes(mintId);
         
+        _grantRole(keccak256("UPGRADER_ROLE"), c9tOwner);
         c9t.setTokenUpgraded(tokenId);
         uint256 upgradedSet = c9t.getOwnersParams(tokenId)[3];
         Assert.equal(upgradedSet, 1, "Invalid upgraded value");
