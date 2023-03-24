@@ -19,6 +19,10 @@ interface IC9Token is IC9ERC721, IERC2981 {
     external view
     returns (string memory name);
 
+    function preRedeemablePeriod()
+    external view
+    returns (uint256);
+
     function redeemAdd(uint256[] calldata _tokenIds) external;
 
     function redeemCancel() external;

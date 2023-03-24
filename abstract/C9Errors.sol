@@ -4,6 +4,7 @@ pragma solidity >=0.8.17;
 // C9ERC721
 error AddressLocked(address from);
 error AddressNotLocked();
+error AddressNotRegistered(address account);
 error ApproveToCaller(); //0xb06307db
 error BatchSizeTooLarge(uint256 maxSize, uint256 received); //0x01df19f6
 //error CallerNotOwnerOrApproved(); //0x8c11f105

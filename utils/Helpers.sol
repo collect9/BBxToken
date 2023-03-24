@@ -75,7 +75,7 @@ library Helpers {
             return bytes2(output);
     }
 
-    function flip4Space(bytes4 input)
+    function remove4Null(bytes4 input)
         internal pure
         returns (bytes4) {
             bytes memory output = new bytes(4);
@@ -88,6 +88,21 @@ library Helpers {
                 }
             }
             return bytes4(output);
+    }
+
+    function remove7Null(bytes7 input)
+        internal pure
+        returns (bytes7) {
+            bytes memory output = new bytes(7);
+            for (uint256 i; i<7; i++) {
+                if (input[i] == 0x00) {
+                    output[i] = 0x20;
+                }
+                else {
+                    output[i] = input[i];
+                }
+            }
+            return bytes7(output);
     }
     
     function getBoolean256(uint256 _packedBools, uint256 _boolNumber)

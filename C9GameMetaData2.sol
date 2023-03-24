@@ -68,7 +68,8 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
             '{"trait_type":"Votes","display_type":"boost_number","value":  ,"max_value":15},'
             '{"trait_type":"Transfer Count","value":       ,"max_value":1048575},'
             '{"trait_type":"Hang Tag Generation","value":"   "},'
-            '{"trait_type":"Tush Tag Generation","value":"   "}],';
+            '{"trait_type":"Tush Tag Generation","value":"   "},'
+            '{"trait_type":"Date Redeemable","display_type":"date","value":          }],';
 
         // 1. All 2 byte attributes
     
@@ -253,6 +254,16 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
         ));
         assembly {
             let dst := add(b, 490)
+            mstore(dst, or(and(mload(dst), mask), attribute10))
+        }
+
+        // The date the token becomes redeemable
+        edition = _viewPackedData(data, UPOS_MINTSTAMP, USZ_TIMESTAMP) + IC9Token(contractToken).preRedeemablePeriod();
+        attribute10 = bytes10(Helpers.uintToBytes(
+            edition
+        ));
+        assembly {
+            let dst := add(b, 1255)
             mstore(dst, or(and(mload(dst), mask), attribute10))
         }
         

@@ -56,7 +56,7 @@ contract C9Token is ERC721IdEnumBasic {
      * redeemed.
      */
     uint24[] private _burnedTokens;
-    uint256 private _preRedeemablePeriod; //seconds
+    uint256 public preRedeemablePeriod; //seconds
     uint24[] private _redeemedTokens;
     
     /**
@@ -92,7 +92,7 @@ contract C9Token is ERC721IdEnumBasic {
     constructor()
     ERC721("Collect9 Physically Redeemable NFTs", "C9T", 500) {
         _contractURI = "collect9.io/metadata/C9T";
-        _preRedeemablePeriod = 31556926; // 1 year
+        preRedeemablePeriod = 31556926; // 1 year
         _svgOnly = true;
     }
 
@@ -200,7 +200,7 @@ contract C9Token is ERC721IdEnumBasic {
     private view
     returns (bool) {
         uint256 _ds = block.timestamp - _viewPackedData(tokenData, UPOS_MINTSTAMP, USZ_TIMESTAMP);
-        return _ds < _preRedeemablePeriod;
+        return _ds < preRedeemablePeriod;
     }
 
     /*
@@ -261,6 +261,15 @@ contract C9Token is ERC721IdEnumBasic {
         for (uint256 i; i<batchSize;) {
             _input = input[i];
 
+            // Checks
+            tokenId = _input.tokenid;
+            if (tokenId == 0) {
+                revert ZeroTokenId();
+            }
+            if (_exists(tokenId)) {
+                revert TokenAlreadyMinted(tokenId);
+            }
+
             // Get physical edition id
             edition = _input.edition;
             if (edition == 0) {
@@ -280,6 +289,14 @@ contract C9Token is ERC721IdEnumBasic {
                 }
             }
 
+            // Checks
+            if (edition == 0) {
+                revert ZeroEdition();
+            }
+            if (edition > 99) {
+                revert EditionOverflow(edition);
+            }
+
             // Get the edition mint id
             unchecked {editionMintId = _mintId[edition]+1;}
             if (_input.mintid != 0) {
@@ -290,24 +307,11 @@ contract C9Token is ERC721IdEnumBasic {
             }
 
             // Checks
-            tokenId = _input.tokenid;
-            if (tokenId == 0) {
-                revert ZeroTokenId();
-            }
-            if (_exists(tokenId)) {
-                revert TokenAlreadyMinted(tokenId);
-            }
-            if (edition == 0) {
-                revert ZeroEdition();
-            }
-            if (edition > 99) {
-                revert EditionOverflow(edition);
-            }
             if (editionMintId == 0) {
                 revert ZeroMintId();
             }
 
-            // Add to all tokens list
+            // All checks have passed, add to all tokens list
             _allTokens.push(uint24(tokenId));
 
             /* None of the values are big enough to overflow into the 
@@ -930,10 +934,10 @@ contract C9Token is ERC721IdEnumBasic {
         if (period > MAX_PERIOD) {
             revert PeriodTooLong(MAX_PERIOD, period);
         }
-        if (_preRedeemablePeriod == period) {
+        if (preRedeemablePeriod == period) {
             revert ValueAlreadySet();
         }
-        _preRedeemablePeriod = period;
+        preRedeemablePeriod = period;
     }
 
     /**

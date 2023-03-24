@@ -649,7 +649,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721Base, IERC2981, IERC4906, C9Owner
     function metaUpdateAll()
     external virtual
     onlyRole(DEFAULT_ADMIN_ROLE) {
-        emit BatchMetadataUpdate(0, totalSupply());
+        emit BatchMetadataUpdate(0, type(uint256).max);
     }
 
     /**
