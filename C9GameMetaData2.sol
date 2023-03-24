@@ -66,7 +66,9 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
             '{"trait_type":"Edition","display_type":"number","value":  ,"max_value":99},'
             '{"trait_type":"Edition Mint Id","display_type":"number","value":    ,"max_value":    },'
             '{"trait_type":"Votes","display_type":"boost_number","value":  ,"max_value":15},'
-            '{"trait_type":"Transfer Count","value":       ,"max_value":1048575}],';
+            '{"trait_type":"Transfer Count","value":       ,"max_value":1048575},'
+            '{"trait_type":"Hang Tag Generation","value":"   "},'
+            '{"trait_type":"Tush Tag Generation","value":"   "}],';
 
         // 1. All 2 byte attributes
     
@@ -151,6 +153,8 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
             mstore(dst, or(and(mload(dst), mask), attribute3))
             dst := add(b, 409)
             mstore(dst, or(and(mload(dst), mask), attribute3))
+            dst := add(b, 1136)
+            mstore(dst, or(and(mload(dst), mask), attribute3))
         }
 
         // Tush tag gen ordinal
@@ -161,6 +165,8 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
             let dst := add(b, 215)
             mstore(dst, or(and(mload(dst), mask), attribute3))
             dst := add(add(b, 418), _offset)
+            mstore(dst, or(and(mload(dst), mask), attribute3))
+            dst := add(b, 1187)
             mstore(dst, or(and(mload(dst), mask), attribute3))
         }
 
