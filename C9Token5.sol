@@ -512,17 +512,6 @@ contract C9Token is ERC721IdEnumBasic {
         return string(bName);
     }
 
-    /**
-     * @dev Returns view of the barCodeData.
-     */
-    function isLocked(uint256 tokenId)
-    external view
-    requireMinted(tokenId)
-    returns (bool) {
-        uint256 data = _owners[tokenId];
-        return data>>MPOS_LOCKED & BOOL_MASK == 1 ? true : false;
-    }
-
     /* @dev Batch minting function.
      */
     function mint(TokenData[] calldata input)

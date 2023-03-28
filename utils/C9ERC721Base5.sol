@@ -309,6 +309,15 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     }
 
     /**
+     * @dev Returns if token is locked.
+     */
+    function _isLocked(uint256 tokenData)
+    internal pure
+    returns (bool) {
+        return tokenData & BOOL_MASK == 1 ? true : false;
+    }
+
+    /**
      * @dev Returns the owner of the `tokenId`. Does NOT revert if token doesn't exist
      */
     function _ownerOf(uint256 tokenId)
@@ -406,7 +415,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
             }
         }
         // 3. Make sure token is not locked
-        if (tokenData & BOOL_MASK == LOCKED) {
+        if (_isLocked(tokenData)) {
             revert TokenIsLocked(tokenId);
         }
         // 4. If the token is inactive, automatically update to be active (~210 gas cost when active)
@@ -542,8 +551,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     /**
      * @dev Gets the stored registration data.
      */
-    function getRegistrationFor(address account)
-    external view
+    function _getRegistrationFor(address account)
+    internal view
     returns (uint256 data) {
         return uint256(uint32(_balances[account]>>APOS_REGISTRATION));
     }
@@ -556,6 +565,16 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     override
     returns (bool) {
         return _operatorApprovals[tokenOwner][operator];
+    }
+
+    /**
+     * @dev Returns if token is locked.
+     */
+    function isLocked(uint256 tokenId)
+    external view
+    requireMinted(tokenId)
+    returns (bool) {
+        return _isLocked(_owners[tokenId]);
     }
 
     /**

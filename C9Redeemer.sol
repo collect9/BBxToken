@@ -85,13 +85,13 @@ contract C9Redeemer is C9Token {
      * @dev The function that locks to token prior to 
      * calling the redeemer contract.
      */
-    function _redeemLockTokens(uint256[] calldata _tokenIds)
+    function _redeemLockTokens(uint256[] calldata tokenIds)
     private {
-        uint256 _batchSize = _tokenIds.length;
+        uint256 _batchSize = tokenIds.length;
         uint256 _tokenId;
         uint256 _tokenData;
         for (uint256 i; i<_batchSize;) {
-            _tokenId = _tokenIds[i];
+            _tokenId = tokenIds[i];
             // 1. Check token exists (implicit via ownerOf()) and that caller is owner or approved
             _isApprovedOrOwner(_msgSender(), ownerOf(_tokenId), _tokenId);
             // 2. Copy token data from storage
@@ -104,7 +104,7 @@ contract C9Redeemer is C9Token {
                   This will also prevent multiple approved trying to
                   redeem the same token at once.
             */
-            if (_tokenData & BOOL_MASK == LOCKED) {
+            if (_isLocked(_tokenData)) {
                 revert TokenIsLocked(_tokenId);
             }
             // 5. All checks pass, so lock the token
