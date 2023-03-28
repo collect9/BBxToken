@@ -45,6 +45,7 @@ error SizeMismatch(uint256 maxSize, uint256 received); //0x97ce59d2
 
 // Registrar
 error AddressAlreadyRegistered(); //0x2d42c772
+error AddressMustFirstRegister(address account);
 error AddressNotInProcess(); //0x286d0071
 error CodeMismatch(); //0x179708c0
 error SigLengthIncorrect(); //0x4d889d44

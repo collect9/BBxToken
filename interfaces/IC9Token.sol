@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
 import "@openzeppelin/contracts/interfaces/IERC2981.sol";
-import "./../utils/interfaces/IC9ERC721.sol";
+import "./../utils/interfaces/IC9ERC721Base.sol";
 
 interface IC9Token is IC9ERC721, IERC2981 {
 
@@ -12,6 +12,10 @@ interface IC9Token is IC9ERC721, IERC2981 {
     function getEditionMaxMintId(uint256 edition)
     external view
     returns (uint256);
+
+    function getInsuredsValue(uint256[] calldata tokenIds)
+    external view
+    returns (uint256 value);
 
     function getTokenParams(uint256 _tokenId) external view returns(uint256[19] memory params);
 

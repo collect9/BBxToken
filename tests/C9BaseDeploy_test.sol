@@ -9,7 +9,7 @@ import "remix_accounts.sol";
 // This import is automatically injected by Remix
 import "remix_tests.sol"; 
 
-import "../C9Token4.sol";
+import "../C9Redeemer.sol";
 import "../abstract/C9Struct4.sol";
 
 // File name has to end with '_test.sol', this file can contain more than one testSuite contracts
@@ -29,7 +29,7 @@ contract C9TestContract is C9Struct {
     TokenData[32] internal _rawData;
 
     // Create contract and mint some NFTs
-    C9Token internal c9t;
+    C9Redeemer internal c9t;
 
     constructor() {
         // Store raw data to compare against in tests
@@ -67,7 +67,7 @@ contract C9TestContract is C9Struct {
         _rawData[31] = TokenData("FLASH", 0, 0, 0, 4, 0, 6, 4, 1, 1, 1, 0, 4, 0, 37, 0, 894296, 0, 0, 1500, 3, 24323467797581229811197741915687639246135400876943092544792468055570397136869);
 
         // Create NFT contract instance
-        c9t = new C9Token();
+        c9t = new C9Redeemer();
 
         // Seed for random mint Ids at test
         _timestamp = block.timestamp;
@@ -189,17 +189,17 @@ contract C9TestContract is C9Struct {
         Assert.equal(c9t.totalSupply(), _rawData.length, "Invalid supply");
         _checkOwnerDataOf(c9tOwner);
 
-        uint256 combo;
-        combo = c9t.comboExists(5, 4, 1, 1, 1, 0, "PATTI DF") ? 1 : 0;
-        Assert.equal(combo, 1, "Invalid combo1");
-        combo = c9t.comboExists(6, 0, 1, 1, 0, 0, "QUACKER WINGLESS") ? 1 : 0;
-        Assert.equal(combo, 1, "Invalid combo2");
-        combo = c9t.comboExists(5, 1, 3, 1, 4, 1, "ROYAL BLUE PEANUT") ? 1 : 0;
-        Assert.equal(combo, 1, "Invalid combo3");
+        // uint256 combo;
+        // combo = c9t.comboExists(5, 4, 1, 1, 1, 0, "PATTI DF") ? 1 : 0;
+        // Assert.equal(combo, 1, "Invalid combo1");
+        // combo = c9t.comboExists(6, 0, 1, 1, 0, 0, "QUACKER WINGLESS") ? 1 : 0;
+        // Assert.equal(combo, 1, "Invalid combo2");
+        // combo = c9t.comboExists(5, 1, 3, 1, 4, 1, "ROYAL BLUE PEANUT") ? 1 : 0;
+        // Assert.equal(combo, 1, "Invalid combo3");
 
-        // Check for one that doesn't exist
-        combo = c9t.comboExists(5, 2, 3, 1, 4, 1, "ROYAL BLUE PEANUT") ? 1 : 0;
-        Assert.equal(combo, 0, "Invalid combo4");
+        // // Check for one that doesn't exist
+        // combo = c9t.comboExists(5, 2, 3, 1, 4, 1, "ROYAL BLUE PEANUT") ? 1 : 0;
+        // Assert.equal(combo, 0, "Invalid combo4");
     }
 
     /* @dev 2. Checks that all data has been stored and is being 
@@ -220,5 +220,20 @@ contract C9TestContract is C9Struct {
         for (uint256 i; i<_rawData.length; ++i) {
             _checkOwnerParams(i);
         }
+    }
+
+    function checkTotalSupply()
+    public {
+        Assert.equal(_rawData.length, c9t.totalSupply(), "Invalid total supply");
+    }
+
+    function checkMintEdCounter()
+    public {
+        uint256 mintSupply;
+        for (uint256 i; i<99;) {
+            mintSupply += c9t.getEditionMaxMintId(i);
+            unchecked {++i;}
+        }
+        Assert.equal(mintSupply, c9t.totalSupply(), "Invalid mint counter supply");
     }
 }

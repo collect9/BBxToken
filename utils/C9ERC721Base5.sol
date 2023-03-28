@@ -41,11 +41,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
 
     bytes32 public constant REDEEMER_ROLE = keccak256("REDEEMER_ROLE");
 
-    uint256 constant APOS_LOCKED = 0;
-    uint256 constant APOS_LOCKSTAMP = 8;
-    uint256 constant APOS_LOCKPERIOD = 48;
-    uint256 constant APOS_REGISTRATION = 72;
-    uint256 constant APOS_RESERVED = 168;
+    uint256 constant APOS_REDEEMER = 0;
+    uint256 constant APOS_REGISTRATION = 144;
     uint256 constant APOS_REDEMPTIONS = 176;
     uint256 constant APOS_BALANCE = 192;
     uint256 constant APOS_VOTES = 208;
@@ -138,11 +135,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     internal virtual {
         // Copy from storage first
         uint256 balancesFrom = _balances[from];
-        // Check that the from account did not have an active lock
-        if (uint256(uint8(balancesFrom)) == LOCKED) {
-            revert AddressLocked(from);
-        }
-        // Copy from storage first
         uint256 balancesTo = _balances[to];
         // Parameters to update, token owners balances and transfer counts
         uint256 balanceFrom = uint256(uint16(balancesFrom>>APOS_BALANCE));
@@ -316,31 +308,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
         }
     }
 
-
-
-
-    function _mint(address to, uint256 firstTokenId, uint256 batchSize)
-    internal virtual {
-        uint256 _to = uint256(uint160(to));
-        uint256 _tokenIdLast = firstTokenId+batchSize;
-        uint256 _tokenId = firstTokenId;
-        for (_tokenId; _tokenId<_tokenIdLast;) {
-            if (_exists(_tokenId)) {
-                revert TokenAlreadyMinted(_tokenId);
-            }
-            _owners[_tokenId] = _to<<MPOS_OWNER;
-            emit Transfer(address(0), to, _tokenId);
-            unchecked {
-                ++_tokenId;
-            }
-        }
-        // Update supply and balances one time
-        unchecked {
-            _balances[to] += batchSize; 
-            _totalSupply += batchSize;  
-        }
-    }
-
     /**
      * @dev Returns the owner of the `tokenId`. Does NOT revert if token doesn't exist
      */
@@ -348,34 +315,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     internal view virtual
     returns (address) {
         return address(uint160(_owners[tokenId]>>MPOS_OWNER));
-    }
-
-    /**
-     * @dev Safely mints `tokenId` and transfers it to `to`.
-     *
-     * Requirements:
-     *
-     * - `tokenId` must not exist.
-     * - If `to` refers to a smart contract, it must implement {IERC721Receiver-onERC721Received}, which is called upon a safe transfer.
-     *
-     * Emits a {Transfer} event.
-     */
-    function _safeMint(address to, uint256 firstTokenId, uint256 batchSize)
-    internal virtual {
-        _safeMint(to, firstTokenId, batchSize, "");
-    }
-    
-    /**
-     * @dev Same as {xref-ERC721-_safeMint-address-uint256-}[`_safeMint`], with an additional `data` parameter which is
-     * forwarded in {IERC721Receiver-onERC721Received} to contract recipients.
-     */
-    function _safeMint(address to, uint256 firstTokenId, uint256 batchSize, bytes memory data)
-    internal virtual {
-        _mint(to, firstTokenId, batchSize);
-        // Only check the first token
-        if (!_checkOnERC721Received(address(0), to, firstTokenId, data)) {
-            revert NonERC721Receiver();
-        }
     }
 
     /**
@@ -605,23 +544,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      */
     function getRegistrationFor(address account)
     external view
-    onlyRole(REDEEMER_ROLE)
     returns (uint256 data) {
-        if (!isRegistered(account)) {
-            revert AddressNotRegistered(account);
-        }
-        return uint256(uint96(_balances[account]>>APOS_REGISTRATION));
-    }
-
-    /**
-     * @dev The cost to set/update should be comparable 
-     * to updating insured values.
-     */
-    function getReservedBalanceSpace(address account)
-    external view
-    returns (uint256) {
-        uint256 balanceData = _balances[account];
-        return uint256(uint8(balanceData>>APOS_RESERVED));
+        return uint256(uint32(_balances[account]>>APOS_REGISTRATION));
     }
 
     /**
@@ -640,7 +564,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     function isRegistered(address account)
     public view
     returns (bool) {
-        return uint96(_balances[account]>>APOS_REGISTRATION) > 0;
+        return uint32(_balances[account]>>APOS_REGISTRATION) > 0;
     }
 
     /**
@@ -663,18 +587,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
         votes = uint256(uint24(ownerData>>APOS_VOTES));
         redemptions = uint256(uint16(ownerData>>APOS_REDEMPTIONS));
         transfers = uint256(ownerData>>APOS_TRANSFERS);
-    }
-
-    /**
-     * @dev View function to see owner lock status.
-     */
-    function ownerLocked(address tokenOwner)
-    public view virtual
-    returns (bool locked, uint256 lockStamp) {
-        uint256 ownerData = _balances[tokenOwner];
-        uint256 _locked = uint256(uint8(ownerData));
-        locked = _locked == 1 ? true : false;
-        lockStamp = uint256(uint40(ownerData>>APOS_LOCKSTAMP));
     }
 
     /**
@@ -713,8 +625,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
         _balances[_msgSender()] = _setTokenParam(
             _balances[_msgSender()],
             APOS_REGISTRATION,
-            uint96(bytes12(ksig32)),
-            type(uint96).max
+            uint32(bytes4(ksig32)),
+            type(uint32).max
         );
         emit Register(_msgSender());
     }
@@ -786,28 +698,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     public virtual
     override {
         _setApprovalForAll(_msgSender(), operator, approved);
-    }
-
-    /**
-     * @dev Sets the data for the reserved (unused balance) 
-     * space. Since this storage is already paid for, it may
-     * be used for expansion features that may be available 
-     * later. Such features will only be available to 
-     * external contracts, as this contract will have no
-     * built-in parsing.
-     * 8 bits remain in the reserved storage space.
-     */
-    function setReservedBalanceSpace(uint256 data)
-    external {
-        if (!_reservedBalanceSpaceOpen) {
-            revert ReservedSpaceNotOpen();
-        }
-        _balances[_msgSender()] = _setTokenParam(
-            _balances[_msgSender()],
-            APOS_RESERVED,
-            data,
-            type(uint8).max
-        );
     }
 
     /**
@@ -909,77 +799,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     external virtual
     override {
         _transfer(from, to, tokenIds);
-    }
-
-    /**
-     * @dev Allows user to temporarily lock all tokens from being
-     * transferred.
-     */
-    function userLockAddress(uint256 lockPeriod)
-    external virtual {
-        if (lockPeriod == 0) {
-            revert ZeroValueError();
-        }
-        if (lockPeriod > MAX_LOCK_PERIOD) {
-            revert PeriodTooLong(MAX_LOCK_PERIOD, lockPeriod);
-        }
-        // Check that the from account does not already have an active lock
-        uint256 addressInfo = _balances[_msgSender()];
-        if (uint256(uint8(addressInfo)) == LOCKED) {
-            revert AddressLocked(_msgSender());
-        }
-        // Set the account lock
-        addressInfo = _setTokenParam(
-            addressInfo,
-            APOS_LOCKED,
-            LOCKED,
-            type(uint8).max
-        );
-        // Set the account lock timestamp
-        addressInfo = _setTokenParam(
-            addressInfo,
-            APOS_LOCKSTAMP,
-            block.timestamp,
-            type(uint40).max
-        );
-        // Set the account lock period timestamp
-        addressInfo = _setTokenParam(
-            addressInfo,
-            APOS_LOCKPERIOD,
-            lockPeriod,
-            type(uint24).max
-        );
-        // Write back to storage
-        _balances[_msgSender()] = addressInfo;
-    }
-
-    /**
-     * @dev Allows user to unlock all tokens (if locked, and 
-     * if lock period has expired).
-     */
-    function userUnlockAddress()
-    external virtual {
-        uint256 addressInfo = _balances[_msgSender()];
-        // Check that the from account does not already have an active lock
-        if (uint256(uint8(addressInfo)) == UNLOCKED) {
-            revert AddressNotLocked();
-        }
-        // Check the lock period has expired
-        uint256 _userLockPeriod =  uint256(uint24(addressInfo>>APOS_LOCKPERIOD));
-        uint256 _sinceLocked = block.timestamp - uint256(uint40(addressInfo>>APOS_LOCKSTAMP));
-        if (_sinceLocked < _userLockPeriod) {
-            revert LockPeriodNotFinished(_userLockPeriod, _sinceLocked);
-        }
-        // Set the account unlocked
-        addressInfo = _setTokenParam(
-            addressInfo,
-            APOS_LOCKED,
-            UNLOCKED,
-            type(uint8).max
-        );
-        // No need to update lock timestamp
-        // Write back to storage
-        _balances[_msgSender()] = addressInfo;
     }
 
     function votesOf(address tokenOwner)
