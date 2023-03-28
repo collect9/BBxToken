@@ -270,10 +270,16 @@ contract C9Redeemer is C9Token {
             _newBatchSize,
             type(uint8).max
         );
-        // 6. Update tokenIds in redeemer
+        // 6. Update tokenIds in redeemer.
         uint256 _offset = RPOS_TOKEN1 + RUINT_SIZE*_oldBatchSize;
         for (uint256 i; i<_addBatchSize;) {
-            _balancesData |= tokenIds[i]<<_offset;
+            _balancesData = _setTokenParam(
+                _balancesData,
+                _offset,
+                tokenIds[i],
+                type(uint24).max
+            );
+            //_balancesData |= tokenIds[i]<<_offset;
             unchecked {
                 _offset += RUINT_SIZE;
                 ++i;
@@ -328,8 +334,9 @@ contract C9Redeemer is C9Token {
         // 1. Check existing batch already exists
         uint256 _balancesData = _balances[_msgSender()];
         uint256 _originalBatchSize = _checker(_balancesData);
-        // 3. Check new batch size is valid
+        // 2. Check new batch size is valid
         uint256 _removedBatchSize = tokenIds.length;
+        // 2a. Cancel is cheaper if removing the entire batch
         if (_removedBatchSize == _originalBatchSize) {
             revert CancelRemainder(_removedBatchSize);
         }
@@ -350,14 +357,14 @@ contract C9Redeemer is C9Token {
                 if (_currentTokenId == tokenIds[i]) { // if a match is found
                     // get the last token
                     _lastTokenId = uint256(uint24(_balancesData>>(RPOS_TOKEN1+RUINT_SIZE*(_currentBatchSize-1))));
-                    // and swap it to the current position (to remove it)
+                    // and swap it to the current position of the token to remove it
                     _balancesData = _setTokenParam(
                         _balancesData,
                         _tokenOffset,
                         _lastTokenId,
                         type(uint24).max
                     );
-                    // subtract 1 from current batch size
+                    // subtract 1 from current batch size so the popped token is no longer looked up
                     --_currentBatchSize;
                     break;
                 }
@@ -367,21 +374,15 @@ contract C9Redeemer is C9Token {
                 }
             }
             _tokenOffset = RPOS_TOKEN1;
-            unchecked {++i;}
-        }
-
-        // Unlock tokens
-        for (uint256 i; i<_removedBatchSize;) {
             _unlockToken(tokenIds[i]);
             unchecked {++i;}
         }
 
-        // Update new length in packed _data
-        uint256 _newBatchSize = _originalBatchSize-_removedBatchSize;
+        // Update remaining batchsize in packed _data
         _balancesData = _setTokenParam(
             _balancesData,
             RPOS_BATCHSIZE,
-            _newBatchSize,
+            _currentBatchSize,
             type(uint8).max
         );
 
