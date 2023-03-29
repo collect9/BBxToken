@@ -15,6 +15,16 @@ import "../abstract/C9Struct4.sol";
 // File name has to end with '_test.sol', this file can contain more than one testSuite contracts
 contract C9TestContract is C9Struct {
 
+    function afterEach()
+    public {
+        // Make sure all balance information is still correct after any test
+        address _address = c9tOwner;
+        Assert.equal(c9t.balanceOf(_address), balances[_address], "Invalid balanceOf");
+        Assert.equal(c9t.redemptionsOf(_address), redemptions[_address], "Invalid redemptionsOf");
+        Assert.equal(c9t.transfersOf(_address), transfers[_address], "Invalid transfersOf");
+        Assert.equal(c9t.votesOf(_address), votes[_address], "Invalid votesOf");
+    }
+
     address internal c9tOwner;
 
     // Variables to save and check against
@@ -29,7 +39,7 @@ contract C9TestContract is C9Struct {
     TokenData[32] internal _rawData;
 
     // Create contract and mint some NFTs
-    C9Redeemer internal c9t;
+    C9Redeemable internal c9t;
 
     constructor() {
         // Store raw data to compare against in tests
@@ -67,7 +77,7 @@ contract C9TestContract is C9Struct {
         _rawData[31] = TokenData("FLASH", 0, 0, 0, 4, 0, 6, 4, 1, 1, 1, 0, 4, 0, 37, 0, 894296, 0, 0, 1500, 3, 24323467797581229811197741915687639246135400876943092544792468055570397136869);
 
         // Create NFT contract instance
-        c9t = new C9Redeemer();
+        c9t = new C9Redeemable();
 
         // Seed for random mint Ids at test
         _timestamp = block.timestamp;

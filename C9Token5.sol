@@ -88,9 +88,12 @@ contract C9Token is ERC721IdEnumBasic {
      * @dev Checks if caller is a smart contract (except from 
      * a constructor).
      */ 
-    modifier isContract() {
-        uint256 sz = _msgSender().code.length;
-        if (sz > 0) {
+    modifier isContract(address _address) {
+        uint256 size;
+        assembly {
+            size := extcodesize(_address)
+        }
+        if (size == 0) {
             revert CallerNotContract();
         }
         _;
@@ -713,7 +716,7 @@ contract C9Token is ERC721IdEnumBasic {
     function setTokenValidity(uint256 tokenId, uint256 vId)
     external
     onlyRole(VALIDITY_ROLE)
-    isContract()
+    isContract(_msgSender())
     requireMinted(tokenId)
     notDead(tokenId) {
         uint256 _tokenValidity = _currentVId(_owners[tokenId]);
@@ -734,7 +737,7 @@ contract C9Token is ERC721IdEnumBasic {
     function setTokenUpgraded(uint256 tokenId)
     external
     onlyRole(UPGRADER_ROLE)
-    isContract()
+    isContract(_msgSender())
     requireMinted(tokenId)
     notDead(tokenId) {
         uint256 _tokenData = _owners[tokenId];

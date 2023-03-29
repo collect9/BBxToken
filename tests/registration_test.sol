@@ -6,6 +6,8 @@ import "./C9BaseDeploy_test.sol";
 // File name has to end with '_test.sol', this file can contain more than one testSuite contracts
 contract RegistrationTest is C9TestContract {
 
+    uint256 constant MASK_REGISTRATION = 2**20-1;
+
     function _checkRegistration(bytes32 ksig, bool alreadyRegistered)
     private {
         // Should not be registered to start
@@ -18,10 +20,6 @@ contract RegistrationTest is C9TestContract {
         // Check if now registered
         isRegistered = c9t.isRegistered(c9tOwner);
         Assert.equal(isRegistered, true, "registration error");
-
-        // Check registration data stored matches
-        uint256 regData = c9t._getRegistrationFor(c9tOwner);
-        Assert.equal(regData, uint256(uint32(bytes4(ksig))), "regData error");
     }
 
     function checkRegistration1()

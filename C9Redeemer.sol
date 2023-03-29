@@ -490,7 +490,6 @@ contract C9Redeemable is C9Token {
         _frozenRedeemer = toggle;
     }
 
-
     /**
      * @dev Returns the number of redeemed tokens.
      */
@@ -517,10 +516,15 @@ contract C9Redeemable is C9Token {
         }
         // 2. Get latest on-chain insured value
         uint256[] memory tokenIds = _unpackTokenIds(_redeemerData);
-        uint256 insuredValue = getInsuredsValue(tokenIds);
         // 3. Get the estimated s&h fees
-        uint256 _minRedeemUsd = getRedeemerFees(insuredValue, tokenIds.length);            
-        uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_minRedeemUsd);
+        uint256 _minRedeemUsd = getRedeemerFees(
+            getInsuredsValue(tokenIds),
+            tokenIds.length
+        );            
+        // uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(
+        //     _minRedeemUsd
+        // );
+        uint256 _minRedeemWei = 0;
         // 4. Next step update
         _balances[_msgSender()] = _setTokenParam(
             _balances[_msgSender()],
@@ -529,12 +533,12 @@ contract C9Redeemable is C9Token {
             type(uint8).max
         );
         // 5. Make sure payment amount is valid and successful
-        if (msg.value < _minRedeemWei) {
+        if (msg.value != _minRedeemWei) {
             revert InvalidPaymentAmount(_minRedeemWei, msg.value);
         }
         (bool success,) = payable(owner).call{value: msg.value}("");
         if (!success) {
-            revert PaymentFailure(msg.sender, owner, msg.value);
+            revert PaymentFailure(_msgSender(), owner, msg.value);
         }
     }
 }

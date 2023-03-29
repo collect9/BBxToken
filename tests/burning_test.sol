@@ -15,6 +15,7 @@ contract BurningTest is C9TestContract {
         (uint256 tokenId, uint256 numVotes) = _getTokenIdVotes(mintId);
         // Must be invalid before dead
         uint256 preStatus = (_timestamp % 3) + 1; // 1-3
+        _grantRole(keccak256("VALIDITY_ROLE"), c9tOwner);
         _setValidityStatus(tokenId, preStatus);
         uint256 deadStatus = (_timestamp % 4) + 5; // 4-8
         _setValidityStatus(tokenId, deadStatus);

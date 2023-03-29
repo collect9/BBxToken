@@ -5,7 +5,6 @@ import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 
 interface IC9ERC721 is IERC721, IERC721Metadata {
     function clearApproved(uint256[] calldata tokenIds) external;
-    function getRegistrationFor(address account) external returns (uint256);
     function isRegistered(address account) external returns (bool);
     function safeTransferBatchFrom(address from, address to, uint256[] calldata tokenIds) external;
     function safeBatchTransferBatchFrom(address from, address[] calldata to, uint256[][] calldata tokenIds) external;

@@ -16,13 +16,15 @@ contract SettersTest is C9TestContract {
         address contract5 = TestsAccounts.getAccount(5);
 
         c9t.setContractMeta(contract1);
+        c9t.setContractPricer(contract2);
         c9t.setContractUpgrader(contract4);
         c9t.setContractVH(contract5);
 
-        (address contractMeta, address contractUpgrader, address contractVH) = c9t.getContracts();
+        (address contractMeta, address contractPricer, address contractUpgrader, address contractVH) = c9t.getContracts();
 
         // Check contracts
         Assert.equal(contractMeta, contract1, "Invalid meta contract");
+        Assert.equal(contractPricer, contract2, "Invalid pricer contract");
         Assert.equal(contractUpgrader, contract4, "Invalid upgrader contract");
         Assert.equal(contractVH, contract5, "Invalid vh contract");
 
