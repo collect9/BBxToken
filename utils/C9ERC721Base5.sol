@@ -637,7 +637,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
         _balances[_msgSender()] = _setTokenParam(
             _balances[_msgSender()],
             APOS_REGISTRATION,
-            uint256(ksig32),
+            uint256(ksig32) % MASK_REGISTRATION,
             MASK_REGISTRATION
         );
     }

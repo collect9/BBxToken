@@ -28,23 +28,16 @@ import "./abstract/C9Errors.sol";
 abstract contract C9OwnerControl is AccessControl, ERC2771Context {
     address public owner;
     address public pendingOwner;
-    bool _frozen = false;
+    bool _frozen;
 
-    event OwnershipTransferCancel(
-        address indexed previousOwner
-    );
-    event OwnershipTransferComplete(
-        address indexed previousOwner,
-        address indexed newOwner
-    );
-    event OwnershipTransferInit(
+    event OwnershipTransfer(
         address indexed previousOwner,
         address indexed newOwner
     );
 
     constructor() {
         owner = _msgSender();
-        _grantRole(DEFAULT_ADMIN_ROLE, owner);
+        _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
     }
 
     /*
@@ -132,7 +125,7 @@ abstract contract C9OwnerControl is AccessControl, ERC2771Context {
             owner = _newOwner;
             _grantRole(DEFAULT_ADMIN_ROLE, _newOwner);
             _revokeRole(DEFAULT_ADMIN_ROLE, _oldOwner);
-            emit OwnershipTransferComplete(_oldOwner, _newOwner);
+            emit OwnershipTransfer(_oldOwner, _newOwner);
     }
 
     /**
@@ -141,12 +134,11 @@ abstract contract C9OwnerControl is AccessControl, ERC2771Context {
      * functionally equivalent to Ownable.
      */
     function transferOwnership(address _newOwner)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-        validTo(_newOwner)
-        notFrozen() {
-            pendingOwner = _newOwner;
-            emit OwnershipTransferInit(owner, _newOwner);
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE)
+    validTo(_newOwner)
+    notFrozen() {
+        pendingOwner = _newOwner;
     }
 
     /**
@@ -171,7 +163,6 @@ abstract contract C9OwnerControl is AccessControl, ERC2771Context {
         onlyRole(DEFAULT_ADMIN_ROLE) {
             if (pendingOwner == address(0)) revert NoTransferPending();
             delete pendingOwner;
-            emit OwnershipTransferCancel(owner);
     }
 
     /**
