@@ -413,9 +413,14 @@ contract C9Token is ERC721IdEnumBasic {
     public view
     returns (uint256 value) {
         uint256 _batchSize = tokenIds.length;
+        uint256 _tokenId;
         for (uint256 i; i<_batchSize;) {
+            _tokenId = tokenIds[i];
+            if (!_exists(_tokenId)) {
+                revert InvalidToken(_tokenId);
+            }
             unchecked {
-                value += _viewPackedData(_owners[tokenIds[i]], MPOS_INSURANCE, MSZ_INSURANCE);
+                value += _viewPackedData(_owners[_tokenId], MPOS_INSURANCE, MSZ_INSURANCE);
                 ++i;
             }
         }
