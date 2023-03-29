@@ -188,7 +188,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * @dev Updates the addresse's redemptions count.
      */
     function _addRedemptionsTo(address from, uint256 batchSize)
-    internal view virtual {
+    internal virtual {
         uint256 balancesFrom = _balances[from];
         uint256 redemptions = uint256(uint16(balancesFrom>>APOS_REDEMPTIONS));
         unchecked {
@@ -200,6 +200,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
             redemptions,
             type(uint16).max
         );
+        _balances[from] = balancesFrom;
     }
 
     /**
@@ -309,7 +310,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     function _isLocked(uint256 tokenData)
     internal pure
     returns (bool) {
-        return tokenData & BOOL_MASK == 1 ? true : false;
+        return (tokenData & BOOL_MASK) == 1;
     }
 
     /**
@@ -489,9 +490,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     function approve(address[] calldata to, uint256[][] calldata tokenIds)
     external virtual {
         uint256 _batchSize = tokenIds.length;
-        uint256 _addressBookSize = to.length;
-        if (_addressBookSize != _batchSize) {
-            revert TransferSizeMismatch(_addressBookSize, _batchSize);
+        if (to.length != _batchSize) {
+            revert TransferSizeMismatch(to.length, _batchSize);
         }
         uint256 tokenId;
         uint256 _tokenIdsBatchSize;
@@ -646,10 +646,10 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * @dev See {IERC2981-royaltyInfo}.
      */
     function royaltyInfo(uint256 /*tokenId*/, uint256 salePrice)
-        external view virtual override
-        returns (address receiver, uint256 royaltyAmount) {
-            receiver = owner;
-            royaltyAmount = (salePrice * _royalty) / 10000;
+    external view virtual override
+    returns (address receiver, uint256 royaltyAmount) {
+        receiver = owner;
+        royaltyAmount = (salePrice * _royalty) / 10000;
     }
 
     /**
@@ -696,9 +696,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     external
     notFrozen() {
         uint256 _batchSize = tokenIds.length;
-        uint256 _addressBookSize = to.length;
-        if (_addressBookSize != _batchSize) {
-            revert TransferSizeMismatch(_addressBookSize, _batchSize);
+        if (to.length != _batchSize) {
+            revert TransferSizeMismatch(to.length, _batchSize);
         }
         for (uint256 i; i<_batchSize;) {
             _safeTransfer(from, to[i], tokenIds[i], "");

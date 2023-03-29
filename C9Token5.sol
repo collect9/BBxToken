@@ -29,9 +29,9 @@ contract C9Token is ERC721IdEnumBasic {
     /**
      * @dev Contracts this token contract interacts with.
      */
-    address private contractMeta;
-    address private contractUpgrader;
-    address private contractVH;
+    address internal contractMeta;
+    address internal contractUpgrader;
+    address internal contractVH;
 
     /**
      * @dev Flag that may enable external (IPFS) artwork 
@@ -89,7 +89,8 @@ contract C9Token is ERC721IdEnumBasic {
      * a constructor).
      */ 
     modifier isContract() {
-        if (_msgSender().code.length > 0) {
+        uint256 sz = _msgSender().code.length;
+        if (sz > 0) {
             revert CallerNotContract();
         }
         _;
@@ -223,7 +224,7 @@ contract C9Token is ERC721IdEnumBasic {
     function _lockToken(uint256 tokenId, uint256 tokenData)
     internal
     returns (uint256) {
-        emit TokenLocked(tokenId, address(this));
+        emit TokenLocked(tokenId, _msgSender());
         return _setTokenParam(
             tokenData,
             MPOS_LOCKED,
@@ -294,7 +295,7 @@ contract C9Token is ERC721IdEnumBasic {
             UNLOCKED,
             BOOL_MASK
         );
-        emit TokenUnlocked(_tokenId, address(this));
+        emit TokenUnlocked(_tokenId, _msgSender());
     }
 
     /**
@@ -388,9 +389,10 @@ contract C9Token is ERC721IdEnumBasic {
      * @dev Returns list of contracts this contract is linked to.
      */
     function getContracts()
-    external view
-    returns(address meta, address upgrader, address vH) {
+    external view virtual
+    returns(address meta, address pricer, address upgrader, address vH) {
         meta = contractMeta;
+        pricer = address(0);
         upgrader = contractUpgrader;
         vH = contractVH;
     }
@@ -616,9 +618,6 @@ contract C9Token is ERC721IdEnumBasic {
     function setPreRedeemPeriod(uint256 period)
     external
     onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (period > MAX_PERIOD) {
-            revert PeriodTooLong(MAX_PERIOD, period);
-        }
         if (preRedeemablePeriod == period) {
             revert ValueAlreadySet();
         }

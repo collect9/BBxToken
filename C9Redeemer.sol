@@ -7,7 +7,7 @@ import "./utils/interfaces/IC9EthPriceFeed.sol";
 contract C9Redeemable is C9Token {
     
     bool private _frozenRedeemer;
-    address public contractPricer;
+    address private contractPricer;
     uint24[] private _redeemedTokens;
 
     uint256 constant RPOS_STEP = 0;
@@ -85,7 +85,7 @@ contract C9Redeemable is C9Token {
     function _getStep(uint256 balancesData)
     private pure
     returns (uint256) {
-        return uint256(uint8(balancesData>>RPOS_STEP));
+        return uint256(uint8(balancesData));
     }
 
     /**
@@ -195,14 +195,14 @@ contract C9Redeemable is C9Token {
     redeemerNotFrozen() {
         // 1. Set all tokens in the redeemer's account to redeemed
         uint256 _tokenId;
-        uint256 _balancesData = _balances[redeemer];
-        uint256 _batchSize = _getBatchSize(_balancesData);
+        uint256 _redeemerData = _balances[redeemer];
+        uint256 _batchSize = _getBatchSize(_redeemerData);
         uint256 _tokenOffsetMax;
         unchecked {
             _tokenOffsetMax = RPOS_TOKEN1 + (_batchSize*RUINT_SIZE);
         }
         for (uint256 _tokenOffset=RPOS_TOKEN1; _tokenOffset<_tokenOffsetMax;) {
-            _tokenId = uint256(uint24(_balancesData>>_tokenOffset));
+            _tokenId = uint256(uint24(_redeemerData>>_tokenOffset));
             _setTokenValidity(_tokenId, REDEEMED);
             _redeemedTokens.push(uint24(_tokenId));
             unchecked {
@@ -212,6 +212,18 @@ contract C9Redeemable is C9Token {
         // 2. Update the token redeemer's redemption count
         _addRedemptionsTo(redeemer, _batchSize);
         _clearRedemptionData(redeemer);
+    }
+
+    /**
+     * @dev Returns list of contracts this contract is linked to.
+     */
+    function getContracts()
+    external view override
+    returns(address meta, address pricer, address upgrader, address vH) {
+        meta = contractMeta;
+        pricer = contractPricer;
+        upgrader = contractUpgrader;
+        vH = contractVH;
     }
 
     /**
@@ -272,10 +284,7 @@ contract C9Redeemable is C9Token {
     external view
     requireMinted(tokenId)
     returns (bool) {
-        if (_currentVId(_owners[tokenId]) == REDEEMED) {
-            return true;
-        }
-        return false;
+        return _currentVId(_owners[tokenId]) == REDEEMED;
     }
 
     /**
@@ -298,8 +307,8 @@ contract C9Redeemable is C9Token {
     external
     redeemerNotFrozen() {
         // 1. Check existing batch already exists
-        uint256 _balancesData = _balances[_msgSender()];
-        uint256 _oldBatchSize = _changeChecker(_balancesData);
+        uint256 _redeemerData = _balances[_msgSender()];
+        uint256 _oldBatchSize = _changeChecker(_redeemerData);
         // 3. Check new batch size fits within storage
         uint256 _addBatchSize = tokenIds.length;
         uint256 _newBatchSize = _addBatchSize+_oldBatchSize;
@@ -309,8 +318,8 @@ contract C9Redeemable is C9Token {
         // 4. Lock tokens
         _redeemLockTokens(tokenIds);
         // 5. Update batch size
-        _balancesData = _setTokenParam(
-            _balancesData,
+        _redeemerData = _setTokenParam(
+            _redeemerData,
             RPOS_BATCHSIZE,
             _newBatchSize,
             type(uint8).max
@@ -318,8 +327,8 @@ contract C9Redeemable is C9Token {
         // 6. Update tokenIds in redeemer.
         uint256 _offset = RPOS_TOKEN1 + RUINT_SIZE*_oldBatchSize;
         for (uint256 i; i<_addBatchSize;) {
-            _balancesData = _setTokenParam(
-                _balancesData,
+            _redeemerData = _setTokenParam(
+                _redeemerData,
                 _offset,
                 tokenIds[i],
                 type(uint24).max
@@ -330,7 +339,7 @@ contract C9Redeemable is C9Token {
             }
         }
         // 7. Save back to storage
-        _balances[_msgSender()] = _balancesData;
+        _balances[_msgSender()] = _redeemerData;
     }
 
     /**
@@ -341,8 +350,7 @@ contract C9Redeemable is C9Token {
      */
     function redeemCancel()
     external {
-        uint256 _redeemerData = _balances[_msgSender()];
-        uint256[] memory tokenIds = _unpackTokenIds(_redeemerData);
+        uint256[] memory tokenIds = _unpackTokenIds(_balances[_msgSender()]);
         uint256 _batchSize = tokenIds.length;
         _checkBatchSize(_batchSize);
         for (uint256 i; i<_batchSize;) {
@@ -362,8 +370,8 @@ contract C9Redeemable is C9Token {
     function redeemRemove(uint256[] calldata tokenIds)
     external {
         // 1. Check existing batch already exists
-        uint256 _balancesData = _balances[_msgSender()];
-        uint256 _originalBatchSize = _changeChecker(_balancesData);
+        uint256 _redeemerData = _balances[_msgSender()];
+        uint256 _originalBatchSize = _changeChecker(_redeemerData);
         // 2. Check new batch size is valid
         uint256 _removedBatchSize = tokenIds.length;
         // 2a. Cancel is cheaper if removing the entire batch
@@ -382,13 +390,13 @@ contract C9Redeemable is C9Token {
         for (uint256 i; i<_removedBatchSize;) { // foreach token to remove
             _originalTokenId = tokenIds[i];
             for (uint256 j; j<_currentBatchSize;) { // check it against each existing token in the redeemer's batch
-                _currentTokenId = uint256(uint24(_balancesData>>_tokenOffset));
+                _currentTokenId = uint256(uint24(_redeemerData>>_tokenOffset));
                 if (_currentTokenId == _originalTokenId) { // if a match is found
                     // get the last token in the batch
-                    _lastTokenId = uint256(uint24(_balancesData>>(RPOS_TOKEN1+RUINT_SIZE*(_currentBatchSize-1))));
+                    _lastTokenId = uint256(uint24(_redeemerData>>(RPOS_TOKEN1+RUINT_SIZE*(_currentBatchSize-1))));
                     // and swap it to the current position of the token to remove
-                    _balancesData = _setTokenParam(
-                        _balancesData,
+                    _redeemerData = _setTokenParam(
+                        _redeemerData,
                         _tokenOffset,
                         _lastTokenId,
                         type(uint24).max
@@ -409,14 +417,14 @@ contract C9Redeemable is C9Token {
         }
 
         // Update remaining batchsize in packed _data
-        _balancesData = _setTokenParam(
-            _balancesData,
+        _redeemerData = _setTokenParam(
+            _redeemerData,
             RPOS_BATCHSIZE,
             _currentBatchSize,
             type(uint8).max
         );
 
-        _balances[_msgSender()] = _balancesData;
+        _balances[_msgSender()] = _redeemerData;
     }
 
     /**
