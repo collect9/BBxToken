@@ -16,20 +16,17 @@ contract SettersTest is C9TestContract {
         address contract5 = TestsAccounts.getAccount(5);
 
         c9t.setContractMeta(contract1);
-        c9t.setContractRedeemer(contract2);
         c9t.setContractUpgrader(contract4);
         c9t.setContractVH(contract5);
 
-        (address contractMeta, address contractRedeemer, address contractUpgrader, address contractVH) = c9t.getContracts();
+        (address contractMeta, address contractUpgrader, address contractVH) = c9t.getContracts();
 
         // Check contracts
         Assert.equal(contractMeta, contract1, "Invalid meta contract");
-        Assert.equal(contractRedeemer, contract2, "Invalid redeemer contract");
         Assert.equal(contractUpgrader, contract4, "Invalid upgrader contract");
         Assert.equal(contractVH, contract5, "Invalid vh contract");
 
         // Check roles
-        Assert.equal(c9t.hasRole(c9t.REDEEMER_ROLE(), contractRedeemer), true, "redeemer role not set");
         Assert.equal(c9t.hasRole(c9t.UPGRADER_ROLE(), contractUpgrader), true, "upgrader role not set");
         Assert.equal(c9t.hasRole(c9t.VALIDITY_ROLE(), contractVH), true, "validity role not set");
 
@@ -72,27 +69,6 @@ contract SettersTest is C9TestContract {
         string memory contractURI = "somecontract/uri";
         c9t.setContractURI(contractURI);
         Assert.equal(string.concat("https://", contractURI, ".json"), c9t.contractURI(), "Invalid contractURI");
-    }
-
-    /* @dev 4. Tests for account reserved space setters.
-     */
-    function checkAccountReserved()
-    public {
-        // Must enable reserved space
-        c9t.toggleReservedBalanceSpace(true);
-
-        c9t.setReservedBalanceSpace(_timestamp);
-        uint256 reservedResult = c9t.getReservedBalanceSpace(c9tOwner);
-        Assert.equal(reservedResult, _timestamp, "Invalid account reserved 1");
-
-        uint256 randomness = uint256(uint104(uint256(keccak256(abi.encodePacked(_timestamp)))));
-        c9t.setReservedBalanceSpace(randomness);
-        reservedResult = c9t.getReservedBalanceSpace(c9tOwner);
-        Assert.equal(reservedResult, randomness, "Invalid account reserved 2");
-
-        c9t.setReservedBalanceSpace(_timestamp);
-        reservedResult = c9t.getReservedBalanceSpace(c9tOwner);
-        Assert.equal(reservedResult, _timestamp, "Invalid account reserved 3");
     }
 }
     

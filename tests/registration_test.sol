@@ -20,8 +20,8 @@ contract RegistrationTest is C9TestContract {
         Assert.equal(isRegistered, true, "registration error");
 
         // Check registration data stored matches
-        uint96 regData = c9t.getRegistrationFor(c9tOwner);
-        Assert.equal(regData, uint96(bytes12(ksig)), "regData error");
+        uint256 regData = c9t._getRegistrationFor(c9tOwner);
+        Assert.equal(regData, uint256(uint32(bytes4(ksig))), "regData error");
     }
 
     function checkRegistration1()

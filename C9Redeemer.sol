@@ -6,6 +6,7 @@ import "./utils/interfaces/IC9EthPriceFeed.sol";
 
 contract C9Redeemer is C9Token {
     
+    bool private _frozenRedeemer;
     address public contractPricer;
     uint24[] private _redeemedTokens;
 
@@ -15,6 +16,19 @@ contract C9Redeemer is C9Token {
     uint256 constant MAX_BATCH_SIZE = 6;
     uint256 constant RUINT_SIZE = 24;
 
+    /*
+     * @dev Check to see if contract is frozen.
+     */ 
+    modifier redeemerNotFrozen() { 
+        if (_frozenRedeemer) {
+            revert RedeemerFrozen();
+        }
+        _;
+    }
+
+    /*
+     * @dev Checks to make sure user is on correct redemption step.
+     */ 
     modifier redemptionStep(uint256 step) {
         uint256 _expected = _getStep(_balances[_msgSender()]);
         if (step != _expected) {
@@ -23,6 +37,25 @@ contract C9Redeemer is C9Token {
         _;
     }
 
+    /*
+     * @dev Checks batch size and that redeemer is not too
+     * far along in the process to still make changes.
+     */ 
+    function _changeChecker(uint256 balancesData)
+    private pure
+    returns (uint256 _originalBatchSize) {
+        _originalBatchSize = _getBatchSize(balancesData);
+        _checkBatchSize(_originalBatchSize);
+        // 2. Make sure redeemer is not already at final step
+        uint256 _currentStep = _getStep(balancesData);
+        if (_currentStep > 2) {
+            revert AddressToFarInProcess(2, _currentStep);
+        }
+    }
+
+    /*
+     * @dev Checks batch size.
+     */ 
     function _checkBatchSize(uint256 batchSize)
     private pure {
         if (batchSize == 0) {
@@ -34,7 +67,7 @@ contract C9Redeemer is C9Token {
     private {
         _balances[redeemer] = _setTokenParam(
             _balances[redeemer], 0, 0,
-            type(uint144).max
+            type(uint160).max
         );
     }
 
@@ -154,7 +187,7 @@ contract C9Redeemer is C9Token {
     external
     onlyRole(DEFAULT_ADMIN_ROLE)
     redemptionStep(3)
-    notFrozen() {
+    redeemerNotFrozen() {
         // 1. Set all tokens in the redeemer's account to redeemed
         uint256 _tokenId;
         uint256 _balancesData = _balances[redeemer];
@@ -192,7 +225,7 @@ contract C9Redeemer is C9Token {
     public pure
     returns (uint256 total) {
         uint256 _insuredCost = 5*insuredValue/100;
-        uint256 _packagingBaseCost = 20 + 20*batchSize/4;
+        uint256 _packagingBaseCost = 20 + 5*batchSize;
         total = _packagingBaseCost + _insuredCost;
     }
 
@@ -251,10 +284,10 @@ contract C9Redeemer is C9Token {
      */
     function redeemAdd(uint256[] calldata tokenIds)
     external
-    notFrozen() {
+    redeemerNotFrozen() {
         // 1. Check existing batch already exists
         uint256 _balancesData = _balances[_msgSender()];
-        uint256 _oldBatchSize = _checker(_balancesData);
+        uint256 _oldBatchSize = _changeChecker(_balancesData);
         // 3. Check new batch size fits within storage
         uint256 _addBatchSize = tokenIds.length;
         uint256 _newBatchSize = _addBatchSize+_oldBatchSize;
@@ -297,8 +330,8 @@ contract C9Redeemer is C9Token {
      */
     function redeemCancel()
     external {
-        uint256 _balancesData = _balances[_msgSender()];
-        uint256[] memory tokenIds = _unpackTokenIds(_balancesData);
+        uint256 _redeemerData = _balances[_msgSender()];
+        uint256[] memory tokenIds = _unpackTokenIds(_redeemerData);
         uint256 _batchSize = tokenIds.length;
         if (_batchSize == 0) {
             revert AddressNotInProcess();
@@ -308,18 +341,6 @@ contract C9Redeemer is C9Token {
             unchecked {++i;}
         }
         _clearRedemptionData(_msgSender());
-    }
-
-    function _checker(uint256 balancesData)
-    private pure
-    returns (uint256 _originalBatchSize) {
-        _originalBatchSize = _getBatchSize(balancesData);
-        _checkBatchSize(_originalBatchSize);
-        // 2. Make sure redeemer is not already at final step
-        uint256 _currentStep = _getStep(balancesData);
-        if (_currentStep > 2) {
-            revert AddressToFarInProcess(2, _currentStep);
-        }
     }
 
     /*
@@ -333,7 +354,7 @@ contract C9Redeemer is C9Token {
     external {
         // 1. Check existing batch already exists
         uint256 _balancesData = _balances[_msgSender()];
-        uint256 _originalBatchSize = _checker(_balancesData);
+        uint256 _originalBatchSize = _changeChecker(_balancesData);
         // 2. Check new batch size is valid
         uint256 _removedBatchSize = tokenIds.length;
         // 2a. Cancel is cheaper if removing the entire batch
@@ -395,7 +416,9 @@ contract C9Redeemer is C9Token {
      * unless canceled.
      */
     function redeemStart(uint256[] calldata tokenIds)
-    external {
+    external
+    redemptionStep(0)
+    redeemerNotFrozen() {
         // 1. Checks
         if (!isRegistered(_msgSender())) {
             revert AddressMustFirstRegister(_msgSender());
@@ -407,30 +430,42 @@ contract C9Redeemer is C9Token {
         // 2. Lock tokens
         _redeemLockTokens(tokenIds);
         // 3. Update redeemer data portion of balances
-        uint256 _balancesData = _balances[_msgSender()];
-        _balancesData |= 2<<RPOS_STEP;
-        _balancesData |= _batchSize<<RPOS_BATCHSIZE;
+        uint256 _redeemerData = 2;
+        _redeemerData |= _batchSize<<RPOS_BATCHSIZE;
         uint256 _offset = RPOS_TOKEN1;
         for (uint256 i; i<_batchSize;) {
-            _balancesData |= tokenIds[i]<<_offset;
+            _redeemerData |= tokenIds[i]<<_offset;
             unchecked {
                 _offset += RUINT_SIZE;
                 ++i;
             }
         }
         // 4. Save redeemer state
-        _balances[_msgSender()] = _balancesData;  
+        _balances[_msgSender()] |= _redeemerData;
     }
 
     /**
      * @dev Updates the token contract address.
      */
     function setContractPricer(address pricer)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-        addressNotSame(contractPricer, pricer) {
-            contractPricer = pricer;
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE)
+    addressNotSame(contractPricer, pricer) {
+        contractPricer = pricer;
     }
+
+    /**
+     * @dev Freezes or unfreezes redeemer portion of contract.
+     */
+    function toggleRedeemerFreezer(bool toggle)
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_frozenRedeemer == toggle) {
+            revert BoolAlreadySet();
+        }
+        _frozenRedeemer = toggle;
+    }
+
 
     /**
      * @dev Returns the number of redeemed tokens.
@@ -449,7 +484,8 @@ contract C9Redeemer is C9Token {
      */
     function userVerifyRedemption(uint256 registrationCode)
     external payable
-    redemptionStep(2) {
+    redemptionStep(2)
+    redeemerNotFrozen() {
         // 1. Checks
         if (registrationCode != _getRegistrationFor(_msgSender())) {
             revert CodeMismatch();

@@ -89,8 +89,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     address internal _royaltyReceiver;
     uint96 internal _royalty;
 
-    bool private _reservedBalanceSpaceOpen;
-
     /**
      * @dev Initializes the contract by setting a `name` and a `symbol` to the token collection.
      */
@@ -552,7 +550,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * @dev Gets the stored registration data.
      */
     function _getRegistrationFor(address account)
-    internal view
+    public view
     returns (uint256 data) {
         return uint256(uint32(_balances[account]>>APOS_REGISTRATION));
     }
@@ -756,20 +754,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
             interfaceId == type(IERC2981).interfaceId ||
             interfaceId == type(IERC4906).interfaceId ||
             super.supportsInterface(interfaceId);
-    }
-
-    /**
-     * @dev Flag that sets global toggle to freeze redemption. 
-     * Users may still cancel redemption and unlock their 
-     * token if in the process.
-     */
-    function toggleReservedBalanceSpace(bool toggle)
-    external
-    onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (_reservedBalanceSpaceOpen == toggle) {
-            revert BoolAlreadySet();
-        }
-        _reservedBalanceSpaceOpen = toggle;
     }
 
     /**
