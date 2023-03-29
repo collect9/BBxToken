@@ -4,7 +4,7 @@ import "./C9Token5.sol";
 
 import "./utils/interfaces/IC9EthPriceFeed.sol";
 
-contract C9Redeemer is C9Token {
+contract C9Redeemable is C9Token {
     
     bool private _frozenRedeemer;
     address public contractPricer;
@@ -44,6 +44,7 @@ contract C9Redeemer is C9Token {
     function _changeChecker(uint256 balancesData)
     private pure
     returns (uint256 _originalBatchSize) {
+        // 1. Check a batch size exists
         _originalBatchSize = _getBatchSize(balancesData);
         _checkBatchSize(_originalBatchSize);
         // 2. Make sure redeemer is not already at final step
@@ -59,10 +60,14 @@ contract C9Redeemer is C9Token {
     function _checkBatchSize(uint256 batchSize)
     private pure {
         if (batchSize == 0) {
-            revert AddressNotInProcess();
+            revert NoRedemptionBatchPresent();
         }
     }
 
+    /*
+     * @dev Clears the step, batchsize, and space for 
+     * 6 token Ids (u24).
+     */
     function _clearRedemptionData(address redeemer)
     private {
         _balances[redeemer] = _setTokenParam(
@@ -220,12 +225,19 @@ contract C9Redeemer is C9Token {
 
     /*
      * @dev Returns the minimum amount payable given batch size.
+     * Shipping insurance as quoted Mar 2023 costs around ~1.2% 
+     * of the value. We add a refundable buffer (~2%) for international 
+     * shipments that will have a higher base.
+     * Base package costs are around $20 CONUS. Thus the release 
+     * fee can be summarized as $20 + (VALUE*2%).
+     * Additional fees may be refunded.
+     * Note: Max batch size can only be 6.
      */
     function getRedeemerFees(uint256 insuredValue, uint256 batchSize)
     public pure
     returns (uint256 total) {
-        uint256 _insuredCost = 5*insuredValue/100;
-        uint256 _packagingBaseCost = 20 + 5*batchSize;
+        uint256 _insuredCost = 2*insuredValue/100;
+        uint256 _packagingBaseCost = 20 + 2*batchSize;
         total = _packagingBaseCost + _insuredCost;
     }
 
@@ -312,7 +324,6 @@ contract C9Redeemer is C9Token {
                 tokenIds[i],
                 type(uint24).max
             );
-            //_balancesData |= tokenIds[i]<<_offset;
             unchecked {
                 _offset += RUINT_SIZE;
                 ++i;
@@ -333,9 +344,7 @@ contract C9Redeemer is C9Token {
         uint256 _redeemerData = _balances[_msgSender()];
         uint256[] memory tokenIds = _unpackTokenIds(_redeemerData);
         uint256 _batchSize = tokenIds.length;
-        if (_batchSize == 0) {
-            revert AddressNotInProcess();
-        }
+        _checkBatchSize(_batchSize);
         for (uint256 i; i<_batchSize;) {
             _unlockToken(tokenIds[i]);
             unchecked {++i;}
@@ -358,11 +367,8 @@ contract C9Redeemer is C9Token {
         // 2. Check new batch size is valid
         uint256 _removedBatchSize = tokenIds.length;
         // 2a. Cancel is cheaper if removing the entire batch
-        if (_removedBatchSize == _originalBatchSize) {
+        if (_removedBatchSize >= _originalBatchSize) {
             revert CancelRemainder(_removedBatchSize);
-        }
-        if (_removedBatchSize > _originalBatchSize) {
-            revert SizeMismatch(_originalBatchSize, _removedBatchSize);
         }
         /*
         Swap and pop in memory instead of storage. This keeps 
@@ -370,23 +376,27 @@ contract C9Redeemer is C9Token {
         */
         uint256 _currentTokenId;
         uint256 _lastTokenId;
+        uint256 _originalTokenId;
         uint256 _tokenOffset = RPOS_TOKEN1;
         uint256 _currentBatchSize = _originalBatchSize;
         for (uint256 i; i<_removedBatchSize;) { // foreach token to remove
-            for (uint256 j; j<_currentBatchSize;) { // check it against each existing token
+            _originalTokenId = tokenIds[i];
+            for (uint256 j; j<_currentBatchSize;) { // check it against each existing token in the redeemer's batch
                 _currentTokenId = uint256(uint24(_balancesData>>_tokenOffset));
-                if (_currentTokenId == tokenIds[i]) { // if a match is found
-                    // get the last token
+                if (_currentTokenId == _originalTokenId) { // if a match is found
+                    // get the last token in the batch
                     _lastTokenId = uint256(uint24(_balancesData>>(RPOS_TOKEN1+RUINT_SIZE*(_currentBatchSize-1))));
-                    // and swap it to the current position of the token to remove it
+                    // and swap it to the current position of the token to remove
                     _balancesData = _setTokenParam(
                         _balancesData,
                         _tokenOffset,
                         _lastTokenId,
                         type(uint24).max
                     );
-                    // subtract 1 from current batch size so the popped token is no longer looked up
+                    // subtract 1 from current batch size so the popped token (duplicate now) is no longer looked up
                     --_currentBatchSize;
+                    // Unlock the removed token
+                    _unlockToken(_originalTokenId);
                     break;
                 }
                 unchecked {
@@ -395,7 +405,6 @@ contract C9Redeemer is C9Token {
                 }
             }
             _tokenOffset = RPOS_TOKEN1;
-            _unlockToken(tokenIds[i]);
             unchecked {++i;}
         }
 
@@ -417,20 +426,27 @@ contract C9Redeemer is C9Token {
      */
     function redeemStart(uint256[] calldata tokenIds)
     external
-    redemptionStep(0)
     redeemerNotFrozen() {
         // 1. Checks
-        if (!isRegistered(_msgSender())) {
+        uint256 _redeemerData = _balances[_msgSender()];
+        // 1b. Check account is registered
+        if (!(_getRegistrationFor(_redeemerData) > 0)) {
             revert AddressMustFirstRegister(_msgSender());
         }
+        // 1c. Check account does not have open redemption
+        uint256 _step = _getStep(_redeemerData);
+        if (_step != 0) {
+            revert WrongProcessStep(0, _step);
+        }
+        // 1d. Check redemption batchsize is within limits
         uint256 _batchSize = tokenIds.length;
         if (_batchSize > MAX_BATCH_SIZE) {
             revert RedeemerBatchSizeTooLarge(MAX_BATCH_SIZE, _batchSize);
         }
         // 2. Lock tokens
         _redeemLockTokens(tokenIds);
-        // 3. Update redeemer data portion of balances
-        uint256 _redeemerData = 2;
+        // 3. Update redeemer data
+        _redeemerData |= 2;
         _redeemerData |= _batchSize<<RPOS_BATCHSIZE;
         uint256 _offset = RPOS_TOKEN1;
         for (uint256 i; i<_batchSize;) {
@@ -441,7 +457,7 @@ contract C9Redeemer is C9Token {
             }
         }
         // 4. Save redeemer state
-        _balances[_msgSender()] |= _redeemerData;
+        _balances[_msgSender()] = _redeemerData;
     }
 
     /**
@@ -487,12 +503,12 @@ contract C9Redeemer is C9Token {
     redemptionStep(2)
     redeemerNotFrozen() {
         // 1. Checks
-        if (registrationCode != _getRegistrationFor(_msgSender())) {
+        uint256 _redeemerData = _balances[_msgSender()];
+        if (registrationCode != _getRegistrationFor(_redeemerData)) {
             revert CodeMismatch();
         }
         // 2. Get latest on-chain insured value
-        uint256 _balancesData = _balances[_msgSender()];
-        uint256[] memory tokenIds = _unpackTokenIds(_balancesData);
+        uint256[] memory tokenIds = _unpackTokenIds(_redeemerData);
         uint256 insuredValue = getInsuredsValue(tokenIds);
         // 3. Get the estimated s&h fees
         uint256 _minRedeemUsd = getRedeemerFees(insuredValue, tokenIds.length);            

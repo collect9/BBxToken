@@ -76,6 +76,7 @@ abstract contract C9Struct {
     uint256 constant MSZ_XFER_COUNTER = 20;
 
     // Masks of packed data in ownerData
+    uint256 constant M_MASK_INSURANCE = 2**MSZ_INSURANCE-1;
     uint256 constant M_MASK_VALIDITY = 2**MSZ_VALIDITY-1;
     uint256 constant M_MASK_ROYALTY = 2**MSZ_ROYALTY-1;
     uint256 constant M_IMASK_VALIDITY = 2**(256-MSZ_VALIDITY)-1;
@@ -112,6 +113,6 @@ abstract contract C9Struct {
     uint256 constant U_MASK_ROYALTIES_DUE = 2**USZ_ROYALTIES_DUE-1;
     
     // Masks of packed data in balances
-    uint256 constant MASK_ADDRESS_XFER = 2**184-1;
-    uint256 constant MASK_BALANCER = 2**64-1;
+    uint256 constant MASK_ADDRESS_XFER = 2**184-1; // Token Id owner and transfer counter
+    uint256 constant MASK_BALANCER = 2**60-1; // Address balance, votes, and transfer counter
 }

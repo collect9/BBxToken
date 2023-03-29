@@ -40,7 +40,9 @@ error InvalidSigner(address expected, address received); //0x7ba5ffb5
 // Redeemer
 error AddressToFarInProcess(uint256 minStep, uint256 received); //0xb078ecc8
 error CancelRemainder(uint256 remainingBatch); //0x2c9f7f1d
+error NoRedemptionBatchPresent();
 error RedeemerBatchSizeTooLarge(uint256 maxSize, uint256 received); //0x66aa3a8c
+error RedeemerFrozen();
 error SizeMismatch(uint256 maxSize, uint256 received); //0x97ce59d2
 
 // Registrar

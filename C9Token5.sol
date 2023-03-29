@@ -56,7 +56,6 @@ contract C9Token is ERC721IdEnumBasic {
     uint24[] private _burnedTokens;
     uint256 public preRedeemablePeriod; //seconds
 
-    
     /**
      * @dev Mappings that hold all of the token info required to 
      * construct the 100% on chain SVG.
@@ -66,15 +65,6 @@ contract C9Token is ERC721IdEnumBasic {
     mapping(uint256 => address) private _rTokenData;
     mapping(uint256 => uint256) private _cTokenData;
     mapping(uint256 => uint256) internal _uTokenData;
-    
-    /**
-     * @dev Mapping that checks whether or not some combination of 
-     * TokenData has already been minted. The boolean determines
-     * whether or not to increment the editionID. This also allows 
-     * for quick external lookup on whether or not a particular 
-     * combo exists within this collection.
-     */
-    mapping(bytes32 => bool) private _tokenComboExists;
 
     /**
      * @dev _mintId stores the edition minting for up to 99 editions.
@@ -99,12 +89,7 @@ contract C9Token is ERC721IdEnumBasic {
      * a constructor).
      */ 
     modifier isContract() {
-        uint256 size;
-        address sender = _msgSender();
-        assembly {
-            size := extcodesize(sender)
-        }
-        if (size == 0) {
+        if (_msgSender().code.length > 0) {
             revert CallerNotContract();
         }
         _;
@@ -454,17 +439,6 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Returns view of the barCodeData.
-     */
-    function getQRData(uint256 tokenId)
-    external view
-    requireMinted(tokenId)
-    returns (uint256) {
-        return _cTokenData[tokenId];
-    }
-
-
-    /**
      * @dev Returns an unpacked view of the tokenData.
      */
     function getTokenParams(uint256 tokenId)
@@ -494,7 +468,7 @@ contract C9Token is ERC721IdEnumBasic {
     function getTokenParamsName(uint256 tokenId)
     external view
     requireMinted(tokenId)
-    returns (string memory name) {
+    returns (bytes memory bName) {
         uint256 data = _uTokenData[tokenId];
         bytes19 b19Name = bytes19(uint152(data >> UPOS_NAME));
         uint256 i;
@@ -504,12 +478,11 @@ contract C9Token is ERC721IdEnumBasic {
             }
             unchecked {++i;}
         }
-        bytes memory bName = new bytes(i);
+        bName = new bytes(i);
         for (uint256 j; j<i;) {
             bName[j] = b19Name[j];
             unchecked {++j;}
         }
-        return string(bName);
     }
 
     /* @dev Batch minting function.
@@ -848,6 +821,30 @@ contract C9Token is ERC721IdEnumBasic {
     external view
     returns (uint256) {
         return _burnedTokens.length;
+    }
+
+    /**
+     * @dev The cost to set/update should be comparable 
+     * to updating insured values.
+     */
+    function updatedInsuranceValues(uint256[2][] calldata data)
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE) {
+        uint256 _batchSize = data.length;
+        uint256 _tokenId;
+        for (uint256 i; i<_batchSize;) {
+            _tokenId = data[i][0];
+            if (!_exists(_tokenId)) {
+                revert InvalidToken(_tokenId);
+            }
+            _owners[_tokenId] = _setTokenParam(
+                _owners[_tokenId],
+                MPOS_INSURANCE,
+                data[i][1],
+                M_MASK_INSURANCE
+            );
+            unchecked {++i;}
+        }
     }
 
     /**

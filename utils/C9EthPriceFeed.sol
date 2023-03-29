@@ -13,6 +13,8 @@ contract C9EthPriceFeed is IC9EthPriceFeed, Ownable {
      * Aggregator: ETH/USD
      * Network: Goerli
      * Address: 0xD4a33860578De61DBAbDc8BFdb98FD742fA7028e
+     * Network: Sepolia
+     * Address: 0x694AA1769357215DE4FAC081bf1f309aDC325306
      * Network: Mainnet
      * Address: 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419
      */
@@ -40,9 +42,8 @@ contract C9EthPriceFeed is IC9EthPriceFeed, Ownable {
     function getTokenWeiPrice(uint256 _tokenUSDPrice)
         external view override
         returns (uint256 tokenETHPrice) {
-            uint256 tokenUSDPrice = _tokenUSDPrice*10**18;
-            uint256 etherPriceUSD = getLatestETHUSDPrice()*10**10;
-            tokenETHPrice = (tokenUSDPrice*10**18)/etherPriceUSD; //wei
+            uint256 etherPriceUSD = getLatestETHUSDPrice();
+            tokenETHPrice = (_tokenUSDPrice*10**26)/etherPriceUSD; //wei
     }
 
     /**
@@ -50,7 +51,7 @@ contract C9EthPriceFeed is IC9EthPriceFeed, Ownable {
      */
     function setPriceFeed(address _address)
     public
-        onlyOwner {
-            priceFeed = AggregatorV3Interface(_address);
+    onlyOwner {
+        priceFeed = AggregatorV3Interface(_address);
     }
 }

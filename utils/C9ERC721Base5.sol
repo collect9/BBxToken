@@ -39,18 +39,15 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     using Address for address;
     using Strings for uint256;
 
-    bytes32 public constant REDEEMER_ROLE = keccak256("REDEEMER_ROLE");
-
     uint256 constant APOS_REDEEMER = 0;
-    uint256 constant APOS_REGISTRATION = 144;
-    uint256 constant APOS_REDEMPTIONS = 176;
-    uint256 constant APOS_BALANCE = 192;
-    uint256 constant APOS_VOTES = 208;
-    uint256 constant APOS_TRANSFERS = 232;
+    uint256 constant APOS_REGISTRATION = 160;
+    uint256 constant APOS_REDEMPTIONS = 180;
+    uint256 constant APOS_BALANCE = 196;
+    uint256 constant APOS_VOTES = 212;
+    uint256 constant APOS_TRANSFERS = 236;
 
-    uint256 constant MAX_LOCK_PERIOD = 1209600; // 14 days
-
-    event Register(address indexed account);
+    uint256 constant ASZ_REGISTRATION = 20;
+    uint256 constant MASK_REGISTRATION = 2**ASZ_REGISTRATION-1;
 
     // Token name
     string public name;
@@ -394,7 +391,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
 
     function __transfer(address from, uint256 to, uint256 tokenId)
     internal virtual
-    notFrozen()
     returns (uint256 votes) {
         uint256 tokenData = _owners[tokenId];
         /*
@@ -549,10 +545,10 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     /**
      * @dev Gets the stored registration data.
      */
-    function _getRegistrationFor(address account)
-    public view
+    function _getRegistrationFor(uint256 accountData)
+    internal pure
     returns (uint256 data) {
-        return uint256(uint32(_balances[account]>>APOS_REGISTRATION));
+        return _viewPackedData(accountData, APOS_REGISTRATION, ASZ_REGISTRATION);
     }
 
     /**
@@ -581,7 +577,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     function isRegistered(address account)
     public view
     returns (bool) {
-        return uint32(_balances[account]>>APOS_REGISTRATION) > 0;
+        return _getRegistrationFor(_balances[account]) > 0;
     }
 
     /**
@@ -603,7 +599,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
         balance = uint256(uint16(ownerData>>APOS_BALANCE));
         votes = uint256(uint24(ownerData>>APOS_VOTES));
         redemptions = uint256(uint16(ownerData>>APOS_REDEMPTIONS));
-        transfers = uint256(ownerData>>APOS_TRANSFERS);
+        transfers = ownerData>>APOS_TRANSFERS;
     }
 
     /**
@@ -637,15 +633,13 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * @dev Adds address registration.
      */
     function register(bytes32 ksig32)
-    external
-    notFrozen() {
+    external {
         _balances[_msgSender()] = _setTokenParam(
             _balances[_msgSender()],
             APOS_REGISTRATION,
-            uint32(bytes4(ksig32)),
-            type(uint32).max
+            uint256(ksig32),
+            MASK_REGISTRATION
         );
-        emit Register(_msgSender());
     }
 
     /**
@@ -663,7 +657,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      */
     function safeTransferFrom(address from, address to, uint256 tokenId)
     public virtual
-    override {
+    override
+    notFrozen() {
         safeTransferFrom(from, to, tokenId, "");
     }
 
@@ -672,7 +667,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      */
     function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory data)
     public virtual
-    override {
+    override
+    notFrozen() {
         _safeTransfer(from, to, tokenId, data);
     }
 
@@ -681,7 +677,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * between two addresses. Max batch size is 64.
      */
     function safeTransferBatchFrom(address from, address to, uint256[] calldata tokenIds)
-    external {
+    external
+    notFrozen() {
         _transfer(from, to, tokenIds);
         // Only need to check one time
         if (!_checkOnERC721Received(from, to, tokenIds[0], "")) {
@@ -696,7 +693,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * non-ERC721 receiver.
      */
     function safeBatchTransferBatchFrom(address from, address[] calldata to, uint256[][] calldata tokenIds)
-    external {
+    external
+    notFrozen() {
         uint256 _batchSize = tokenIds.length;
         uint256 _addressBookSize = to.length;
         if (_addressBookSize != _batchSize) {
@@ -790,7 +788,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * @dev See {IERC721-transferFrom}.
      */
     function transferFrom(address from, address to, uint256 tokenId)
-    public virtual {
+    public virtual
+    notFrozen() {
         _transfer(from, to, tokenId);
     }
 
@@ -800,7 +799,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      */
     function transferBatchFrom(address from, address to, uint256[] calldata tokenIds)
     external virtual
-    override {
+    override
+    notFrozen() {
         _transfer(from, to, tokenIds);
     }
 
