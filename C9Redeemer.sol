@@ -70,10 +70,7 @@ contract C9Redeemable is C9Token {
      */
     function _clearRedemptionData(address redeemer)
     private {
-        _balances[redeemer] = _setTokenParam(
-            _balances[redeemer], 0, 0,
-            type(uint160).max
-        );
+        _balances[redeemer] &= ~(uint256(type(uint160).max));
     }
 
     function _getBatchSize(uint256 balancesData)
@@ -519,13 +516,12 @@ contract C9Redeemable is C9Token {
             getInsuredsValue(tokenIds),
             tokenIds.length
         );            
-        // uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(
-        //     _minRedeemUsd
-        // );
-        uint256 _minRedeemWei = 0;
+        uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(
+            _minRedeemUsd
+        );
         // 4. Next step update
         _balances[_msgSender()] = _setTokenParam(
-            _balances[_msgSender()],
+            _redeemerData,
             RPOS_STEP,
             3,
             type(uint8).max

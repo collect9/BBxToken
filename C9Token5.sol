@@ -127,12 +127,7 @@ contract C9Token is ERC721IdEnumBasic {
         _transferEvent(ownerOf(tokenId), address(0), tokenId);
         delete _tokenApprovals[tokenId];
         // Set zero address
-        _owners[tokenId] = _setTokenParam(
-            _owners[tokenId],
-            MPOS_OWNER,
-            uint256(0),
-            type(uint160).max
-        );
+        _owners[tokenId] &= ~(uint256(type(uint160).max)<<MPOS_OWNER);
     }
 
     /**
@@ -224,12 +219,7 @@ contract C9Token is ERC721IdEnumBasic {
     internal
     returns (uint256) {
         emit TokenLocked(tokenId, _msgSender());
-        return _setTokenParam(
-            tokenData,
-            MPOS_LOCKED,
-            LOCKED,
-            BOOL_MASK
-        );
+        return tokenData |= uint256(BOOL_MASK)<<MPOS_LOCKED;
     }
 
     /**
@@ -296,12 +286,7 @@ contract C9Token is ERC721IdEnumBasic {
      */
     function _unlockToken(uint256 _tokenId)
     internal {
-        _owners[_tokenId] = _setTokenParam(
-            _owners[_tokenId],
-            MPOS_LOCKED,
-            UNLOCKED,
-            BOOL_MASK
-        );
+        _owners[_tokenId] &= ~(uint256(BOOL_MASK)<<MPOS_LOCKED);
         emit TokenUnlocked(_tokenId, _msgSender());
     }
 
@@ -769,12 +754,7 @@ contract C9Token is ERC721IdEnumBasic {
         if ((_tokenData>>MPOS_UPGRADED & BOOL_MASK) == UPGRADED) {
             revert TokenAlreadyUpgraded(tokenId);
         }
-        _owners[tokenId] = _setTokenParam(
-            _tokenData,
-            MPOS_UPGRADED,
-            UPGRADED,
-            BOOL_MASK
-        );
+        _owners[tokenId] |= uint256(BOOL_MASK)<<MPOS_UPGRADED;
         _metaUpdate(tokenId);
     }
 
