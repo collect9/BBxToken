@@ -148,12 +148,12 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
             xfersTo += batchSize;
         }
         // Set packed data From in memory
-        balancesFrom &= ~(MASK_BALANCER)<<APOS_BALANCE;
+        balancesFrom &= ~(MASK_BALANCER<<APOS_BALANCE);
         balancesFrom |= balanceFrom<<APOS_BALANCE;
         balancesFrom |= votesFrom<<APOS_VOTES;
         balancesFrom |= xfersFrom<<APOS_TRANSFERS;
         // Set packed data Ro in memory
-        balancesTo &= ~(MASK_BALANCER)<<APOS_BALANCE;
+        balancesTo &= ~(MASK_BALANCER<<APOS_BALANCE);
         balancesTo |= balanceTo<<APOS_BALANCE;
         balancesTo |= votesTo<<APOS_VOTES;
         balancesTo |= xfersTo<<APOS_TRANSFERS;
@@ -430,7 +430,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
         votes = _viewPackedData(tokenData, MPOS_VOTES, MSZ_VOTES);
 
         // Set new owner and transfer count
-        tokenData &= ~(MASK_ADDRESS_XFER)<<MPOS_OWNER;
+        tokenData &= ~(MASK_ADDRESS_XFER<<MPOS_OWNER);
         tokenData |= to<<MPOS_OWNER;
         tokenData |= tokenTransferCount<<MPOS_XFER_COUNTER;
 
