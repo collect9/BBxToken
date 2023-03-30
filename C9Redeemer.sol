@@ -190,9 +190,7 @@ contract C9Redeemable is C9Token {
      */
     function adminFinalApproval(address redeemer)
     external
-    onlyRole(DEFAULT_ADMIN_ROLE)
-    redemptionStep(3)
-    redeemerNotFrozen() {
+    onlyRole(DEFAULT_ADMIN_ROLE) {
         // 1. Set all tokens in the redeemer's account to redeemed
         uint256 _tokenId;
         uint256 _redeemerData = _balances[redeemer];
@@ -360,7 +358,7 @@ contract C9Redeemable is C9Token {
         _clearRedemptionData(_msgSender());
     }
 
-    /*
+    /**
      * @dev
      * Remove individual tokens from the redemption process.
      * This is useful is a tokenOwner wants to remove a 

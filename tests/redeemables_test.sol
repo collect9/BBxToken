@@ -6,9 +6,19 @@ import "./C9BaseDeploy_test.sol";
 // File name has to end with '_test.sol', this file can contain more than one testSuite contracts
 contract RedeemablesTest is C9TestContract {
 
-    function _checkPreRedeemable(uint256 tokenId)
-    private {
-        _checkRedeemable(tokenId, 0, true);
+    uint256 mintId;
+
+    function afterEach()
+    public override {
+        // Check c9towner params
+        super.afterEach();
+        _checkTokenParams(mintId);
+        _checkOwnerParams(mintId);
+    }
+
+    function beforeAll()
+    public {
+        _grantRole(keccak256("VALIDITY_ROLE"), c9tOwner);
     }
 
     function _checkRedeemable(uint256 tokenId, uint256 status, bool isRedeemable)
@@ -22,8 +32,7 @@ contract RedeemablesTest is C9TestContract {
         
         // Set and make sure validity status is correct
         if (status > 0) {
-            _grantRole(keccak256("VALIDITY_ROLE"), c9tOwner);
-            _setValidityStatus(tokenId, status);
+            _setValidityStatus(mintId, tokenId, status);
         }
 
         // Check new redemption conditions of the token
@@ -45,37 +54,16 @@ contract RedeemablesTest is C9TestContract {
     function checkValidRedeemable()
     public {
         // Test preRedeemPeriod
-        uint256 mintId = _timestamp % (_rawData.length - 4);
+        mintId = _timestamp % (_rawData.length - 4);
         (uint256 tokenId,) = _getTokenIdVotes(mintId);
-        _checkPreRedeemable(tokenId);
+        _checkRedeemable(tokenId, 0, true);
     }
 
-    /* @dev 2. Checks to make sure dead status tokens cannot be redeemed.
-     */ 
-    function checkDeadRedeemable()
-    public {
-        // Last token is already a dead status, so it should not be redeemable
-        (uint256 tokenId,) = _getTokenIdVotes(_rawData.length-1);
-        _checkRedeemable(tokenId, 0, false);
-
-        // Set a valid token be to dead and make sure it is not redeemable
-        uint256 mintId = _timestamp % (_rawData.length - 4);
-        (tokenId,) = _getTokenIdVotes(mintId);
-        _checkPreRedeemable(tokenId);
-
-        // Cannot change from valid to dead, so must change to invalid (1-3) first
-        uint256 preStatus = (_timestamp % 3) + 1; // 1-3
-        uint256 deadStatus = (_timestamp % 4) + 5; // 4-8
-        _grantRole(keccak256("VALIDITY_ROLE"), c9tOwner);
-        _setValidityStatus(tokenId, preStatus);
-        _checkRedeemable(tokenId, deadStatus, false);
-    }
-
-    /* @dev 3. Checks to make sure inactive status is still redeemable.
+    /* @dev 2. Checks to make sure inactive status is still redeemable.
      */ 
     function checkInactiveRedeemable()
     public {
-        uint256 mintId = (_timestamp + 1) % (_rawData.length - 4);
+        mintId = (_timestamp + 1) % (_rawData.length - 4);
         (uint256 tokenId,) = _getTokenIdVotes(mintId);
         _checkRedeemable(tokenId, INACTIVE, true);
     }
@@ -84,16 +72,42 @@ contract RedeemablesTest is C9TestContract {
      */ 
     function checkOtherRedeemable()
     public {
-        uint256 mintId = (_timestamp + 2) % (_rawData.length - 4);
+        mintId = (_timestamp + 2) % (_rawData.length - 4);
         (uint256 tokenId,) = _getTokenIdVotes(mintId);
         _checkRedeemable(tokenId, OTHER, false);
     }
 
-    /* @dev 4. Checks to make sure validity royalties is NOT redeemable.
+    /* @dev 4. Checks to make sure dead status tokens cannot be redeemed.
+     */ 
+    function checkDeadRedeemable()
+    public {
+        // Last token is already a dead status, so it should not be redeemable
+        mintId = _rawData.length-1;
+        (uint256 tokenId,) = _getTokenIdVotes(mintId);
+        _checkRedeemable(tokenId, 0, false);
+    }
+
+    /* @dev 4. Checks that setting a token from valid to dead works.
+     */ 
+    function checkSetValidToDead()
+    public {
+        // Set a valid token be to dead and make sure it is not redeemable
+        mintId = _timestamp % (_rawData.length - 4);
+        (uint256 tokenId,) = _getTokenIdVotes(mintId);
+        _checkRedeemable(tokenId, 0, true);
+
+        // Cannot change from valid to dead, so must change to invalid (1-3) first
+        uint256 preStatus = (_timestamp % 3) + 1; // 1-3
+        uint256 deadStatus = (_timestamp % 4) + 5; // 4-8
+        _setValidityStatus(mintId, tokenId, preStatus);
+        _checkRedeemable(tokenId, deadStatus, false);
+    }
+
+    /* @dev 5. Checks to make sure validity royalties is NOT redeemable.
      */ 
     function checkRoyaltiesRedeemable()
     public {
-        uint256 mintId = (_timestamp + 3) % (_rawData.length - 4);
+        mintId = (_timestamp + 3) % (_rawData.length - 4);
         (uint256 tokenId,) = _getTokenIdVotes(mintId);
         _checkRedeemable(tokenId, ROYALTIES, false);
     }

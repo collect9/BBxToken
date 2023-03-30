@@ -28,7 +28,7 @@ import "./abstract/C9Errors.sol";
 abstract contract C9OwnerControl is AccessControl, ERC2771Context {
     address public owner;
     address public pendingOwner;
-    bool _frozen;
+    bool private _frozen;
 
     event OwnershipTransfer(
         address indexed previousOwner,

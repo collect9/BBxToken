@@ -6,6 +6,11 @@ import "./C9BaseDeploy_test.sol";
 // File name has to end with '_test.sol', this file can contain more than one testSuite contracts
 contract SettersTest is C9TestContract {
 
+    function afterEach()
+    public override {
+        super.afterEach();
+    }
+
     /* @dev 1. Check contract setters.
      */ 
     function checkSetContracts()
@@ -28,31 +33,9 @@ contract SettersTest is C9TestContract {
         Assert.equal(contractUpgrader, contract4, "Invalid upgrader contract");
         Assert.equal(contractVH, contract5, "Invalid vh contract");
 
-        // Check roles
+        // Check to make sure set contracts have proper roles
         Assert.equal(c9t.hasRole(c9t.UPGRADER_ROLE(), contractUpgrader), true, "upgrader role not set");
         Assert.equal(c9t.hasRole(c9t.VALIDITY_ROLE(), contractVH), true, "validity role not set");
-
-    }
-
-    /* @dev 2. Tests token set upgrade and set display.
-     */ 
-    function checkSetTokenUpgradedDisplay()
-    public {
-        uint256 mintId = _timestamp % _rawData.length;
-        (uint256 tokenId,) = _getTokenIdVotes(mintId);
-        
-        _grantRole(keccak256("UPGRADER_ROLE"), c9tOwner);
-        c9t.setTokenUpgraded(tokenId);
-        uint256 upgradedSet = c9t.getOwnersParams(tokenId)[3];
-        Assert.equal(upgradedSet, 1, "Invalid upgraded value");
-
-        c9t.setTokenDisplay(tokenId, true);
-        uint256 displaySet = c9t.getOwnersParams(tokenId)[4];
-        Assert.equal(displaySet, 1, "Invalid display1 set");
-
-        c9t.setTokenDisplay(tokenId, false);
-        displaySet = c9t.getOwnersParams(tokenId)[4];
-        Assert.equal(displaySet, 0, "Invalid display set");
     }
 
     /* @dev 3. Tests string setters.

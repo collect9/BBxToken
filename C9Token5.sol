@@ -89,11 +89,7 @@ contract C9Token is ERC721IdEnumBasic {
      * a constructor).
      */ 
     modifier isContract(address _address) {
-        uint256 size;
-        assembly {
-            size := extcodesize(_address)
-        }
-        if (size == 0) {
+        if (_address.code.length == 0) {
             revert CallerNotContract();
         }
         _;
@@ -128,7 +124,7 @@ contract C9Token is ERC721IdEnumBasic {
     function _burn(uint256 tokenId)
     internal
     override {
-        emit Transfer(ownerOf(tokenId), address(0), tokenId);
+        _transferEvent(ownerOf(tokenId), address(0), tokenId);
         delete _tokenApprovals[tokenId];
         // Set zero address
         _owners[tokenId] = _setTokenParam(
@@ -214,7 +210,7 @@ contract C9Token is ERC721IdEnumBasic {
             _cTokenData[tokenId] = _input.cData;
 
             // This is a waste but there's no transfer batch
-            emit Transfer(address(0), to, tokenId);
+            _transferEvent(address(0), to, tokenId);
 
             unchecked {
                 ++i;
@@ -248,6 +244,14 @@ contract C9Token is ERC721IdEnumBasic {
             tokenData = _lockToken(tokenId, tokenData);
         }
         _owners[tokenId] = tokenData;
+        _metaUpdate(tokenId);
+    }
+
+    /**
+     * @dev Emits metadata update for tokenId.
+     */
+    function _metaUpdate(uint256 tokenId)
+    private {
         emit MetadataUpdate(tokenId);
     }
 
@@ -302,6 +306,15 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
+     * @dev Temp function only used in the contrat tests.
+     */
+    // function adminLock(uint256 tokenId)
+    // external
+    // onlyRole(DEFAULT_ADMIN_ROLE) {
+    //     _owners[tokenId] = _lockToken(tokenId, _owners[tokenId]);
+    // }
+
+    /**
      * @dev Fail-safe function that can unlock an active token.
      * This is for any edge cases that may have been missed 
      * during redeemer testing. Dead tokens are still not 
@@ -345,10 +358,21 @@ contract C9Token is ERC721IdEnumBasic {
         // 2. Votes burn
         uint256 votesToBurn = _viewPackedData(_tokenData, MPOS_VOTES, MSZ_VOTES);
         unchecked {_totalVotes -= votesToBurn;}
-        // 3. Zero address burn
+        // 3. Zero address burn (emits transfer event)
         _burn(tokenId);
         // 4. Add to list of burned tokens
         _burnedTokens.push(uint24(tokenId));
+        // 5. Update burners balances (we don't add a transfer, just like minting doesn't add one)
+        (uint256 burnerBalance, uint256 burnerVotes,,) = ownerDataOf(_msgSender());
+        unchecked {
+            --burnerBalance;
+            burnerVotes -= votesToBurn;
+        }
+        uint256 balances = _balances[_msgSender()];
+        balances &= ~(MASK_BALANCER)<<APOS_BALANCE;
+        balances |= burnerBalance<<APOS_BALANCE;
+        balances |= burnerVotes<<APOS_VOTES;
+        _balances[_msgSender()] = balances;
     }
 
     /**
@@ -374,9 +398,9 @@ contract C9Token is ERC721IdEnumBasic {
     function contractURI()
     external view
     returns (string memory) {
-        return string(abi.encodePacked(
+        return string.concat(
             "https://", _contractURI, ".json"
-        ));
+        );
     }
 
     /**
@@ -478,7 +502,7 @@ contract C9Token is ERC721IdEnumBasic {
     function getTokenParamsName(uint256 tokenId)
     external view
     requireMinted(tokenId)
-    returns (bytes memory bName) {
+    returns (string memory) {
         uint256 data = _uTokenData[tokenId];
         bytes19 b19Name = bytes19(uint152(data >> UPOS_NAME));
         uint256 i;
@@ -488,11 +512,12 @@ contract C9Token is ERC721IdEnumBasic {
             }
             unchecked {++i;}
         }
-        bName = new bytes(i);
+        bytes memory bName = new bytes(i);
         for (uint256 j; j<i;) {
             bName[j] = b19Name[j];
             unchecked {++j;}
         }
+        return string(bName);
     }
 
     /* @dev Batch minting function.
@@ -688,7 +713,7 @@ contract C9Token is ERC721IdEnumBasic {
             display,
             BOOL_MASK
         );
-        emit MetadataUpdate(tokenId);
+        _metaUpdate(tokenId);
     }
 
     /**
@@ -750,16 +775,7 @@ contract C9Token is ERC721IdEnumBasic {
             UPGRADED,
             BOOL_MASK
         );
-        emit MetadataUpdate(tokenId);
-    }
-
-    /**
-     * @dev Returns if the contract is set to SVGonly mode.
-     */
-    function svgOnly()
-    external view
-    returns (bool) {
-        return _svgOnly;
+        _metaUpdate(tokenId);
     }
 
     /**

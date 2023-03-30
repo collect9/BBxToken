@@ -15,6 +15,15 @@ abstract contract C9Context is C9Struct {
         return _viewPackedData(tokenData, MPOS_VALIDITY, MSZ_VALIDITY);
     }
 
+    /**
+     * @dev Returns if token is locked.
+     */
+    function _isLocked(uint256 tokenData)
+    internal pure
+    returns (bool) {
+        return (tokenData & BOOL_MASK) == 1;
+    }
+
     function _setTokenParam(uint256 packedData, uint256 pos, uint256 val, uint256 mask)
     internal pure virtual
     returns(uint256) {
@@ -24,14 +33,14 @@ abstract contract C9Context is C9Struct {
     }
 
     function _setDataValidity(uint256 packedData, uint256 validity)
-    internal pure virtual
+    internal view virtual
     returns (uint256) {
-        return _setTokenParam(
-            packedData,
-            MPOS_VALIDITY,
-            validity,
-            M_MASK_VALIDITY
-        );
+        // 1. Zero out validity potion
+        packedData &= ~(MASK_VALIDITY<<MPOS_VALIDITY);
+        // 2. Set values
+        packedData |= validity<<MPOS_VALIDITY;
+        packedData |= block.timestamp<<MPOS_VALIDITYSTAMP;
+        return packedData;
     }
 
     function _viewPackedData(uint256 packedData, uint256 offset, uint256 size)

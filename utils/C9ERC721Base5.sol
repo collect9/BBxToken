@@ -233,7 +233,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      */
     function _burn(uint256 tokenId)
     internal virtual {
-        emit Transfer(_ownerOf(tokenId), address(0), tokenId);
+        _transferEvent(_ownerOf(tokenId), address(0), tokenId);
         delete _tokenApprovals[tokenId];
         delete _owners[tokenId];
     }
@@ -302,15 +302,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
                 revert CallerNotOwnerOrApproved(tokenId, tokenOwner, spender);
             }
         }
-    }
-
-    /**
-     * @dev Returns if token is locked.
-     */
-    function _isLocked(uint256 tokenData)
-    internal pure
-    returns (bool) {
-        return (tokenData & BOOL_MASK) == 1;
     }
 
     /**
@@ -446,7 +437,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
         // Update balances
         _afterTokenTransfer(from, to, 0, 1, votes);
         // Emit event
-        emit Transfer(from, to, tokenId);
+        _transferEvent(from, to, tokenId);
     }
 
     /**
@@ -465,11 +456,19 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
             // Set new owner
             unchecked {votes += __transfer(from, _to, tokenId);}
             // Emit event
-            emit Transfer(from, to, tokenId);
+            _transferEvent(from, to, tokenId);
             unchecked {++i;}
         }
         // Update balances one time
         _afterTokenTransfer(from, to, 0, batchSize, votes);
+    }
+
+    /**
+     * @dev Emits transfer event. Slightly reduces bytecode compared to calling directly.
+     */
+    function _transferEvent(address from, address to, uint256 tokenId)
+    internal {
+        emit Transfer(from, to, tokenId);
     }
 
     /**
@@ -584,8 +583,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * @dev Contract owner emits meta update for all tokens.
      */
     function metaUpdateAll()
-    external virtual
-    onlyRole(DEFAULT_ADMIN_ROLE) {
+    external virtual {
         emit BatchMetadataUpdate(0, type(uint256).max);
     }
 

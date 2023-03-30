@@ -16,23 +16,26 @@ import "../abstract/C9Struct4.sol";
 contract C9TestContract is C9Struct {
 
     function afterEach()
-    public {
-        // Make sure all balance information is still correct after any test
-        address _address = c9tOwner;
-        Assert.equal(c9t.balanceOf(_address), balances[_address], "Invalid balanceOf");
-        Assert.equal(c9t.redemptionsOf(_address), redemptions[_address], "Invalid redemptionsOf");
-        Assert.equal(c9t.transfersOf(_address), transfers[_address], "Invalid transfersOf");
-        Assert.equal(c9t.votesOf(_address), votes[_address], "Invalid votesOf");
+    public virtual {
+        _checkOwnerDataOf(c9tOwner);
     }
 
-    address internal c9tOwner;
+    address internal c9tOwner = address(this);
 
-    // Variables to save and check against
+    // Ground truth parameters to compare against
     mapping(address => uint256) internal balances;
     mapping(address => uint256) internal redemptions;
     mapping(address => uint256) internal transfers;
     mapping(address => uint256) internal votes;
+    mapping(uint256 => uint256) internal tokenTransfers;
+    mapping(uint256 => address) internal tokenOwner;
+    bool regStatus;
 
+    // Others to save and check against
+    uint256 internal redeemCounter;
+    uint256 internal burnCounter;
+
+    // Randomness variable
     uint256 internal _timestamp;
 
     // Raw data stored to compare tests against
@@ -40,9 +43,9 @@ contract C9TestContract is C9Struct {
 
     // Create contract and mint some NFTs
     C9Redeemable internal c9t;
-
+    
     constructor() {
-        // Store raw data to compare against in tests
+        // Raw data ground truth
         _rawData[0] = TokenData("CUBBIE", 0, 0, 0, 0, 0, 5, 4, 0, 1, 1, 0, 2, 0, 35, 0, 78081, 0, 0, 2500, 10, 5799085202302367719035234681017398474051095076570857013597817786734685);
         _rawData[1] = TokenData("ROYAL BLUE PEANUT", 0, 0, 0, 0, 0, 5, 1, 3, 1, 4, 1, 3, 0, 35, 0, 72467, 0, 0, 2800, 6, 5799151008014567951206005882768312063662414510760790137393226684311161);
         _rawData[2] = TokenData("VALENTINO", 0, 0, 0, 0, 0, 6, 0, 2, 1, 3, 2, 2, 0, 35, 0, 71092, 0, 0, 2750, 8, 5799322928678693543339885123734541867255269856302548571350708924197061);
@@ -85,14 +88,15 @@ contract C9TestContract is C9Struct {
         // Local type to be compatible with c9t.mint
         TokenData[] memory minterData = new TokenData[](32);
         for (uint256 i; i<32; i++) {
+            _rawData[i].validitystamp = _timestamp;
             minterData[i] = _rawData[i];
+            tokenOwner[_rawData[i].tokenid] = c9tOwner; // Set minter as owner
         }
 
         // Mint NFTs
         c9t.mint(minterData);
 
         // After minting the owner should have this in ownerOfData
-        c9tOwner = address(this);
         balances[c9tOwner] = _rawData.length;
         redemptions[c9tOwner] = 0;
         transfers[c9tOwner] = 0;
@@ -100,6 +104,8 @@ contract C9TestContract is C9Struct {
             votes[c9tOwner] += _rawData[i].votes;
         }
     }
+
+    
 
     /* @dev Returns ownerData.
      */
@@ -109,6 +115,7 @@ contract C9TestContract is C9Struct {
         Assert.equal(c9t.redemptionsOf(_address), redemptions[_address], "Invalid redemptionsOf");
         Assert.equal(c9t.transfersOf(_address), transfers[_address], "Invalid transfersOf");
         Assert.equal(c9t.votesOf(_address), votes[_address], "Invalid votesOf");
+        Assert.equal(c9t.isRegistered(_address), regStatus, "Invalid regStatus");
     }
 
     /* @dev Checks the minted token params.
@@ -119,18 +126,17 @@ contract C9TestContract is C9Struct {
         uint256[11] memory _tokenParams = c9t.getTokenParams(tokenId);
         TokenData memory rawdata = _rawData[mintId];
 
-        Assert.equal(_timestamp, _tokenParams[0], "Invalid mintstamp");
-        Assert.equal(rawdata.cntrytag, _tokenParams[3], "Invalid cntrytag");
-        Assert.equal(rawdata.cntrytush, _tokenParams[4], "Invalid cntrytush");
-        Assert.equal(rawdata.gentag, _tokenParams[5], "Invalid gentag");
-        Assert.equal(rawdata.gentush, _tokenParams[6], "Invalid gentush");
-        Assert.equal(rawdata.markertush, _tokenParams[7], "Invalid markertush");
-        Assert.equal(rawdata.special, _tokenParams[8], "Invalid special");
-        Assert.equal(rawdata.raritytier, _tokenParams[9], "Invalid raritytier");
-        Assert.equal(rawdata.royaltiesdue, _tokenParams[10], "Invalid royalties due");
+        Assert.equal(_tokenParams[0], _timestamp, "Invalid mintstamp");
+        Assert.equal(_tokenParams[3], rawdata.cntrytag, "Invalid cntrytag");
+        Assert.equal(_tokenParams[4], rawdata.cntrytush, "Invalid cntrytush");
+        Assert.equal(_tokenParams[5], rawdata.gentag, "Invalid gentag");
+        Assert.equal(_tokenParams[6], rawdata.gentush, "Invalid gentush");
+        Assert.equal(_tokenParams[7], rawdata.markertush, "Invalid markertush");
+        Assert.equal(_tokenParams[8], rawdata.special, "Invalid special");
+        Assert.equal(_tokenParams[9], rawdata.raritytier, "Invalid raritytier");
+        Assert.equal(_tokenParams[10], rawdata.royaltiesdue, "Invalid royalties due");
 
-        address _owner = c9t.ownerOf(tokenId);
-        Assert.equal(c9tOwner, _owner, "Invalid owner");
+        Assert.equal(c9t.ownerOf(tokenId), tokenOwner[tokenId], "Invalid owner");
     }
 
     /* @dev Checks the minted owner params.
@@ -141,15 +147,21 @@ contract C9TestContract is C9Struct {
         uint256[9] memory _ownerParams = c9t.getOwnersParams(tokenId);
         TokenData memory rawdata = _rawData[mintId];
 
-        Assert.equal(0, _ownerParams[0], "Invalid xfer counter");
-        Assert.equal(_timestamp, _ownerParams[1], "Invalid validitystamp");
-        Assert.equal(rawdata.validity, _ownerParams[2], "Invalid validity");
-        Assert.equal(rawdata.upgraded, _ownerParams[3], "Invalid upgraded");
-        Assert.equal(rawdata.display, _ownerParams[4], "Invalid display");
-        Assert.equal(rawdata.locked, _ownerParams[5], "Invalid locked");
-        Assert.equal(rawdata.insurance, _ownerParams[6], "Invalid insurance");
-        Assert.equal(rawdata.royalty*10, _ownerParams[7], "Invalid royalty");
-        Assert.equal(rawdata.votes, _ownerParams[8], "Invalid votes");
+        // actual, expected
+        Assert.equal(_ownerParams[0], tokenTransfers[tokenId], "Invalid xfer counter");
+        Assert.equal(_ownerParams[1], rawdata.validitystamp, "Invalid validitystamp");
+        Assert.equal(_ownerParams[2], rawdata.validity, "Invalid validity");
+        Assert.equal(_ownerParams[3], rawdata.upgraded, "Invalid upgraded");
+        Assert.equal(_ownerParams[4], rawdata.display, "Invalid display");
+        Assert.equal(_ownerParams[5], rawdata.locked, "Invalid locked");
+        Assert.equal(_ownerParams[6], rawdata.insurance, "Invalid insurance");
+        Assert.equal(_ownerParams[7], rawdata.royalty*10, "Invalid royalty");
+        Assert.equal(_ownerParams[8], rawdata.votes, "Invalid votes");
+    }
+
+    function checkTotalSupply()
+    public {
+         Assert.equal(c9t.totalSupply(), _rawData.length, "Invalid total supply");
     }
 
     /* @dev Returns number of votes for the minted token.
@@ -182,11 +194,24 @@ contract C9TestContract is C9Struct {
             }
     }
 
-    function _setValidityStatus(uint256 tokenId, uint256 status)
+    function _setValidityStatus(uint256 mintId, uint256 tokenId, uint256 status)
     internal {
+        // 1. Set raw data ground truth
+        _rawData[mintId].validity = status; 
+        _rawData[mintId].validitystamp = block.timestamp;
+        if (status >= REDEEMED) {
+            _rawData[mintId].locked = LOCKED;
+        }
+
+        // 2. Set token validity
         c9t.setTokenValidity(tokenId, status);
+        
+        // 3. Make sure validity status method is getting correct result
         uint256 validityStatus = c9t.validityStatus(tokenId);
         Assert.equal(validityStatus, status, "Invalid validity status");
+
+        // 4. Make sure all token params match ground truth
+        _checkTokenParams(mintId);
     }
 
     /* @dev 1. Make sure contract owner, total supply, and owner 
@@ -195,28 +220,20 @@ contract C9TestContract is C9Struct {
      */ 
     function checkPostMint()
     public {
-        Assert.equal(c9tOwner, c9t.owner(), "Invalid owner");
+        Assert.equal(c9t.owner(), c9tOwner, "Invalid owner");
         Assert.equal(c9t.totalSupply(), _rawData.length, "Invalid supply");
-        _checkOwnerDataOf(c9tOwner);
-
-        // uint256 combo;
-        // combo = c9t.comboExists(5, 4, 1, 1, 1, 0, "PATTI DF") ? 1 : 0;
-        // Assert.equal(combo, 1, "Invalid combo1");
-        // combo = c9t.comboExists(6, 0, 1, 1, 0, 0, "QUACKER WINGLESS") ? 1 : 0;
-        // Assert.equal(combo, 1, "Invalid combo2");
-        // combo = c9t.comboExists(5, 1, 3, 1, 4, 1, "ROYAL BLUE PEANUT") ? 1 : 0;
-        // Assert.equal(combo, 1, "Invalid combo3");
-
-        // // Check for one that doesn't exist
-        // combo = c9t.comboExists(5, 2, 3, 1, 4, 1, "ROYAL BLUE PEANUT") ? 1 : 0;
-        // Assert.equal(combo, 0, "Invalid combo4");
     }
 
     /* @dev 2. Checks that all data has been stored and is being 
      * read properly by the viewer function.
-     */ 
+     */
     function checkTokenParams()
     public {
+        _checkTokenParams();
+    }
+
+    function _checkTokenParams()
+    private {
         for (uint256 i; i<_rawData.length; ++i) {
             _checkTokenParams(i);
         }
@@ -227,14 +244,14 @@ contract C9TestContract is C9Struct {
      */ 
     function checkOwnerParams()
     public {
+        _checkOwnerParams();
+    }
+
+    function _checkOwnerParams()
+    private {
         for (uint256 i; i<_rawData.length; ++i) {
             _checkOwnerParams(i);
         }
-    }
-
-    function checkTotalSupply()
-    public {
-        Assert.equal(_rawData.length, c9t.totalSupply(), "Invalid total supply");
     }
 
     function checkMintEdCounter()
@@ -244,6 +261,6 @@ contract C9TestContract is C9Struct {
             mintSupply += c9t.getEditionMaxMintId(i);
             unchecked {++i;}
         }
-        Assert.equal(mintSupply, c9t.totalSupply(), "Invalid mint counter supply");
+        Assert.equal(c9t.totalSupply(), mintSupply, "Invalid mint counter supply");
     }
 }

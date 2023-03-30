@@ -13,6 +13,11 @@ contract RedeemersTest is C9TestContract {
 
     uint256 numberInRedeemer;
 
+    function afterEach()
+    public override {
+        super.afterEach();
+    }
+
     function _shuffle(uint256[] memory numberArr)
     private view {
         for (uint256 i; i<numberArr.length; i++) {
@@ -30,6 +35,8 @@ contract RedeemersTest is C9TestContract {
     public {
         c9t.setPreRedeemPeriod(0);
         c9t.register(0x271577b3d4a93c7c5fecc74cc37569c86d8df05e511c8acf0438f0cb98e35427);
+        regStatus = true; //Set truth
+        _checkOwnerDataOf(c9tOwner);
     }
 
     function redeemStartMultiple()
@@ -39,6 +46,7 @@ contract RedeemersTest is C9TestContract {
         uint256[] memory mintIds = new uint256[](numberToAdd);
         for (uint256 i; i<numberToAdd; i++) {
             mintIds[i] = (_timestamp + i) % (_rawData.length-4);
+            _rawData[mintIds[i]].locked = LOCKED; // Set truth
         }
         (uint256[] memory tokenIds,) = _getTokenIdsVotes(mintIds);
 
@@ -53,8 +61,11 @@ contract RedeemersTest is C9TestContract {
 
         // Check all tokens are in redeemer and locked
         for (uint256 i; i<numberToAdd; i++) {
-            Assert.equal(tokenIds[i], rTokenIds[i], "Invalid tokenId in redeemer");
+            Assert.equal(rTokenIds[i], tokenIds[i], "Invalid tokenId in redeemer");
             Assert.equal(c9t.isLocked(tokenIds[i]), true, "Invalid locked status");
+            // Make sure the rest of the packed params are still ok
+            _checkTokenParams(mintIds[i]);
+            _checkOwnerParams(mintIds[i]);
         }
     }
 
@@ -66,6 +77,7 @@ contract RedeemersTest is C9TestContract {
         uint256[] memory mintIds = new uint256[](numberToAdd);
         for (uint256 i; i<numberToAdd; i++) {
             mintIds[i] = (_timestamp + i + numberInRedeemer) % (_rawData.length-4);
+            _rawData[mintIds[i]].locked = LOCKED; // Set truth
         }
         (uint256[] memory tokenIds,) = _getTokenIdsVotes(mintIds);
         
@@ -77,12 +89,15 @@ contract RedeemersTest is C9TestContract {
         Assert.equal(step, 2, "Invalid redeem add step");
         Assert.equal(rTokenIds.length, numberInRedeemer+numberToAdd, "Invalid redeem tokenIds length");
 
-        // Received, truth
+        // Check all tokens are in redeemer and locked
         for (uint256 i; i<numberToAdd; i++) {
             Assert.equal(rTokenIds[i+numberInRedeemer], tokenIds[i], "Invalid tokenId added to redeemer");
             Assert.equal(c9t.isLocked(tokenIds[i]), true, "Invalid locked status");
+            // Make sure the rest of the packed params are still ok
+            _checkTokenParams(mintIds[i]);
+            _checkOwnerParams(mintIds[i]);
         }
-
+        // Update truth
         numberInRedeemer += numberToAdd;
     }
 
