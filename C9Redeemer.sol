@@ -520,11 +520,9 @@ contract C9Redeemable is C9Token {
             getInsuredsValue(tokenIds),
             tokenIds.length
         );            
-        // uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(
-        //     _minRedeemUsd
-        // );
-        // uint256 _minRedeemWei = 1000000;
-        uint256 _minRedeemWei = 0;
+        uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(
+            _minRedeemUsd
+        );
         // 4. Next step update
         _balances[_msgSender()] = _setTokenParam(
             _redeemerData,
