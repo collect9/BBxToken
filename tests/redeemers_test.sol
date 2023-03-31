@@ -156,5 +156,4 @@ contract RedeemersTest is C9TestContract {
         Assert.equal(rTokenIds.length, 0, "Invalid redeem start step");
     }
 
-
 }
