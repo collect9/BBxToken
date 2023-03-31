@@ -354,7 +354,7 @@ contract C9Token is ERC721IdEnumBasic {
             burnerVotes -= votesToBurn;
         }
         uint256 balances = _balances[_msgSender()];
-        balances &= ~(MASK_BALANCER)<<APOS_BALANCE;
+        balances &= ~(MASK_BURNER<<APOS_BALANCE);
         balances |= burnerBalance<<APOS_BALANCE;
         balances |= burnerVotes<<APOS_VOTES;
         _balances[_msgSender()] = balances;
@@ -520,7 +520,7 @@ contract C9Token is ERC721IdEnumBasic {
             _totalVotes += votes;
         }
         uint256 balances = _balances[_msgSender()];
-        balances &= ~(MASK_BALANCER)<<APOS_BALANCE;
+        balances &= ~(MASK_BALANCER<<APOS_BALANCE);
         balances |= minterBalance<<APOS_BALANCE;
         balances |= minterVotes<<APOS_VOTES;
         _balances[_msgSender()] = balances;

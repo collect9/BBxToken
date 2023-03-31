@@ -116,5 +116,6 @@ abstract contract C9Struct {
     // Masks of packed data in balances
     uint256 constant MASK_ADDRESS_XFER = 2**(160+MSZ_XFER_COUNTER)-1; // Token Id owner and transfer counter
     uint256 constant MASK_BALANCER = 2**60-1; // Address balance, votes, and transfer counter
+    uint256 constant MASK_BURNER = 2**40-1; // Address balance, votes
     uint256 constant MASK_VALIDITY = 2**(MSZ_VALIDITY+MSZ_TIMESTAMP)-1; // Validity and validity timestamp
 }

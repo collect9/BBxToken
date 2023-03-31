@@ -112,10 +112,10 @@ contract C9TestContract is C9Struct {
     function _checkOwnerDataOf(address _address)
     internal {
         Assert.equal(c9t.balanceOf(_address), balances[_address], "Invalid balanceOf");
-        Assert.equal(c9t.redemptionsOf(_address), redemptions[_address], "Invalid redemptionsOf");
         Assert.equal(c9t.transfersOf(_address), transfers[_address], "Invalid transfersOf");
         Assert.equal(c9t.votesOf(_address), votes[_address], "Invalid votesOf");
         Assert.equal(c9t.isRegistered(_address), regStatus, "Invalid regStatus");
+        Assert.equal(c9t.redemptionsOf(_address), redemptions[_address], "Invalid redemptionsOf");
     }
 
     /* @dev Checks the minted token params.

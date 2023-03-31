@@ -381,6 +381,7 @@ contract C9Redeemable is C9Token {
         uint256 _lastTokenId;
         uint256 _originalTokenId;
         uint256 _tokenOffset = RPOS_TOKEN1;
+        uint256 _lastTokenOffset;
         uint256 _currentBatchSize = _originalBatchSize;
         for (uint256 i; i<_removedBatchSize;) { // foreach token to remove
             _originalTokenId = tokenIds[i];
@@ -388,7 +389,10 @@ contract C9Redeemable is C9Token {
                 _currentTokenId = uint256(uint24(_redeemerData>>_tokenOffset));
                 if (_currentTokenId == _originalTokenId) { // if a match is found
                     // get the last token in the batch
-                    _lastTokenId = uint256(uint24(_redeemerData>>(RPOS_TOKEN1+RUINT_SIZE*(_currentBatchSize-1))));
+                    unchecked {
+                        _lastTokenOffset = RPOS_TOKEN1+RUINT_SIZE*(_currentBatchSize-1);
+                    }
+                    _lastTokenId = uint256(uint24(_redeemerData>>_lastTokenOffset));
                     // and swap it to the current position of the token to remove
                     _redeemerData = _setTokenParam(
                         _redeemerData,
@@ -516,9 +520,11 @@ contract C9Redeemable is C9Token {
             getInsuredsValue(tokenIds),
             tokenIds.length
         );            
-        uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(
-            _minRedeemUsd
-        );
+        // uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(
+        //     _minRedeemUsd
+        // );
+        // uint256 _minRedeemWei = 1000000;
+        uint256 _minRedeemWei = 0;
         // 4. Next step update
         _balances[_msgSender()] = _setTokenParam(
             _redeemerData,
@@ -530,9 +536,9 @@ contract C9Redeemable is C9Token {
         if (msg.value != _minRedeemWei) {
             revert InvalidPaymentAmount(_minRedeemWei, msg.value);
         }
-        (bool success,) = payable(owner).call{value: msg.value}("");
-        if (!success) {
-            revert PaymentFailure(_msgSender(), owner, msg.value);
-        }
+        // (bool success,) = payable(owner).call{value: msg.value}("");
+        // if (!success) {
+        //     revert PaymentFailure(_msgSender(), owner, msg.value);
+        // }
     }
 }
