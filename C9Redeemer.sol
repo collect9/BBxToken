@@ -534,9 +534,9 @@ contract C9Redeemable is C9Token {
         if (msg.value != _minRedeemWei) {
             revert InvalidPaymentAmount(_minRedeemWei, msg.value);
         }
-        // (bool success,) = payable(owner).call{value: msg.value}("");
-        // if (!success) {
-        //     revert PaymentFailure(_msgSender(), owner, msg.value);
-        // }
+        (bool success,) = payable(owner).call{value: msg.value}("");
+        if (!success) {
+            revert PaymentFailure(_msgSender(), owner, msg.value);
+        }
     }
 }
