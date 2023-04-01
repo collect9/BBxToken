@@ -546,7 +546,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      */
     function _getRegistrationFor(uint256 accountData)
     internal pure
-    returns (uint256 data) {
+    returns (uint256) {
         return _viewPackedData(accountData, APOS_REGISTRATION, ASZ_REGISTRATION);
     }
 

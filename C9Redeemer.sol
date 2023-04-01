@@ -243,9 +243,13 @@ contract C9Redeemable is C9Token {
     function getRedeemerFees(uint256 insuredValue, uint256 batchSize)
     public pure
     returns (uint256 total) {
-        uint256 _insuredCost = 2*insuredValue/100;
-        uint256 _packagingBaseCost = 20 + 2*batchSize;
-        total = _packagingBaseCost + _insuredCost;
+        uint256 _insuredCost;
+        uint256 _packagingBaseCost;
+        unchecked {
+            _insuredCost = 2*insuredValue/100;
+            _packagingBaseCost = 20 + 2*batchSize;
+            total = _packagingBaseCost + _insuredCost;
+        }
     }
 
     /*
