@@ -21,7 +21,16 @@ abstract contract C9Context is C9Struct {
     function _isLocked(uint256 tokenData)
     internal pure
     returns (bool) {
-        return (tokenData & BOOL_MASK) == 1;
+        return (tokenData & BOOL_MASK) == LOCKED;
+    }
+
+    /**
+     * @dev Returns if token is upgraded.
+     */
+    function _isUpgraded(uint256 tokenData)
+    internal pure
+    returns (uint256) {
+        return tokenData>>MPOS_UPGRADED & BOOL_MASK;
     }
 
     function _setTokenParam(uint256 packedData, uint256 pos, uint256 val, uint256 mask)

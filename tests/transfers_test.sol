@@ -8,6 +8,7 @@ contract TransfersTest is C9TestContract {
 
     address private _to = TestsAccounts.getAccount(1);
     address private _to2 = TestsAccounts.getAccount(2);
+    uint256 private _mintIdOffset;
 
     function afterEach()
     public override {
@@ -39,6 +40,7 @@ contract TransfersTest is C9TestContract {
     public {
         uint256 mintId = _timestamp % (_rawData.length-4);
         (uint256 tokenId, uint256 numVotes) = _getTokenIdVotes(mintId);
+        _mintIdOffset += 1;
 
         c9t.transferFrom(c9tOwner, _to, tokenId);
 
@@ -59,10 +61,14 @@ contract TransfersTest is C9TestContract {
      */ 
     function checkTransferBatch()
     public {
-        uint256[] memory mintIds = new uint256[](2);
-        mintIds[0] = (_timestamp + 1) % (_rawData.length-4);
-        mintIds[1] = (_timestamp + 2) % (_rawData.length-4);
+        // Pick random number of tokens to transfer
+        uint256 numberToTransfer = _timestamp % 10;
+        uint256[] memory mintIds = new uint256[](numberToTransfer);
+        for (uint256 i; i<numberToTransfer; i++) {
+            mintIds[i] = (_timestamp + i + _mintIdOffset) % (_rawData.length-4);
+        }
         (uint256[] memory tokenIds, uint256 numVotes) = _getTokenIdsVotes(mintIds);
+        _mintIdOffset += numberToTransfer;
 
         // Make sure new owner is correct
         c9t.transferBatchFrom(c9tOwner, _to, tokenIds);
@@ -77,10 +83,10 @@ contract TransfersTest is C9TestContract {
         _updateBalancesTruth(c9tOwner, _to, tokenIds.length, numVotes);
         
         // Compare against
-        _checkTokenParams(mintIds[0]);
-        _checkOwnerParams(mintIds[0]);
-        _checkTokenParams(mintIds[1]);
-        _checkOwnerParams(mintIds[1]);
+        for (uint256 i; i<numberToTransfer; i++) {
+            _checkTokenParams(mintIds[i]);
+            _checkOwnerParams(mintIds[i]);
+        }
     }
 
     /* @dev 3. Check to ensure optimized safeTransfer works properly, 
@@ -88,8 +94,9 @@ contract TransfersTest is C9TestContract {
      */ 
     function checkSafeTransfer()
     public {
-        uint256 mintId = (_timestamp + 3) % (_rawData.length-4);
+        uint256 mintId = (_timestamp + _mintIdOffset) % (_rawData.length-4);
         (uint256 tokenId, uint256 numVotes) = _getTokenIdVotes(mintId);
+        _mintIdOffset += 1;
 
         c9t.safeTransferFrom(c9tOwner, _to, tokenId);
 
@@ -110,9 +117,11 @@ contract TransfersTest is C9TestContract {
      */ 
     function checkSafeTransferBatch()
     public {
-        uint256[] memory mintIds = new uint256[](2);
-        mintIds[0] = (_timestamp + 4) % (_rawData.length-4);
-        mintIds[1] = (_timestamp + 5) % (_rawData.length-4);
+        uint256 numberToTransfer = _timestamp % 8;
+        uint256[] memory mintIds = new uint256[](numberToTransfer);
+        for (uint256 i; i<numberToTransfer; i++) {
+            mintIds[i] = (_timestamp + i + _mintIdOffset) % (_rawData.length-4);
+        }
         (uint256[] memory tokenIds, uint256 numVotes) = _getTokenIdsVotes(mintIds);
 
         c9t.safeTransferBatchFrom(c9tOwner, _to, tokenIds);
@@ -127,10 +136,12 @@ contract TransfersTest is C9TestContract {
         _updateBalancesTruth(c9tOwner, _to, tokenIds.length, numVotes);
         
         // Compare against
-        _checkTokenParams(mintIds[0]);
-        _checkOwnerParams(mintIds[0]);
-        _checkTokenParams(mintIds[1]);
-        _checkOwnerParams(mintIds[1]);
+        for (uint256 i; i<numberToTransfer; i++) {
+            _checkTokenParams(mintIds[i]);
+            _checkOwnerParams(mintIds[i]);
+        }
+
+        _mintIdOffset += numberToTransfer;
     }
 
     /* @dev 5. Check to ensure optimized batch safeTransferBatchAddress works properly, 
@@ -138,18 +149,30 @@ contract TransfersTest is C9TestContract {
      */ 
     function checkSafeTransferBatchAddress()
     public {
+        uint256 numberToTransferTo1 = _timestamp % 4;
+        uint256 numberToTransferTo2 = uint256(keccak256(abi.encodePacked(
+            numberToTransferTo1,
+            _timestamp,
+            msg.sender
+        ))) % 4;
+
         address[] memory toBatch = new address[](2);
         toBatch[0] = _to;
         toBatch[1] = _to2;
 
-        uint256[] memory mintIdsTo1 = new uint256[](2);
-        mintIdsTo1[0] = (_timestamp + 6) % (_rawData.length-4);
-        mintIdsTo1[1] = (_timestamp + 7) % (_rawData.length-4);
+        uint256[] memory mintIdsTo1 = new uint256[](numberToTransferTo1);
+        for (uint256 i; i<numberToTransferTo1; i++) {
+            mintIdsTo1[i] = (_timestamp + i + _mintIdOffset) % (_rawData.length-4);
+        }
         (uint256[] memory tokenIdsTo1, uint256 numVotesTo1) = _getTokenIdsVotes(mintIdsTo1);
+        _mintIdOffset += numberToTransferTo1;
 
-        uint256[] memory mintIdsTo2 = new uint256[](1);
-        mintIdsTo2[0] = (_timestamp + 8) % (_rawData.length-4);
+        uint256[] memory mintIdsTo2 = new uint256[](numberToTransferTo2);
+        for (uint256 i; i<numberToTransferTo2; i++) {
+            mintIdsTo2[i] = (_timestamp + i + _mintIdOffset) % (_rawData.length-4);
+        }
         (uint256[] memory tokenIdsTo2, uint256 numVotesTo2) = _getTokenIdsVotes(mintIdsTo2);
+        _mintIdOffset += numberToTransferTo2;
 
         uint256[][] memory tokenIds = new uint256[][](2);
         tokenIds[0] = tokenIdsTo1;
@@ -170,11 +193,13 @@ contract TransfersTest is C9TestContract {
         _updateBalancesTruth(c9tOwner, toBatch[1], tokenIds[1].length, numVotesTo2);
         
         // Compare against
-        _checkTokenParams(mintIdsTo1[0]);
-        _checkOwnerParams(mintIdsTo1[0]);
-        _checkTokenParams(mintIdsTo1[1]);
-        _checkOwnerParams(mintIdsTo1[1]);
-        _checkTokenParams(mintIdsTo2[0]);
-        _checkOwnerParams(mintIdsTo2[0]);
+        for (uint256 i; i<numberToTransferTo1; i++) {
+            _checkTokenParams(mintIdsTo1[i]);
+            _checkOwnerParams(mintIdsTo1[i]);
+        }
+        for (uint256 i; i<numberToTransferTo2; i++) {
+            _checkTokenParams(mintIdsTo2[i]);
+            _checkOwnerParams(mintIdsTo2[i]);
+        }
     }
 }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
-import "./C9Token5.sol";
+import "./C9Token6.sol";
 
 import "./utils/interfaces/IC9EthPriceFeed.sol";
 
@@ -22,17 +22,6 @@ contract C9Redeemable is C9Token {
     modifier redeemerNotFrozen() { 
         if (_frozenRedeemer) {
             revert RedeemerFrozen();
-        }
-        _;
-    }
-
-    /*
-     * @dev Checks to make sure user is on correct redemption step.
-     */ 
-    modifier redemptionStep(uint256 step) {
-        uint256 _expected = _getStep(_balances[_msgSender()]);
-        if (step != _expected) {
-            revert WrongProcessStep(_expected, step);
         }
         _;
     }
@@ -73,12 +62,18 @@ contract C9Redeemable is C9Token {
         _balances[redeemer] &= ~(uint256(type(uint160).max));
     }
 
+    /*
+     * @dev Gets the batch size of the redeemer.
+     */
     function _getBatchSize(uint256 balancesData)
     private pure
     returns (uint256) {
         return uint256(uint8(balancesData>>RPOS_BATCHSIZE));
     }
 
+    /*
+     * @dev Gets the step of the redeemer.
+     */
     function _getStep(uint256 balancesData)
     private pure
     returns (uint256) {
@@ -124,30 +119,61 @@ contract C9Redeemable is C9Token {
     private {
         uint256 _batchSize = tokenIds.length;
         uint256 _tokenId;
-        uint256 _tokenData;
+        uint256 _ownerData;
+        address _tokenOwner;
         for (uint256 i; i<_batchSize;) {
             _tokenId = tokenIds[i];
-            // 1. Check token exists (implicit via ownerOf()) and that caller is owner or approved
-            _isApprovedOrOwner(_msgSender(), ownerOf(_tokenId), _tokenId);
-            // 2. Copy token data from storage
-            _tokenData = _owners[_tokenId];
+            // 1. Copy token data from storage
+            _ownerData = _owners[_tokenId];
+            // 2. Check caller is owner or approved
+            _tokenOwner = address(uint160(_ownerData>>MPOS_OWNER));
+            _isApprovedOrOwner(_msgSender(), _tokenOwner, _tokenId);
             // 3. Check token is redeemable
-            if (!_isRedeemable(_tokenId, _tokenData)) {
+            if (!_isRedeemable(_tokenId, _ownerData)) {
                 revert TokenNotRedeemable(_tokenId);
             }
             /* 4. If redeemable but locked, token is already in redeemer.
                   This will also prevent multiple approved trying to
                   redeem the same token at once.
             */
-            if (_isLocked(_tokenData)) {
+            if (_isLocked(_ownerData)) {
                 revert TokenIsLocked(_tokenId);
             }
             // 5. All checks pass, so lock the token
-            _tokenData = _lockToken(_tokenId, _tokenData);
+            _ownerData = _lockToken(_tokenId, _ownerData);
             // 6. Save to storage
-            _owners[_tokenId] = _tokenData;
+            _owners[_tokenId] = _ownerData;
             unchecked {++i;}
         }
+    }
+
+    /*
+     * @dev Checks to make sure user is on correct redemption step.
+     */ 
+    function _redemptionStep(uint256 redeemerData, uint256 step)
+    private pure {
+        uint256 _expected = _getStep(redeemerData);
+        if (step != _expected) {
+            revert WrongProcessStep(_expected, step);
+        }
+    }
+
+    /**
+     * @dev Updates the token validity status.
+     */
+    function _setTokenValidity(uint256 tokenId, uint256 tokenData, uint256 vId)
+    internal {
+        tokenData = _setDataValidity(tokenData, vId);
+        // Lock if changing to a dead status (forever lock)
+        if (vId >= REDEEMED) {
+            tokenData = _lockToken(tokenId, tokenData);
+            if (vId == REDEEMED) {
+                _redeemedTokens.push(uint24(tokenId));
+                _addRedemptionsTo(_ownerOf(tokenId), 1);
+            }
+        }
+        _owners[tokenId] = tokenData;
+        _metaUpdate(tokenId);
     }
 
     /**
@@ -188,9 +214,12 @@ contract C9Redeemable is C9Token {
     function adminFinalApproval(address redeemer)
     external
     onlyRole(DEFAULT_ADMIN_ROLE) {
-        // 1. Set all tokens in the redeemer's account to redeemed
-        uint256 _tokenId;
+        // 1. Make sure redeemer is on last step
         uint256 _redeemerData = _balances[redeemer];
+        _redemptionStep(_redeemerData, 3);
+        // 2. Set all tokens in the redeemer's account to redeemed
+        uint256 _tokenId;
+        uint256 _tokenData;
         uint256 _batchSize = _getBatchSize(_redeemerData);
         uint256 _tokenOffsetMax;
         unchecked {
@@ -198,14 +227,12 @@ contract C9Redeemable is C9Token {
         }
         for (uint256 _tokenOffset=RPOS_TOKEN1; _tokenOffset<_tokenOffsetMax;) {
             _tokenId = uint256(uint24(_redeemerData>>_tokenOffset));
-            _setTokenValidity(_tokenId, REDEEMED);
-            _redeemedTokens.push(uint24(_tokenId));
+            _tokenData = _owners[_tokenId];
+            _setTokenValidity(_tokenId, _tokenData, REDEEMED);
             unchecked {
                 _tokenOffset += RUINT_SIZE;
             }
         }
-        // 2. Update the token redeemer's redemption count
-        _addRedemptionsTo(redeemer, _batchSize);
         _clearRedemptionData(redeemer);
     }
 
@@ -213,7 +240,8 @@ contract C9Redeemable is C9Token {
      * @dev Returns list of contracts this contract is linked to.
      */
     function getContracts()
-    external view override
+    external view
+    override
     returns(address meta, address pricer, address upgrader, address vH) {
         meta = contractMeta;
         pricer = contractPricer;
@@ -256,7 +284,7 @@ contract C9Redeemable is C9Token {
      * @dev Gets the redemption info/array of _tokenOwner.
      */
     function getRedeemerInfo(address account)
-    public view
+    external view
     returns(uint256 step, uint256[] memory tokenIds) {
         uint256 _balancesData = _balances[account];
         step = _getStep(_balancesData);
@@ -270,9 +298,9 @@ contract C9Redeemable is C9Token {
      */
     function isRedeemable(uint256 tokenId)
     external view
-    requireMinted(tokenId)
     returns (bool) {
-        return _isRedeemable(tokenId, _owners[tokenId]);
+        uint256 _ownerData = _owners[tokenId];
+        return _isRedeemable(tokenId, _ownerData);
     }
 
     /**
@@ -281,9 +309,9 @@ contract C9Redeemable is C9Token {
      */
     function isRedeemed(uint256 tokenId)
     external view
-    requireMinted(tokenId)
     returns (bool) {
-        return _currentVId(_owners[tokenId]) == REDEEMED;
+        uint256 _ownerData = _owners[tokenId];
+        return _currentVId(_ownerData) == REDEEMED;
     }
 
     /**
@@ -292,9 +320,9 @@ contract C9Redeemable is C9Token {
      */
     function preRedeemable(uint256 tokenId)
     external view
-    requireMinted(tokenId)
     returns (bool) {
-        return _preRedeemable(_uTokenData[tokenId]);
+        uint256 _tokenData = _uTokenData[tokenId];
+        return _preRedeemable(_tokenData);
     }
 
     /*
@@ -305,8 +333,10 @@ contract C9Redeemable is C9Token {
     function redeemAdd(uint256[] calldata tokenIds)
     external
     redeemerNotFrozen() {
-        // 1. Check existing batch already exists
+        // 1. Check redeemer is already started
         uint256 _redeemerData = _balances[_msgSender()];
+        _redemptionStep(_redeemerData, 2);
+        // 2. Check existing batch already exists
         uint256 _oldBatchSize = _changeChecker(_redeemerData);
         // 3. Check new batch size fits within storage
         uint256 _addBatchSize = tokenIds.length;
@@ -324,7 +354,10 @@ contract C9Redeemable is C9Token {
             type(uint8).max
         );
         // 6. Update tokenIds in redeemer.
-        uint256 _offset = RPOS_TOKEN1 + RUINT_SIZE*_oldBatchSize;
+        uint256 _offset;
+        unchecked {
+            _offset = RPOS_TOKEN1 + RUINT_SIZE*_oldBatchSize;
+        }
         for (uint256 i; i<_addBatchSize;) {
             _redeemerData = _setTokenParam(
                 _redeemerData,
@@ -368,12 +401,14 @@ contract C9Redeemable is C9Token {
      */
     function redeemRemove(uint256[] calldata tokenIds)
     external {
-        // 1. Check existing batch already exists
+        // 1. Check redeemer already started
         uint256 _redeemerData = _balances[_msgSender()];
+        _redemptionStep(_redeemerData, 2);
+        // 2. Check existing batch already exists
         uint256 _originalBatchSize = _changeChecker(_redeemerData);
-        // 2. Check new batch size is valid
+        // 3. Check new batch size is valid
         uint256 _removedBatchSize = tokenIds.length;
-        // 2a. Cancel is cheaper if removing the entire batch
+        // 3a. Cancel is cheaper if removing the entire batch
         if (_removedBatchSize >= _originalBatchSize) {
             revert CancelRemainder(_removedBatchSize);
         }
@@ -419,7 +454,7 @@ contract C9Redeemable is C9Token {
             unchecked {++i;}
         }
 
-        // Update remaining batchsize in packed _data
+        // 4. Update remaining batchsize in packed _data
         _redeemerData = _setTokenParam(
             _redeemerData,
             RPOS_BATCHSIZE,
@@ -445,10 +480,7 @@ contract C9Redeemable is C9Token {
             revert AddressMustFirstRegister(_msgSender());
         }
         // 1c. Check account does not have open redemption
-        uint256 _step = _getStep(_redeemerData);
-        if (_step != 0) {
-            revert WrongProcessStep(0, _step);
-        }
+        _redemptionStep(_redeemerData, 0);
         // 1d. Check redemption batchsize is within limits
         uint256 _batchSize = tokenIds.length;
         if (_batchSize > MAX_BATCH_SIZE) {
@@ -481,6 +513,29 @@ contract C9Redeemable is C9Token {
         contractPricer = pricer;
     }
 
+    /*
+     * @dev Sets the token validity. This method allows for 
+     * a gasless digital signature redemption process where  
+     * the admin can set the token to redeemed.
+     */
+    function setTokenValidity(uint256 tokenId, uint256 vId)
+    external
+    onlyRole(VALIDITY_ROLE)
+    requireMinted(tokenId)
+    notDead(tokenId) {
+        uint256 _tokenData = _owners[tokenId];
+        uint256 _tokenValidity = _currentVId(_tokenData);
+        if (vId == _tokenValidity) {
+            revert ValueAlreadySet();
+        }
+        if (vId > REDEEMED) {
+            if (_tokenValidity == VALID) {
+                revert CannotValidToDead(tokenId, vId);
+            }
+        }
+        _setTokenValidity(tokenId, _tokenData, vId);
+    }
+
     /**
      * @dev Freezes or unfreezes redeemer portion of contract.
      */
@@ -510,16 +565,17 @@ contract C9Redeemable is C9Token {
      */
     function userVerifyRedemption(uint256 registrationCode)
     external payable
-    redemptionStep(2)
     redeemerNotFrozen() {
-        // 1. Checks
+        // 1. Check redeemer has been started
         uint256 _redeemerData = _balances[_msgSender()];
+        _redemptionStep(_redeemerData, 2);
+        // 2. Check code
         if (registrationCode != _getRegistrationFor(_redeemerData)) {
             revert CodeMismatch();
         }
-        // 2. Get latest on-chain insured value
+        // 3. Get latest on-chain insured value
         uint256[] memory tokenIds = _unpackTokenIds(_redeemerData);
-        // 3. Get the estimated s&h fees
+        // 4. Get the estimated s&h fees
         uint256 _minRedeemUsd = getRedeemerFees(
             getInsuredsValue(tokenIds),
             tokenIds.length

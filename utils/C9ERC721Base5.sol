@@ -305,6 +305,14 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     }
 
     /**
+     * @dev Emits metadata update for tokenId.
+     */
+    function _metaUpdate(uint256 tokenId)
+    internal {
+        emit MetadataUpdate(tokenId);
+    }
+
+    /**
      * @dev Returns the owner of the `tokenId`. Does NOT revert if token doesn't exist
      */
     function _ownerOf(uint256 tokenId)
@@ -341,7 +349,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
 
     function _safeTransfer(address from, address to, uint256[] calldata tokenIds, bytes memory data)
     internal virtual {
-        _transfer(from, to, tokenIds);
+        _transferBatch(from, to, tokenIds);
         // Only check the first token
         if (!_checkOnERC721Received(from, to, tokenIds[0], data)) {
             revert NonERC721Receiver();
@@ -363,6 +371,16 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     }
 
     /**
+     * @dev Checks input sizes match.
+     */
+    function _sizeChecker(uint256 toLength, uint256 batchSize)
+    private pure {
+        if (toLength != batchSize) {
+            revert TransferSizeMismatch(toLength, batchSize);
+        }
+    }
+
+    /**
      * @dev Transfers `tokenId` from `from` to `to`.
      * Updated to impose restriction on _msgSender() since this is 
      * called singular or batched. The restriction on to 
@@ -380,7 +398,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      *
      * Emits a {Transfer} event.
      */
-
     function __transfer(address from, uint256 to, uint256 tokenId)
     internal virtual
     returns (uint256 votes) {
@@ -431,7 +448,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
 
     function _transfer(address from, address to, uint256 tokenId)
     internal virtual
-    validTo(to) {
+    validTo(to)
+    notFrozen() {
         // Checks, set new owner, return votes to add to balances
         uint256 votes = __transfer(from, uint256(uint160(to)), tokenId);
         // Update balances
@@ -444,9 +462,10 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * @dev We have a separate function here because we don't want to read/write 
      * to balances for every token. One time update at the end only.
      */
-    function _transfer(address from, address to, uint256[] calldata tokenIds)
+    function _transferBatch(address from, address to, uint256[] calldata tokenIds)
     internal virtual
-    validTo(to) {
+    validTo(to)
+    notFrozen() {
         uint256 _to = uint256(uint160(to)); // Convert one time
         uint256 batchSize = tokenIds.length;
         uint256 tokenId;
@@ -489,9 +508,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     function approve(address[] calldata to, uint256[][] calldata tokenIds)
     external virtual {
         uint256 _batchSize = tokenIds.length;
-        if (to.length != _batchSize) {
-            revert TransferSizeMismatch(to.length, _batchSize);
-        }
+        _sizeChecker(to.length, _batchSize);
         uint256 tokenId;
         uint256 _tokenIdsBatchSize;
         for (uint256 i; i<_batchSize;) {
@@ -565,7 +582,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      */
     function isLocked(uint256 tokenId)
     external view
-    requireMinted(tokenId)
     returns (bool) {
         return _isLocked(_owners[tokenId]);
     }
@@ -577,6 +593,15 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     public view
     returns (bool) {
         return _getRegistrationFor(_balances[account]) > 0;
+    }
+
+    /**
+     * @dev Returns if the token is upgraded.
+     */
+    function isUpgraded(uint256 tokenId)
+    external view
+    returns (bool) {
+        return _isUpgraded(_owners[tokenId]) == UPGRADED;
     }
 
     /**
@@ -655,8 +680,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      */
     function safeTransferFrom(address from, address to, uint256 tokenId)
     public virtual
-    override
-    notFrozen() {
+    override {
         safeTransferFrom(from, to, tokenId, "");
     }
 
@@ -665,8 +689,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      */
     function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory data)
     public virtual
-    override
-    notFrozen() {
+    override {
         _safeTransfer(from, to, tokenId, data);
     }
 
@@ -675,9 +698,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * between two addresses. Max batch size is 64.
      */
     function safeTransferBatchFrom(address from, address to, uint256[] calldata tokenIds)
-    external
-    notFrozen() {
-        _transfer(from, to, tokenIds);
+    external {
+        _transferBatch(from, to, tokenIds);
         // Only need to check one time
         if (!_checkOnERC721Received(from, to, tokenIds[0], "")) {
             revert NonERC721Receiver();
@@ -691,14 +713,27 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * non-ERC721 receiver.
      */
     function safeBatchTransferBatchFrom(address from, address[] calldata to, uint256[][] calldata tokenIds)
-    external
-    notFrozen() {
+    external {
         uint256 _batchSize = tokenIds.length;
-        if (to.length != _batchSize) {
-            revert TransferSizeMismatch(to.length, _batchSize);
-        }
+        _sizeChecker(to.length, _batchSize);
         for (uint256 i; i<_batchSize;) {
             _safeTransfer(from, to[i], tokenIds[i], "");
+            unchecked {++i;}
+        }
+    }
+
+    /**
+     * @dev Allows batch transfer to many addresses at once. This will save
+     * around ~20-25% gas with 4 or more addresses sent to at once. This only has a 
+     * safe transfer version to prevent accidents of sending to a 
+     * non-ERC721 receiver.
+     */
+    function safeBatchTransferBatchFrom(address from, address[] calldata to, uint256[][] calldata tokenIds, bytes[] calldata data)
+    external {
+        uint256 _batchSize = tokenIds.length;
+        _sizeChecker(to.length, _batchSize);
+        for (uint256 i; i<_batchSize;) {
+            _safeTransfer(from, to[i], tokenIds[i], data[i]);
             unchecked {++i;}
         }
     }
@@ -785,8 +820,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * @dev See {IERC721-transferFrom}.
      */
     function transferFrom(address from, address to, uint256 tokenId)
-    public virtual
-    notFrozen() {
+    public virtual {
         _transfer(from, to, tokenId);
     }
 
@@ -796,9 +830,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      */
     function transferBatchFrom(address from, address to, uint256[] calldata tokenIds)
     external virtual
-    override
-    notFrozen() {
-        _transfer(from, to, tokenIds);
+    override {
+        _transferBatch(from, to, tokenIds);
     }
 
     function votesOf(address tokenOwner)
