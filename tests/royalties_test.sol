@@ -24,8 +24,6 @@ contract RoyaltiesTest is C9TestContract {
         super.afterEach();
         _checkRoyaltyInfo();
         _checkRoyaltyInfoFromParams();
-        _checkTokenParams(mintId);
-        _checkOwnerParams(mintId);
     }
 
     function _checkRoyaltyInfo()

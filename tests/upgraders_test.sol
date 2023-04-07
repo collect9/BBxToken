@@ -19,8 +19,6 @@ contract UpgradersTest is C9TestContract {
     function afterEach()
     public override {
         super.afterEach();
-        _checkTokenParams(mintId);
-        _checkOwnerParams(mintId);
     }
 
     /* @dev 1. Tests token set upgrade and set display.

@@ -8,6 +8,7 @@ contract TransfersTest is C9TestContract {
 
     address private _to = TestsAccounts.getAccount(1);
     address private _to2 = TestsAccounts.getAccount(2);
+    address private _to3 = TestsAccounts.getAccount(3);
     uint256 private _mintIdOffset;
 
     function afterEach()
@@ -15,6 +16,7 @@ contract TransfersTest is C9TestContract {
         super.afterEach();
         _checkOwnerDataOf(_to);
         _checkOwnerDataOf(_to2);
+        _checkOwnerDataOf(_to3); // Dummy account
     }
 
     function _updateTokenTruth(uint256 tokenId, address to)
@@ -50,10 +52,6 @@ contract TransfersTest is C9TestContract {
         // Ground truth of old and new owner params
         _updateBalancesTruth(c9tOwner, _to, 1, numVotes);
         _updateTokenTruth(tokenId, _to);
-
-        // Compare against
-        _checkTokenParams(mintId);
-        _checkOwnerParams(mintId);
     }
 
     /* @dev 2. Check to ensure optimized batch transfer works properly, 
@@ -81,12 +79,6 @@ contract TransfersTest is C9TestContract {
 
         // Ground truth of old and new owner params
         _updateBalancesTruth(c9tOwner, _to, tokenIds.length, numVotes);
-        
-        // Compare against
-        for (uint256 i; i<numberToTransfer; i++) {
-            _checkTokenParams(mintIds[i]);
-            _checkOwnerParams(mintIds[i]);
-        }
     }
 
     /* @dev 3. Check to ensure optimized safeTransfer works properly, 
@@ -106,10 +98,6 @@ contract TransfersTest is C9TestContract {
         // Ground truth of old and new owner params
         _updateBalancesTruth(c9tOwner, _to, 1, numVotes);
         _updateTokenTruth(tokenId, _to);
-
-        // Compare against
-        _checkTokenParams(mintId);
-        _checkOwnerParams(mintId);
     }
 
     /* @dev 4. Check to ensure optimized batch safeTransferBatch works properly, 
@@ -134,12 +122,6 @@ contract TransfersTest is C9TestContract {
 
         // Ground truth of old and new owner params
         _updateBalancesTruth(c9tOwner, _to, tokenIds.length, numVotes);
-        
-        // Compare against
-        for (uint256 i; i<numberToTransfer; i++) {
-            _checkTokenParams(mintIds[i]);
-            _checkOwnerParams(mintIds[i]);
-        }
 
         _mintIdOffset += numberToTransfer;
     }
@@ -191,15 +173,5 @@ contract TransfersTest is C9TestContract {
         // Better update
         _updateBalancesTruth(c9tOwner, toBatch[0], tokenIds[0].length, numVotesTo1);
         _updateBalancesTruth(c9tOwner, toBatch[1], tokenIds[1].length, numVotesTo2);
-        
-        // Compare against
-        for (uint256 i; i<numberToTransferTo1; i++) {
-            _checkTokenParams(mintIdsTo1[i]);
-            _checkOwnerParams(mintIdsTo1[i]);
-        }
-        for (uint256 i; i<numberToTransferTo2; i++) {
-            _checkTokenParams(mintIdsTo2[i]);
-            _checkOwnerParams(mintIdsTo2[i]);
-        }
     }
 }

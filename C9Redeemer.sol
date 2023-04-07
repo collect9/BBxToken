@@ -6,15 +6,30 @@ import "./utils/interfaces/IC9EthPriceFeed.sol";
 
 contract C9Redeemable is C9Token {
     
-    bool private _frozenRedeemer;
-    address private contractPricer;
-    uint24[] private _redeemedTokens;
-
     uint256 constant RPOS_STEP = 0;
     uint256 constant RPOS_BATCHSIZE = 8; // Pending number of redemptions
     uint256 constant RPOS_TOKEN1 = 16;
     uint256 constant MAX_BATCH_SIZE = 6;
     uint256 constant RUINT_SIZE = 24;
+
+    bool private _frozenRedeemer;
+    address private contractPricer;
+    uint256 public preRedeemablePeriod; //seconds
+    uint24[] private _redeemedTokens;
+
+    /**
+     * @dev https://docs.opensea.io/docs/metadata-standards.
+     * While there is no definitive EIP yet for token staking or locking, OpenSea 
+     * does support several events to help signal that a token should not be eligible 
+     * for trading. This helps prevent "execution reverted" errors for your users 
+     * if transfers are disabled while in a staked or locked state.
+     */
+    event TokenLocked(uint256 indexed tokenId, address indexed approvedContract);
+    event TokenUnlocked(uint256 indexed tokenId, address indexed approvedContract);
+
+    constructor() {
+        preRedeemablePeriod = 31600000; //1 year
+    }
 
     /*
      * @dev Check to see if contract is frozen.
@@ -24,6 +39,19 @@ contract C9Redeemable is C9Token {
             revert RedeemerFrozen();
         }
         _;
+    }
+
+    /*
+     * @dev Checks to see if the caller is approved for 
+     * the redeemer.
+     */ 
+    function _callerApproved(address tokenOwner)
+    private view {
+        if (_msgSender() != tokenOwner) {
+            if (!isApprovedForAll(tokenOwner, _msgSender())) {
+                revert Unauthorized();
+            }
+        }
     }
 
     /*
@@ -98,6 +126,13 @@ contract C9Redeemable is C9Token {
             }
         }
         return true;
+    }
+
+    function _lockToken(uint256 tokenId, uint256 tokenData)
+    internal
+    returns (uint256) {
+        emit TokenLocked(tokenId, _msgSender());
+        return tokenData |= BOOL_MASK<<MPOS_LOCKED;
     }
 
     /**
@@ -177,6 +212,16 @@ contract C9Redeemable is C9Token {
     }
 
     /**
+     * @dev Unlocks the token. The Redeem cancel functions 
+     * call this to unlock the token.
+     */
+    function _unlockToken(uint256 _tokenId)
+    internal {
+        _owners[_tokenId] &= ~(BOOL_MASK<<MPOS_LOCKED);
+        emit TokenUnlocked(_tokenId, _msgSender());
+    }
+
+    /**
      * @dev Unpacks tokenIds from the tightly packed
      * redemption data portion of the balances slot.
      */
@@ -234,6 +279,30 @@ contract C9Redeemable is C9Token {
             }
         }
         _clearRedemptionData(redeemer);
+    }
+
+    /**
+     * @dev Temp function only used in the contract tests.
+     */
+    function adminLock(uint256 tokenId)
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE) {
+        _owners[tokenId] = _lockToken(tokenId, _owners[tokenId]);
+    }
+
+    /**
+     * @dev Fail-safe function that can unlock an active token.
+     * This is for any edge cases that may have been missed 
+     * during redeemer testing. Dead tokens are still not 
+     * possible to unlock, though they may be transferred to the 
+     * contract owner where they may only be burned.
+     */
+    function adminUnlock(uint256 tokenId)
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE)
+    requireMinted(tokenId)
+    notDead(tokenId) {
+        _unlockToken(tokenId);
     }
 
     /**
@@ -330,11 +399,12 @@ contract C9Redeemable is C9Token {
      * Once user final fees have been paid, tokens can no longer 
      * be added to the existing batch.
      */
-    function redeemAdd(uint256[] calldata tokenIds)
+    function redeemAdd(address tokenOwner, uint256[] calldata tokenIds)
     external
     redeemerNotFrozen() {
+        _callerApproved(tokenOwner);
         // 1. Check redeemer is already started
-        uint256 _redeemerData = _balances[_msgSender()];
+        uint256 _redeemerData = _balances[tokenOwner];
         _redemptionStep(_redeemerData, 2);
         // 2. Check existing batch already exists
         uint256 _oldBatchSize = _changeChecker(_redeemerData);
@@ -371,7 +441,7 @@ contract C9Redeemable is C9Token {
             }
         }
         // 7. Save back to storage
-        _balances[_msgSender()] = _redeemerData;
+        _balances[tokenOwner] = _redeemerData;
     }
 
     /**
@@ -422,8 +492,10 @@ contract C9Redeemable is C9Token {
         uint256 _tokenOffset = RPOS_TOKEN1;
         uint256 _lastTokenOffset;
         uint256 _currentBatchSize = _originalBatchSize;
-        for (uint256 i; i<_removedBatchSize;) { // foreach token to remove
+        for (uint256 i; i<_removedBatchSize;) { // Foreach token to remove
             _originalTokenId = tokenIds[i];
+            // check caller is owner or approved
+            _isApprovedOrOwner(_msgSender(), _ownerOf(_originalTokenId), _originalTokenId);
             for (uint256 j; j<_currentBatchSize;) { // check it against each existing token in the redeemer's batch
                 _currentTokenId = uint256(uint24(_redeemerData>>_tokenOffset));
                 if (_currentTokenId == _originalTokenId) { // if a match is found
@@ -470,14 +542,15 @@ contract C9Redeemable is C9Token {
      * Once started, the token is locked from further exchange 
      * unless canceled.
      */
-    function redeemStart(uint256[] calldata tokenIds)
+    function redeemStart(address tokenOwner, uint256[] calldata tokenIds)
     external
     redeemerNotFrozen() {
+        _callerApproved(tokenOwner);
         // 1. Checks
-        uint256 _redeemerData = _balances[_msgSender()];
+        uint256 _redeemerData = _balances[tokenOwner];
         // 1b. Check account is registered
         if (!(_getRegistrationFor(_redeemerData) > 0)) {
-            revert AddressMustFirstRegister(_msgSender());
+            revert AddressMustFirstRegister(tokenOwner);
         }
         // 1c. Check account does not have open redemption
         _redemptionStep(_redeemerData, 0);
@@ -500,7 +573,7 @@ contract C9Redeemable is C9Token {
             }
         }
         // 4. Save redeemer state
-        _balances[_msgSender()] = _redeemerData;
+        _balances[tokenOwner] = _redeemerData;
     }
 
     /**
@@ -511,6 +584,19 @@ contract C9Redeemable is C9Token {
     onlyRole(DEFAULT_ADMIN_ROLE)
     addressNotSame(contractPricer, pricer) {
         contractPricer = pricer;
+    }
+
+    /**
+     * @dev Gets or sets the global token redeemable period.
+     * Limit hardcoded.
+     */
+    function setPreRedeemPeriod(uint256 period)
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (preRedeemablePeriod == period) {
+            revert ValueAlreadySet();
+        }
+        preRedeemablePeriod = period;
     }
 
     /*

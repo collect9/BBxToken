@@ -17,7 +17,12 @@ contract C9TestContract is C9Struct {
 
     function afterEach()
     public virtual {
+        // 1. Check owner data is still correct
         _checkOwnerDataOf(c9tOwner);
+        // 2. Check all token owner params are still correct
+        _checkOwnerParams();
+        // 3. Check all token data params are still correct
+        _checkTokenParams();
     }
 
     address internal c9tOwner = address(this);
@@ -27,8 +32,12 @@ contract C9TestContract is C9Struct {
     mapping(address => uint256) internal redemptions;
     mapping(address => uint256) internal transfers;
     mapping(address => uint256) internal votes;
+    
     mapping(uint256 => uint256) internal tokenTransfers;
     mapping(uint256 => address) internal tokenOwner;
+    mapping(uint256 => bool) internal tokenRedeemed;
+
+
     bool regStatus;
 
     // Others to save and check against
@@ -135,8 +144,6 @@ contract C9TestContract is C9Struct {
         Assert.equal(_tokenParams[8], rawdata.special, "Invalid special");
         Assert.equal(_tokenParams[9], rawdata.raritytier, "Invalid raritytier");
         Assert.equal(_tokenParams[10], rawdata.royaltiesdue, "Invalid royalties due");
-
-        Assert.equal(c9t.ownerOf(tokenId), tokenOwner[tokenId], "Invalid owner");
     }
 
     /* @dev Checks the minted owner params.
@@ -157,6 +164,26 @@ contract C9TestContract is C9Struct {
         Assert.equal(_ownerParams[6], rawdata.insurance, "Invalid insurance");
         Assert.equal(_ownerParams[7], rawdata.royalty*10, "Invalid royalty");
         Assert.equal(_ownerParams[8], rawdata.votes, "Invalid votes");
+    }
+
+    function _checkViewFunctions(uint256 mintId)
+    internal {
+        (uint256 tokenId,) = _getTokenIdVotes(mintId);
+        TokenData memory rawdata = _rawData[mintId];
+
+        // actual, expected
+        uint256 _islocked = c9t.isLocked(tokenId) ? 1 : 0;
+        Assert.equal(_islocked, rawdata.locked, "Invalid view locked");
+        uint256 _isupgraded = c9t.isUpgraded(tokenId) ? 1 : 0;
+        Assert.equal(_isupgraded, rawdata.upgraded, "Invalid view upgraded");
+        Assert.equal(c9t.validityStatus(tokenId), rawdata.validity, "Invalid view validity status");
+        Assert.equal(c9t.ownerOf(tokenId), tokenOwner[tokenId], "Invalid view owner");
+        Assert.equal(c9t.getTokenParamsName(tokenId), rawdata.name, "Invalid view name");
+        (, uint256 _royaltyinfo) = c9t.royaltyInfo(tokenId, 10000);
+        Assert.equal(_royaltyinfo, rawdata.royalty*10, "Invalid view royalty info");
+        Assert.equal(c9t.preRedeemable(tokenId), true, "Invalid view preredeemable");
+        Assert.equal(c9t.isRedeemable(tokenId), false, "Invalid view redeemable");
+        Assert.equal(c9t.isRedeemed(tokenId), tokenRedeemed[tokenId], "Invalid view redeemaed");
     }
 
     function checkTotalSupply()

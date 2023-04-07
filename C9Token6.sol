@@ -10,16 +10,6 @@ import "./utils/C9ERC721EnumBasic.sol";
 
 contract C9Token is ERC721IdEnumBasic {
     /**
-     * @dev https://docs.opensea.io/docs/metadata-standards.
-     * While there is no definitive EIP yet for token staking or locking, OpenSea 
-     * does support several events to help signal that a token should not be eligible 
-     * for trading. This helps prevent "execution reverted" errors for your users 
-     * if transfers are disabled while in a staked or locked state.
-     */
-    event TokenLocked(uint256 indexed tokenId, address indexed approvedContract);
-    event TokenUnlocked(uint256 indexed tokenId, address indexed approvedContract);
-
-    /**
      * @dev Contract access roles.
      */
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
@@ -54,7 +44,6 @@ contract C9Token is ERC721IdEnumBasic {
      * redeemed.
      */
     uint24[] private _burnedTokens;
-    uint256 public preRedeemablePeriod; //seconds
 
     /**
      * @dev Mappings that hold all of the token info required to 
@@ -80,7 +69,6 @@ contract C9Token is ERC721IdEnumBasic {
     constructor()
     ERC721("Collect9 Physically Redeemable NFTs", "C9T", 500) {
         _contractURI = "collect9.io/metadata/C9T";
-        preRedeemablePeriod = 31600000; // ~1 year
         _svgOnly = true;
     }
 
@@ -203,13 +191,6 @@ contract C9Token is ERC721IdEnumBasic {
         return votes;
     }
 
-    function _lockToken(uint256 tokenId, uint256 tokenData)
-    internal
-    returns (uint256) {
-        emit TokenLocked(tokenId, _msgSender());
-        return tokenData |= BOOL_MASK<<MPOS_LOCKED;
-    }
-
     /*
      * @dev Since royalty info is already stored in the uTokenData,
      * we don't need a new slots for per token royalties, and can 
@@ -246,40 +227,6 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Unlocks the token. The Redeem cancel functions 
-     * call this to unlock the token.
-     */
-    function _unlockToken(uint256 _tokenId)
-    internal {
-        _owners[_tokenId] &= ~(BOOL_MASK<<MPOS_LOCKED);
-        emit TokenUnlocked(_tokenId, _msgSender());
-    }
-
-    /**
-     * @dev Temp function only used in the contrat tests.
-     */
-    function adminLock(uint256 tokenId)
-    external
-    onlyRole(DEFAULT_ADMIN_ROLE) {
-        _owners[tokenId] = _lockToken(tokenId, _owners[tokenId]);
-    }
-
-    /**
-     * @dev Fail-safe function that can unlock an active token.
-     * This is for any edge cases that may have been missed 
-     * during redeemer testing. Dead tokens are still not 
-     * possible to unlock, though they may be transferred to the 
-     * contract owner where they may only be burned.
-     */
-    function adminUnlock(uint256 tokenId)
-    external
-    onlyRole(DEFAULT_ADMIN_ROLE)
-    requireMinted(tokenId)
-    notDead(tokenId) {
-        _unlockToken(tokenId);
-    }
-
-    /**
       * @dev Returns the baseURI at given index.
       */
     function baseURIArray(uint256 index)
@@ -291,10 +238,10 @@ contract C9Token is ERC721IdEnumBasic {
     /**
      * @dev Token burning. This option is not available for live 
      * tokens, or with those that have a status below REDEEMED.
-     * The token owner can only burn dead tokens. We keep 
-     * the token "around" to prevent a hole in the token 
-     * enumeration and so that we can retain data of what has 
-     * been physically redeemed.
+     * The token owner can only zero address burn dead tokens. 
+     * Zero address tokens still exist to prevent a hole in the token 
+     * enumeration, and to preserve a historical record on-chain 
+     * of physically redeemed tokens.
      */
     function burn(uint256 tokenId)
     public
@@ -323,22 +270,6 @@ contract C9Token is ERC721IdEnumBasic {
         balances |= burnerBalance<<APOS_BALANCE;
         balances |= burnerVotes<<APOS_VOTES;
         _balances[_msgSender()] = balances;
-    }
-
-    /**
-     * @dev When a single burn is too expensive but you
-     * don't want to burn all.
-     */
-    function burnBatch(uint256[] calldata tokenIds)
-    external {
-        uint256 _batchSize = tokenIds.length;
-        if (_batchSize == 0) {
-            revert NoOwnerSupply(_msgSender());
-        }
-        for (uint256 i; i<_batchSize;) {
-            burn(tokenIds[i]);
-            unchecked {++i;}
-        }
     }
 
     /**
@@ -591,19 +522,6 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Gets or sets the global token redeemable period.
-     * Limit hardcoded.
-     */
-    function setPreRedeemPeriod(uint256 period)
-    external
-    onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (preRedeemablePeriod == period) {
-            revert ValueAlreadySet();
-        }
-        preRedeemablePeriod = period;
-    }
-
-    /**
      * @dev Set royalties due if token validity status 
      * is ROYALTIES. This is admin role instead of VALIDITY_ROLE 
      * to reduce gas costs from using a proxy contract.
@@ -787,16 +705,6 @@ contract C9Token is ERC721IdEnumBasic {
             );
             unchecked {++i;}
         }
-    }
-
-    /**
-     * @dev Returns the number of redeemed tokens.
-     */
-    function validityStatus(uint256 tokenId)
-    external view
-    returns (uint256) {
-        uint256 _ownerData = _owners[tokenId];
-        return _currentVId(_ownerData);
     }
 
     /**

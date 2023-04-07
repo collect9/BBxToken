@@ -10,10 +10,8 @@ contract RedeemablesTest is C9TestContract {
 
     function afterEach()
     public override {
-        // Check c9towner params
+        // Check c9towner params and all tokens
         super.afterEach();
-        _checkTokenParams(mintId);
-        _checkOwnerParams(mintId);
     }
 
     function beforeAll()

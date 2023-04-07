@@ -12,8 +12,6 @@ contract BurningTest is C9TestContract {
     function afterEach()
     public override {
         super.afterEach();
-        _checkTokenParams(mintId);
-        _checkOwnerParams(mintId);
     }
 
     /**

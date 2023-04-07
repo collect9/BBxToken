@@ -559,6 +559,15 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     }
 
     /**
+     * @dev Temp function only used in tests.
+     */
+    function getRegistrationFor(address tokenOwner)
+    external view
+    returns (uint256) {
+        return _getRegistrationFor(_balances[tokenOwner]);
+    }
+
+    /**
      * @dev Gets the stored registration data.
      */
     function _getRegistrationFor(uint256 accountData)
@@ -832,6 +841,16 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     external virtual
     override {
         _transferBatch(from, to, tokenIds);
+    }
+
+    /**
+     * @dev Returns the number of redeemed tokens.
+     */
+    function validityStatus(uint256 tokenId)
+    external view
+    returns (uint256) {
+        uint256 _ownerData = _owners[tokenId];
+        return _currentVId(_ownerData);
     }
 
     function votesOf(address tokenOwner)

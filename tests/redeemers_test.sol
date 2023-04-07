@@ -12,11 +12,7 @@ import "./C9BaseDeploy_test.sol";
 contract RedeemersTest is C9TestContract {
 
     uint256 numberInRedeemer;
-
-    function afterEach()
-    public override {
-        super.afterEach();
-    }
+    uint256 constant MASK_REGISTRATION = 2**20-1;
 
     function _shuffle(uint256[] memory numberArr)
     private view {
@@ -34,8 +30,13 @@ contract RedeemersTest is C9TestContract {
     function beforeAll()
     public {
         c9t.setPreRedeemPeriod(0);
-        c9t.register(0x271577b3d4a93c7c5fecc74cc37569c86d8df05e511c8acf0438f0cb98e35427);
+        bytes32 ksig = 0x271577b3d4a93c7c5fecc74cc37569c86d8df05e511c8acf0438f0cb98e35427;
+        c9t.register(ksig);
         regStatus = true; //Set truth
+
+        uint256 code = uint256(ksig) % MASK_REGISTRATION;
+        Assert.equal(code, c9t.getRegistrationFor(c9tOwner), "registration code error1");
+
         _checkOwnerDataOf(c9tOwner);
     }
 
@@ -67,6 +68,8 @@ contract RedeemersTest is C9TestContract {
             _checkTokenParams(mintIds[i]);
             _checkOwnerParams(mintIds[i]);
         }
+
+        afterEach();
     }
 
     function redeemAddMultiple()
@@ -99,6 +102,8 @@ contract RedeemersTest is C9TestContract {
         }
         // Update truth
         numberInRedeemer += numberToAdd;
+
+        afterEach();
     }
 
     function redeemRemoveMultiple()
@@ -154,6 +159,13 @@ contract RedeemersTest is C9TestContract {
         (uint256 step, uint256[] memory rTokenIds) = c9t.getRedeemerInfo(c9tOwner);
         Assert.equal(step, 0, "Invalid redeem start step");
         Assert.equal(rTokenIds.length, 0, "Invalid redeem start step");
+
+        // Not sure which ones are in redeemer anymore from mintId, so unlock all ground truth
+        for (uint256 i; i<(_rawData.length-4); i++) {
+            _rawData[i].locked = UNLOCKED;
+        }
+
+        afterEach();
     }
 
 }

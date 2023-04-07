@@ -6,13 +6,16 @@ import "./C9BaseDeploy_test.sol";
 // File name has to end with '_test.sol', this file can contain more than one testSuite contracts
 contract RegistrationTest is C9TestContract {
 
+    bytes32 ksig;
+    uint256 constant MASK_REGISTRATION = 2**20-1;
+
     function afterEach()
     public override {
         // Check c9towner params
         super.afterEach();
     }
 
-    function _checkRegistration(bytes32 ksig, bool alreadyRegistered)
+    function _checkRegistration(bool alreadyRegistered)
     private {
         // Should be bool alreadyRegistered to start
         bool isRegistered = c9t.isRegistered(c9tOwner);
@@ -29,14 +32,30 @@ contract RegistrationTest is C9TestContract {
 
     function checkPreRegistration()
     public {
-        bytes32 ksig = keccak256(abi.encodePacked(block.timestamp));
-        _checkRegistration(ksig, false);
+        ksig = keccak256(abi.encodePacked(block.timestamp));
+        _checkRegistration(false);
+    }
+
+    function checkRegistrationCode1()
+    public {
+        uint256 code = uint256(ksig) % MASK_REGISTRATION;
+        Assert.equal(code, c9t.getRegistrationFor(c9tOwner), "registration code error1");
     }
 
     function checkReRegistration()
     public {
-        bytes32 ksig = keccak256(abi.encodePacked("some random data"));
-        _checkRegistration(ksig, true);
+        ksig = keccak256(abi.encodePacked("some random data"));
+        _checkRegistration(true);
     }
+
+    function checkRegistrationCode2()
+    public {
+        uint256 code = uint256(ksig) % MASK_REGISTRATION;
+        Assert.equal(code, c9t.getRegistrationFor(c9tOwner), "registration code error2");
+    }
+
+
+
+
 
 }
