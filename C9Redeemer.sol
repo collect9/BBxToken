@@ -281,14 +281,14 @@ contract C9Redeemable is C9Token {
         _clearRedemptionData(redeemer);
     }
 
-    /**
-     * @dev Temp function only used in the contract tests.
-     */
-    function adminLock(uint256 tokenId)
-    external
-    onlyRole(DEFAULT_ADMIN_ROLE) {
-        _owners[tokenId] = _lockToken(tokenId, _owners[tokenId]);
-    }
+    // /**
+    //  * @dev Temp function only used in the contract tests.
+    //  */
+    // function adminLock(uint256 tokenId)
+    // external
+    // onlyRole(DEFAULT_ADMIN_ROLE) {
+    //     _owners[tokenId] = _lockToken(tokenId, _owners[tokenId]);
+    // }
 
     /**
      * @dev Fail-safe function that can unlock an active token.

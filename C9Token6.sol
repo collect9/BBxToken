@@ -635,6 +635,12 @@ contract C9Token is ERC721IdEnumBasic {
         );
     }
 
+    function svgOnly()
+    external view
+    returns (bool) {
+        return _svgOnly;
+    }
+
     /**
      * @dev Set SVG flag to either display on-chain SVG (true) or  
      * external version (false). If set to true, it is still possible 

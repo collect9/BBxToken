@@ -49,13 +49,11 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
         uint256 mask;
         b = '","attributes":['
             '{"trait_type":"Hang Tag","value":"       "},'
-            '{"trait_type":"Hang Tag Gen","value":  },'
             '{"trait_type":"Hang Tag Country","value":"   "},'
             '{"trait_type":"Tush Tag","value":"            "},'
-            '{"trait_type":"Tush Tag Gen","value":  },'
             '{"trait_type":"Tush Tag Country","value":"   "},'
             '{"trait_type":"Tush Tag Modifier","value":"NORM"},'
-            '{"trait_type":"Full Tag Combo","value":"                      "},'
+            '{"trait_type":"Complete Tags Combo","value":"                      "},'
             '{"trait_type":"Mint Date","display_type":"date","value":          },'
             '{"trait_type":"Upgraded","value":"   "},'
             '{"trait_type":"Redeemed","value":"   "},'
@@ -82,29 +80,7 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
         );
         assembly {
             mask := not(shl(240, 0xFFFF))
-            let dst := add(b, 838)
-            mstore(dst, or(and(mload(dst), mask), attribute2))
-        }
-
-        // Hang tag gen number
-        attribute2 = Helpers.remove2Null(
-            bytes2(Helpers.uintToBytes(
-                _viewPackedData(data, UPOS_GENTAG, USZ_GENTAG)
-            ))
-        );
-        assembly {
-            let dst := add(b, 129)
-            mstore(dst, or(and(mload(dst), mask), attribute2))
-        }
-
-        // Tush tag gen number
-        attribute2 = Helpers.remove2Null(
-            bytes2(Helpers.uintToBytes(
-                _viewPackedData(data, UPOS_GENTUSH, USZ_GENTUSH)
-            ))
-        );
-        assembly {
-            let dst := add(b, 267)
+            let dst := add(b, 761)
             mstore(dst, or(and(mload(dst), mask), attribute2))
         }
 
@@ -115,33 +91,33 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
             ))
         );
         assembly {
-            let dst := add(b, 1004)
+            let dst := add(b, 927)
             mstore(dst, or(and(mload(dst), mask), attribute2))
         }
 
         // 2. All 3 byte attributes
 
-        // Country tag
+        // Country hang tag
         bytes3 attribute3 = bytes3(_getFlagText(_viewPackedData(data, UPOS_CNTRYTAG, USZ_CNTRYTAG)));
         uint256 _offset = attribute3[2] == 0x20 ? 0 : 1;
         assembly {
             mask := not(shl(232, 0xFFFFFF))
             let dst := add(b, 86)
             mstore(dst, or(and(mload(dst), mask), and(attribute3, not(mask))))
-            dst := add(b, 175)
+            dst := add(b, 134)
             mstore(dst, or(and(mload(dst), mask), and(attribute3, not(mask))))
-            dst := add(b, 413)
+            dst := add(b, 336)
             mstore(dst, or(and(mload(dst), mask), and(attribute3, not(mask))))
         }
         
         // Country tush
         attribute3 = bytes3(_getFlagText(_viewPackedData(data, UPOS_CNTRYTUSH, USZ_CNTRYTUSH)));
         assembly {
-            let dst := add(b, 219)
+            let dst := add(b, 178)
             mstore(dst, or(and(mload(dst), mask), and(attribute3, not(mask))))
-            dst := add(b, 313)
+            dst := add(b, 231)
             mstore(dst, or(and(mload(dst), mask), and(attribute3, not(mask))))
-            dst := add(add(b, 422), _offset)
+            dst := add(add(b, 345), _offset)
             mstore(dst, or(and(mload(dst), mask), and(attribute3, not(mask))))
         }
 
@@ -152,9 +128,9 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
         assembly {
             let dst := add(b, 82)
             mstore(dst, or(and(mload(dst), mask), attribute3))
-            dst := add(b, 409)
+            dst := add(b, 332)
             mstore(dst, or(and(mload(dst), mask), attribute3))
-            dst := add(b, 1136)
+            dst := add(b, 1059)
             mstore(dst, or(and(mload(dst), mask), attribute3))
         }
 
@@ -163,11 +139,11 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
             _viewPackedData(data, UPOS_GENTUSH, USZ_GENTUSH)
         );
         assembly {
-            let dst := add(b, 215)
+            let dst := add(b, 174)
             mstore(dst, or(and(mload(dst), mask), attribute3))
-            dst := add(add(b, 418), _offset)
+            dst := add(add(b, 341), _offset)
             mstore(dst, or(and(mload(dst), mask), attribute3))
-            dst := add(b, 1187)
+            dst := add(b, 1110)
             mstore(dst, or(and(mload(dst), mask), attribute3))
         }
 
@@ -176,7 +152,7 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
             ownerData>>MPOS_UPGRADED & BOOL_MASK
         ) == UPGRADED ? bytes3("YES") : bytes3("NO ");
         assembly {
-            let dst := add(b, 536)
+            let dst := add(b, 459)
             mstore(dst, or(and(mload(dst), mask), attribute3))
         }
 
@@ -187,7 +163,7 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
             MSZ_VALIDITY
         ) == REDEEMED ? bytes3("YES") : bytes3("NO ");
         assembly {
-            let dst := add(b, 576)
+            let dst := add(b, 499)
             mstore(dst, or(and(mload(dst), mask), attribute3))
         }
 
@@ -201,7 +177,7 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
         );
         assembly {
             mask := not(shl(224, 0xFFFFFFFF))
-            let dst := add(b, 921)
+            let dst := add(b, 844)
             mstore(dst, or(and(mload(dst), mask), attribute4))
         }
 
@@ -212,7 +188,7 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
             ))
         );
         assembly {
-            let dst := add(b, 938)
+            let dst := add(b, 861)
             mstore(dst, or(and(mload(dst), mask), attribute4))
         }
 
@@ -222,11 +198,11 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
             // attribute4 = _vMarkers[_markerTush-1];
             attribute4 = bytes4(_getMarkerText(_markerTush));
             assembly {
-                let dst := add(b, 223)
+                let dst := add(b, 182)
                 mstore(dst, or(and(mload(dst), mask), and(attribute4, not(mask))))
-                dst := add(b, 362)
+                dst := add(b, 280)
                 mstore(dst, or(and(mload(dst), mask), and(attribute4, not(mask))))
-                dst := add(add(b, 426), _offset)
+                dst := add(add(b, 349), _offset)
                 mstore(dst, or(and(mload(dst), mask), and(attribute4, not(mask))))
             }
         }
@@ -244,7 +220,7 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
         bytes10 attribute10 = _getColorText(_bgidx);
         assembly {
             mask := not(shl(176, 0xFFFFFFFFFFFFFFFFFFFF))
-            let dst := add(b, 769)
+            let dst := add(b, 692)
             mstore(dst, or(and(mload(dst), mask), attribute10))
         }
 
@@ -253,7 +229,7 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
             _viewPackedData(data, UPOS_MINTSTAMP, USZ_TIMESTAMP)
         ));
         assembly {
-            let dst := add(b, 490)
+            let dst := add(b, 413)
             mstore(dst, or(and(mload(dst), mask), attribute10))
         }
 
@@ -263,7 +239,7 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
             edition
         ));
         assembly {
-            let dst := add(b, 1255)
+            let dst := add(b, 1178)
             mstore(dst, or(and(mload(dst), mask), attribute10))
         }
         
@@ -274,7 +250,7 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
             ))
         );
         assembly {
-            let dst := add(b, 1062)
+            let dst := add(b, 985)
             mstore(dst, or(and(mload(dst), not(shl(200, 0xFFFFFFFFFFFFFF))), bXferCounter))
         }
 
@@ -282,20 +258,20 @@ contract C9MetaData is IC9MetaData, C9Shared, C9Context {
         bytes1 attribute1 = _rclass[1];
         assembly {
             mask := not(shl(248, 0xFF))
-            let dst := add(add(b, 416), _offset)
+            let dst := add(add(b, 339), _offset)
             mstore(dst, or(and(mload(dst), mask), "/"))
-            dst := add(b, 621)
+            dst := add(b, 544)
             mstore(dst, or(and(mload(dst), mask), attribute1))
-            dst := add(b, 729)
+            dst := add(b, 652)
             mstore(dst, or(and(mload(dst), mask), attribute1))
         }
 
         // Type class
         attribute1 = _rclass[0];
         assembly {
-            let dst := add(b, 677)
+            let dst := add(b, 600)
             mstore(dst, or(and(mload(dst), mask), attribute1))
-            dst := add(b, 728)
+            dst := add(b, 651)
             mstore(dst, or(and(mload(dst), mask), attribute1))
         }  
     }
