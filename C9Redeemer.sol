@@ -40,6 +40,25 @@ contract C9Redeemable is C9Token {
         _;
     }
 
+    /**
+     * @dev Updates the addresse's redemptions count.
+     */
+    function _addRedemptionsTo(address from, uint256 batchSize)
+    internal virtual {
+        uint256 balancesFrom = _balances[from];
+        uint256 redemptions = uint256(uint16(balancesFrom>>APOS_REDEMPTIONS));
+        unchecked {
+            redemptions += batchSize;
+        }
+        balancesFrom = _setTokenParam(
+            balancesFrom,
+            APOS_REDEMPTIONS,
+            redemptions,
+            type(uint16).max
+        );
+        _balances[from] = balancesFrom;
+    }
+
     /*
      * @dev Checks to see if the caller is approved for 
      * the redeemer.
@@ -239,12 +258,21 @@ contract C9Redeemable is C9Token {
      * possible to unlock, though they may be transferred to the 
      * contract owner where they may only be burned.
      */
-    function adminUnlock(uint256 tokenId)
-    external
-    onlyRole(DEFAULT_ADMIN_ROLE)
+    function _adminUnlock(uint256 tokenId)
+    private
     requireMinted(tokenId)
     notDead(tokenId) {
         _unlockToken(tokenId);
+    }
+
+    function adminUnlock(uint256[] calldata tokenIds)
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE) {
+        uint256 _batchSize = tokenIds.length;
+        for (uint256 i; i<_batchSize;) {
+            _adminUnlock(tokenIds[i]);
+            unchecked {++i;}
+        }
     }
 
     /**

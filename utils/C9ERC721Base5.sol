@@ -39,7 +39,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     using Address for address;
     using Strings for uint256;
 
-    uint256 constant APOS_REDEEMER = 0;
     uint256 constant APOS_REGISTRATION = 160;
     uint256 constant APOS_REDEMPTIONS = 180;
     uint256 constant APOS_BALANCE = 196;
@@ -182,25 +181,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     internal view virtual
     returns (string memory) {
         return "";
-    }
-
-    /**
-     * @dev Updates the addresse's redemptions count.
-     */
-    function _addRedemptionsTo(address from, uint256 batchSize)
-    internal virtual {
-        uint256 balancesFrom = _balances[from];
-        uint256 redemptions = uint256(uint16(balancesFrom>>APOS_REDEMPTIONS));
-        unchecked {
-            redemptions += batchSize;
-        }
-        balancesFrom = _setTokenParam(
-            balancesFrom,
-            APOS_REDEMPTIONS,
-            redemptions,
-            type(uint16).max
-        );
-        _balances[from] = balancesFrom;
     }
 
     /**
