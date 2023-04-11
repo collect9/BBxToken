@@ -505,23 +505,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
         _approve(to, tokenId);
     }
 
-    function approve(address[] calldata to, uint256[][] calldata tokenIds)
-    external virtual {
-        uint256 _batchSize = tokenIds.length;
-        _sizeChecker(to.length, _batchSize);
-        uint256 tokenId;
-        uint256 _tokenIdsBatchSize;
-        for (uint256 i; i<_batchSize;) {
-            _tokenIdsBatchSize = tokenIds[i].length;
-            for (uint256 j; j<_tokenIdsBatchSize;) {
-                tokenId = tokenIds[i][j];
-                approve(to[i], tokenId);
-                unchecked {++j;}
-            }
-            unchecked {++i;}
-        }
-    }
-
     /**
      * @dev See {IERC721-balanceOf}.
      */
@@ -533,21 +516,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     }
 
     /**
-     * @dev Batch version to clear approvals. To clear a single, 
-     * pass in only one token, or set address to 0 using the 
-     * approve method.
-     */
-    function clearApproved(uint256[] calldata tokenIds) external {
-        uint256 _batchSize = tokenIds.length;
-        uint256 _tokenId;
-        for (uint256 i; i<_batchSize;) {
-            _tokenId = tokenIds[i];
-            _isApprovedOrOwner(_msgSender(), ownerOf(_tokenId), _tokenId);
-            delete _tokenApprovals[_tokenId];
-        }
-    }
-
-    /**
      * @dev See {IERC721-getApproved}.
      */
     function getApproved(uint256 tokenId)
@@ -556,15 +524,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     requireMinted(tokenId)
     returns (address) {
         return address(uint160(_tokenApprovals[tokenId]));
-    }
-
-    /**
-     * @dev Temp function only used in tests.
-     */
-    function getRegistrationFor(address tokenOwner)
-    external view
-    returns (uint256) {
-        return _getRegistrationFor(_balances[tokenOwner]);
     }
 
     /**

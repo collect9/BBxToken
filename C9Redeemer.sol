@@ -6,9 +6,8 @@ import "./utils/interfaces/IC9EthPriceFeed.sol";
 
 contract C9Redeemable is C9Token {
     
-    uint256 constant RPOS_STEP = 0;
-    uint256 constant RPOS_BATCHSIZE = 8; // Pending number of redemptions
-    uint256 constant RPOS_TOKEN1 = 16;
+    uint256 constant RPOS_BATCHSIZE = 0; // Pending number of redemptions
+    uint256 constant RPOS_TOKEN1 = 8;
     uint256 constant MAX_BATCH_SIZE = 6;
     uint256 constant RUINT_SIZE = 24;
 
@@ -45,42 +44,15 @@ contract C9Redeemable is C9Token {
      * @dev Checks to see if the caller is approved for 
      * the redeemer.
      */ 
-    function _callerApproved(address tokenOwner)
+    function _callerApproved(address redeemer)
     private view {
-        if (_msgSender() != tokenOwner) {
-            if (!isApprovedForAll(tokenOwner, _msgSender())) {
+        if (_msgSender() != redeemer) {
+            if (!isApprovedForAll(redeemer, _msgSender())) {
                 revert Unauthorized();
             }
         }
     }
-
-    /*
-     * @dev Checks batch size and that redeemer is not too
-     * far along in the process to still make changes.
-     */ 
-    function _changeChecker(uint256 balancesData)
-    private pure
-    returns (uint256 _originalBatchSize) {
-        // 1. Check a batch size exists
-        _originalBatchSize = _getBatchSize(balancesData);
-        _checkBatchSize(_originalBatchSize);
-        // 2. Make sure redeemer is not already at final step
-        uint256 _currentStep = _getStep(balancesData);
-        if (_currentStep > 2) {
-            revert AddressToFarInProcess(2, _currentStep);
-        }
-    }
-
-    /*
-     * @dev Checks batch size.
-     */ 
-    function _checkBatchSize(uint256 batchSize)
-    private pure {
-        if (batchSize == 0) {
-            revert NoRedemptionBatchPresent();
-        }
-    }
-
+    
     /*
      * @dev Clears the step, batchsize, and space for 
      * 6 token Ids (u24).
@@ -97,15 +69,6 @@ contract C9Redeemable is C9Token {
     private pure
     returns (uint256) {
         return uint256(uint8(balancesData>>RPOS_BATCHSIZE));
-    }
-
-    /*
-     * @dev Gets the step of the redeemer.
-     */
-    function _getStep(uint256 balancesData)
-    private pure
-    returns (uint256) {
-        return uint256(uint8(balancesData));
     }
 
     /**
@@ -155,14 +118,14 @@ contract C9Redeemable is C9Token {
         uint256 _batchSize = tokenIds.length;
         uint256 _tokenId;
         uint256 _ownerData;
-        address _tokenOwner;
+        address _redeemer;
         for (uint256 i; i<_batchSize;) {
             _tokenId = tokenIds[i];
             // 1. Copy token data from storage
             _ownerData = _owners[_tokenId];
             // 2. Check caller is owner or approved
-            _tokenOwner = address(uint160(_ownerData>>MPOS_OWNER));
-            _isApprovedOrOwner(_msgSender(), _tokenOwner, _tokenId);
+            _redeemer = address(uint160(_ownerData>>MPOS_OWNER));
+            _isApprovedOrOwner(_msgSender(), _redeemer, _tokenId);
             // 3. Check token is redeemable
             if (!_isRedeemable(_tokenId, _ownerData)) {
                 revert TokenNotRedeemable(_tokenId);
@@ -179,17 +142,6 @@ contract C9Redeemable is C9Token {
             // 6. Save to storage
             _owners[_tokenId] = _ownerData;
             unchecked {++i;}
-        }
-    }
-
-    /*
-     * @dev Checks to make sure user is on correct redemption step.
-     */ 
-    function _redemptionStep(uint256 redeemerData, uint256 step)
-    private pure {
-        uint256 _expected = _getStep(redeemerData);
-        if (step != _expected) {
-            revert WrongProcessStep(_expected, step);
         }
     }
 
@@ -225,14 +177,14 @@ contract C9Redeemable is C9Token {
      * @dev Unpacks tokenIds from the tightly packed
      * redemption data portion of the balances slot.
      */
-    function _unpackTokenIds(uint256 balancesData)
+    function _unpackTokenIds(uint256 redeemerData)
     private pure
     returns (uint256[] memory tokenIds) {
-        uint256 _batchSize = _getBatchSize(balancesData);
+        uint256 _batchSize = _getBatchSize(redeemerData);
         tokenIds = new uint256[](_batchSize);
         uint256 _packedOffset = RPOS_TOKEN1;
         for (uint256 i; i<_batchSize;) {
-            tokenIds[i] = uint256(uint24(balancesData>>_packedOffset));
+            tokenIds[i] = uint256(uint24(redeemerData>>_packedOffset));
             unchecked {
                 _packedOffset += RUINT_SIZE;
                 ++i;
@@ -256,39 +208,29 @@ contract C9Redeemable is C9Token {
      * user will receive tracking information by the email they provided 
      * in a prior step.
      */
-    function adminFinalApproval(address redeemer)
+    function adminFinalApprove(address redeemer)
     external
     onlyRole(DEFAULT_ADMIN_ROLE) {
         // 1. Make sure redeemer is on last step
         uint256 _redeemerData = _balances[redeemer];
-        _redemptionStep(_redeemerData, 3);
-        // 2. Set all tokens in the redeemer's account to redeemed
+        uint256 _batchSize = _getBatchSize(_redeemerData);
+        if (_batchSize == 0) {
+            revert WrongProcessStep(2, 0);
+        }
+        // 2. Get tokenIds for this redeemer
+        uint256[] memory _tokenIds = _unpackTokenIds(_redeemerData);
+        // 3. Set all tokens in the redeemer's account to redeemed
         uint256 _tokenId;
         uint256 _tokenData;
-        uint256 _batchSize = _getBatchSize(_redeemerData);
-        uint256 _tokenOffsetMax;
-        unchecked {
-            _tokenOffsetMax = RPOS_TOKEN1 + (_batchSize*RUINT_SIZE);
-        }
-        for (uint256 _tokenOffset=RPOS_TOKEN1; _tokenOffset<_tokenOffsetMax;) {
-            _tokenId = uint256(uint24(_redeemerData>>_tokenOffset));
+        for (uint256 i; i<_batchSize;) {
+            _tokenId = _tokenIds[i];
             _tokenData = _owners[_tokenId];
             _setTokenValidity(_tokenId, _tokenData, REDEEMED);
-            unchecked {
-                _tokenOffset += RUINT_SIZE;
-            }
+            unchecked {++i;}
         }
+        // 4. Clear redeemer's info so a new redemption can begin
         _clearRedemptionData(redeemer);
     }
-
-    // /**
-    //  * @dev Temp function only used in the contract tests.
-    //  */
-    // function adminLock(uint256 tokenId)
-    // external
-    // onlyRole(DEFAULT_ADMIN_ROLE) {
-    //     _owners[tokenId] = _lockToken(tokenId, _owners[tokenId]);
-    // }
 
     /**
      * @dev Fail-safe function that can unlock an active token.
@@ -332,31 +274,26 @@ contract C9Redeemable is C9Token {
      * Shipping insurance as quoted Mar 2023 costs around ~1.2% 
      * of the value. We add a refundable buffer (~2%) for international 
      * shipments that will have a higher base.
-     * Base package costs are around $20 CONUS. Thus the release 
-     * fee can be summarized as $20 + (VALUE*2%).
+     * Base package costs are around $25 CONUS. Thus the release 
+     * fee can be summarized as $25 + 2%*VALUE.
      * Additional fees may be refunded.
-     * Note: Max batch size can only be 6.
+     * Note: Max batch size 6.
      */
-    function getRedeemerFees(uint256 insuredValue, uint256 batchSize)
+    function getRedemptionFees(uint256 insuredValue)
     public pure
     returns (uint256 total) {
-        uint256 _insuredCost;
-        uint256 _packagingBaseCost;
         unchecked {
-            _insuredCost = 2*insuredValue/100;
-            _packagingBaseCost = 20 + 2*batchSize;
-            total = _packagingBaseCost + _insuredCost;
+            total = 25 + 2*insuredValue/100;
         }
     }
 
     /*
-     * @dev Gets the redemption info/array of _tokenOwner.
+     * @dev Gets the redemption info/array of redeemer.
      */
-    function getRedeemerInfo(address account)
+    function getRedeemerTokenIds(address redeemer)
     external view
-    returns(uint256 step, uint256[] memory tokenIds) {
-        uint256 _balancesData = _balances[account];
-        step = _getStep(_balancesData);
+    returns(uint256[] memory tokenIds) {
+        uint256 _balancesData = _balances[redeemer];
         tokenIds = _unpackTokenIds(_balancesData);
     }
 
@@ -394,175 +331,51 @@ contract C9Redeemable is C9Token {
         return _preRedeemable(_tokenData);
     }
 
-    /*
-     * @dev Add individual tokens to an existing redemption process. 
-     * Once user final fees have been paid, tokens can no longer 
-     * be added to the existing batch.
-     */
-    function redeemAdd(address tokenOwner, uint256[] calldata tokenIds)
-    external
-    redeemerNotFrozen() {
-        _callerApproved(tokenOwner);
-        // 1. Check redeemer is already started
-        uint256 _redeemerData = _balances[tokenOwner];
-        _redemptionStep(_redeemerData, 2);
-        // 2. Check existing batch already exists
-        uint256 _oldBatchSize = _changeChecker(_redeemerData);
-        // 3. Check new batch size fits within storage
-        uint256 _addBatchSize = tokenIds.length;
-        uint256 _newBatchSize = _addBatchSize+_oldBatchSize;
-        if (_newBatchSize > MAX_BATCH_SIZE) {
-            revert RedeemerBatchSizeTooLarge(MAX_BATCH_SIZE, _newBatchSize);
-        }
-        // 4. Lock tokens
-        _redeemLockTokens(tokenIds);
-        // 5. Update batch size
-        _redeemerData = _setTokenParam(
-            _redeemerData,
-            RPOS_BATCHSIZE,
-            _newBatchSize,
-            type(uint8).max
-        );
-        // 6. Update tokenIds in redeemer.
-        uint256 _offset;
-        unchecked {
-            _offset = RPOS_TOKEN1 + RUINT_SIZE*_oldBatchSize;
-        }
-        for (uint256 i; i<_addBatchSize;) {
-            _redeemerData = _setTokenParam(
-                _redeemerData,
-                _offset,
-                tokenIds[i],
-                type(uint24).max
-            );
-            unchecked {
-                _offset += RUINT_SIZE;
-                ++i;
-            }
-        }
-        // 7. Save back to storage
-        _balances[tokenOwner] = _redeemerData;
-    }
-
-    /**
-     * @dev
-     * Cancels redemption process from the token contract. It 
-     * returns the redemption data that contains the list of 
-     * tokenId to unlock.
-     */
-    function redeemCancel()
-    external {
-        uint256[] memory tokenIds = _unpackTokenIds(_balances[_msgSender()]);
-        uint256 _batchSize = tokenIds.length;
-        _checkBatchSize(_batchSize);
-        for (uint256 i; i<_batchSize;) {
-            _unlockToken(tokenIds[i]);
-            unchecked {++i;}
-        }
-        _clearRedemptionData(_msgSender());
-    }
-
-    /**
-     * @dev
-     * Remove individual tokens from the redemption process.
-     * This is useful is a tokenOwner wants to remove a 
-     * fraction of tokens in the process. Otherwise it may 
-     * end up being more expensive than cancel.
-     */
-    function redeemRemove(uint256[] calldata tokenIds)
-    external {
-        // 1. Check redeemer already started
-        uint256 _redeemerData = _balances[_msgSender()];
-        _redemptionStep(_redeemerData, 2);
-        // 2. Check existing batch already exists
-        uint256 _originalBatchSize = _changeChecker(_redeemerData);
-        // 3. Check new batch size is valid
-        uint256 _removedBatchSize = tokenIds.length;
-        // 3a. Cancel is cheaper if removing the entire batch
-        if (_removedBatchSize >= _originalBatchSize) {
-            revert CancelRemainder(_removedBatchSize);
-        }
-        /*
-        Swap and pop in memory instead of storage. This keeps 
-        gas cost down.
-        */
-        uint256 _currentTokenId;
-        uint256 _lastTokenId;
-        uint256 _originalTokenId;
-        uint256 _tokenOffset = RPOS_TOKEN1;
-        uint256 _lastTokenOffset;
-        uint256 _currentBatchSize = _originalBatchSize;
-        for (uint256 i; i<_removedBatchSize;) { // Foreach token to remove
-            _originalTokenId = tokenIds[i];
-            // check caller is owner or approved
-            _isApprovedOrOwner(_msgSender(), _ownerOf(_originalTokenId), _originalTokenId);
-            for (uint256 j; j<_currentBatchSize;) { // check it against each existing token in the redeemer's batch
-                _currentTokenId = uint256(uint24(_redeemerData>>_tokenOffset));
-                if (_currentTokenId == _originalTokenId) { // if a match is found
-                    // get the last token in the batch
-                    unchecked {
-                        _lastTokenOffset = RPOS_TOKEN1+RUINT_SIZE*(_currentBatchSize-1);
-                    }
-                    _lastTokenId = uint256(uint24(_redeemerData>>_lastTokenOffset));
-                    // and swap it to the current position of the token to remove
-                    _redeemerData = _setTokenParam(
-                        _redeemerData,
-                        _tokenOffset,
-                        _lastTokenId,
-                        type(uint24).max
-                    );
-                    // subtract 1 from current batch size so the popped token (duplicate now) is no longer looked up
-                    --_currentBatchSize;
-                    // Unlock the removed token
-                    _unlockToken(_originalTokenId);
-                    break;
-                }
-                unchecked {
-                    _tokenOffset += RUINT_SIZE;
-                    ++j;
-                }
-            }
-            _tokenOffset = RPOS_TOKEN1;
-            unchecked {++i;}
-        }
-
-        // 4. Update remaining batchsize in packed _data
-        _redeemerData = _setTokenParam(
-            _redeemerData,
-            RPOS_BATCHSIZE,
-            _currentBatchSize,
-            type(uint8).max
-        );
-
-        _balances[_msgSender()] = _redeemerData;
-    }
-
     /**
      * @dev Starts the redemption process.
      * Once started, the token is locked from further exchange 
      * unless canceled.
      */
-    function redeemStart(address tokenOwner, uint256[] calldata tokenIds)
-    external
+    function redeemStart(address redeemer, uint256 registrationCode, uint256[] calldata tokenIds)
+    external payable
     redeemerNotFrozen() {
-        _callerApproved(tokenOwner);
+        _callerApproved(redeemer);
         // 1. Checks
-        uint256 _redeemerData = _balances[tokenOwner];
+        uint256 _redeemerData = _balances[redeemer];
         // 1b. Check account is registered
         if (!(_getRegistrationFor(_redeemerData) > 0)) {
-            revert AddressMustFirstRegister(tokenOwner);
+            revert AddressMustFirstRegister(redeemer);
         }
-        // 1c. Check account does not have open redemption
-        _redemptionStep(_redeemerData, 0);
+        // 1c. Check account does not have a pending redemption
+        uint256 _batchSize = _getBatchSize(_redeemerData);
+        if (_batchSize > 0) {
+            revert WrongProcessStep(0, 2);
+        }
         // 1d. Check redemption batchsize is within limits
-        uint256 _batchSize = tokenIds.length;
+        _batchSize = tokenIds.length;
         if (_batchSize > MAX_BATCH_SIZE) {
             revert RedeemerBatchSizeTooLarge(MAX_BATCH_SIZE, _batchSize);
         }
-        // 2. Lock tokens
+        // 2. Check registration code
+        if (registrationCode != _getRegistrationFor(_redeemerData)) {
+            revert CodeMismatch();
+        }
+        // 3. Lock tokens
         _redeemLockTokens(tokenIds);
-        // 3. Update redeemer data
-        _redeemerData |= 2;
+        // 4. Get the estimated s&h fees
+        uint256 _minRedeemUsd = getRedemptionFees(getInsuredsValue(tokenIds));            
+        uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(
+            _minRedeemUsd
+        );
+        // 5. Make sure payment amount is valid and successful
+        if (msg.value != _minRedeemWei) {
+            revert InvalidPaymentAmount(_minRedeemWei, msg.value);
+        }
+        (bool success,) = payable(owner).call{value: msg.value}("");
+        if (!success) {
+            revert PaymentFailure(_msgSender(), owner, msg.value);
+        }
+        // 6. Update redeemer data
         _redeemerData |= _batchSize<<RPOS_BATCHSIZE;
         uint256 _offset = RPOS_TOKEN1;
         for (uint256 i; i<_batchSize;) {
@@ -572,8 +385,8 @@ contract C9Redeemable is C9Token {
                 ++i;
             }
         }
-        // 4. Save redeemer state
-        _balances[tokenOwner] = _redeemerData;
+        // 7. Save redeemer state
+        _balances[redeemer] = _redeemerData;
     }
 
     /**
@@ -641,48 +454,5 @@ contract C9Redeemable is C9Token {
     external view
     returns (uint256) {
         return _redeemedTokens.length;
-    }
-
-    /**
-     * @dev Step 2.
-     * User verifies their info submitted to the frontend by checking 
-     * email confirmation with code, then submitting confirmation code.
-     * Cost: ~35,000 gas
-     */
-    function userVerifyRedemption(uint256 registrationCode)
-    external payable
-    redeemerNotFrozen() {
-        // 1. Check redeemer has been started
-        uint256 _redeemerData = _balances[_msgSender()];
-        _redemptionStep(_redeemerData, 2);
-        // 2. Check code
-        if (registrationCode != _getRegistrationFor(_redeemerData)) {
-            revert CodeMismatch();
-        }
-        // 3. Get latest on-chain insured value
-        uint256[] memory tokenIds = _unpackTokenIds(_redeemerData);
-        // 4. Get the estimated s&h fees
-        uint256 _minRedeemUsd = getRedeemerFees(
-            getInsuredsValue(tokenIds),
-            tokenIds.length
-        );            
-        uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(
-            _minRedeemUsd
-        );
-        // 4. Next step update
-        _balances[_msgSender()] = _setTokenParam(
-            _redeemerData,
-            RPOS_STEP,
-            3,
-            type(uint8).max
-        );
-        // 5. Make sure payment amount is valid and successful
-        if (msg.value != _minRedeemWei) {
-            revert InvalidPaymentAmount(_minRedeemWei, msg.value);
-        }
-        (bool success,) = payable(owner).call{value: msg.value}("");
-        if (!success) {
-            revert PaymentFailure(_msgSender(), owner, msg.value);
-        }
     }
 }
