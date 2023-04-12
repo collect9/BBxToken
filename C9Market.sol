@@ -11,8 +11,8 @@ address constant MINTER_ADDRESS = 0x4f06EC058c9844750cD8B61b913BFa75AF9c565C;
 
 contract C9Market is C9Context, C9Signer, C9OwnerControl {
 
-    address private contractPriceFeed;
-    address private immutable contractToken;
+    address private _contractPriceFeed;
+    address private immutable _contractToken;
     address public signer;
 
     event Purchase(
@@ -21,9 +21,9 @@ contract C9Market is C9Context, C9Signer, C9OwnerControl {
         uint256 indexed tokenId
     );
 
-    constructor(address _contractPriceFeed, address _contractToken) {
-        contractPriceFeed = _contractPriceFeed;
-        contractToken = _contractToken;
+    constructor(address contractPriceFeed, address contractToken) {
+        _contractPriceFeed = contractPriceFeed;
+        _contractToken = contractToken;
         signer = MINTER_ADDRESS;
     }
 
@@ -34,7 +34,7 @@ contract C9Market is C9Context, C9Signer, C9OwnerControl {
     function _checkPayment(uint256 usdPrice)
     private {
         // Check to make sure msg.value matches wei listing price
-        uint256 _weiPrice = IC9EthPriceFeed(contractPriceFeed).getTokenWeiPrice(usdPrice);
+        uint256 _weiPrice = IC9EthPriceFeed(_contractPriceFeed).getTokenWeiPrice(usdPrice);
         if (msg.value != _weiPrice) {
             revert InvalidPaymentAmount(_weiPrice, msg.value);
         }
@@ -92,8 +92,8 @@ contract C9Market is C9Context, C9Signer, C9OwnerControl {
     function getContracts()
     external view
     returns (address priceFeed, address token) {
-        priceFeed = contractPriceFeed;
-        token = contractToken;
+        priceFeed = _contractPriceFeed;
+        token = _contractToken;
     }
 
     /**
@@ -102,7 +102,7 @@ contract C9Market is C9Context, C9Signer, C9OwnerControl {
     function isPurchaseable(uint256 tokenId)
     public view
     returns (bool) {
-        return IC9Token(contractToken).ownerOf(tokenId) == MINTER_ADDRESS;
+        return IC9Token(_contractToken).ownerOf(tokenId) == MINTER_ADDRESS;
     }
 
     /**
@@ -123,7 +123,7 @@ contract C9Market is C9Context, C9Signer, C9OwnerControl {
             revert InvalidToken(_uTokenId);
         }
         // 4. Transfer and emit event
-        IC9Token(contractToken).safeTransferFrom(MINTER_ADDRESS, _msgSender(), _uTokenId);
+        IC9Token(_contractToken).safeTransferFrom(MINTER_ADDRESS, _msgSender(), _uTokenId);
         emit Purchase(_msgSender(), _uListingPrice, _uTokenId);
     }
 
@@ -165,7 +165,7 @@ contract C9Market is C9Context, C9Signer, C9OwnerControl {
         // 3. Check payment
         _checkPayment(_totalListingPrice);
         // 4. Transfer
-        IC9Token(contractToken).safeTransferBatchFrom(MINTER_ADDRESS, _msgSender(), _uTokenIds);
+        IC9Token(_contractToken).safeTransferBatchFrom(MINTER_ADDRESS, _msgSender(), _uTokenIds);
     }
 
     /**
@@ -175,10 +175,10 @@ contract C9Market is C9Context, C9Signer, C9OwnerControl {
     function setContractPricer(address _address)
     external
     onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (contractPriceFeed == _address) {
+        if (_contractPriceFeed == _address) {
             revert AddressAlreadySet();
         }
-        contractPriceFeed = _address;
+        _contractPriceFeed = _address;
     }
 
     /**
@@ -194,5 +194,5 @@ contract C9Market is C9Context, C9Signer, C9OwnerControl {
             revert AddressAlreadySet();
         }
         signer = _address;
-    } 
+    }
 }
