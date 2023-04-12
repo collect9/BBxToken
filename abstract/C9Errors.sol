@@ -36,6 +36,7 @@ error InputSizeMismatch(uint256 tokenIdSize, uint256 listingPriceSize, uint256 s
 error InvalidUPrice(string String, uint256 UInt); //0x9dc0c4ff
 error InvalidUTokenId(string String, uint256 UInt); //0xa5504564
 error InvalidSigner(address expected, address received); //0x7ba5ffb5
+error StringConversionError();
 
 // Redeemer
 error AddressToFarInProcess(uint256 minStep, uint256 received); //0xb078ecc8

@@ -11,6 +11,9 @@ import "./svg/C9Flags.sol";
 
 contract C9SVG is C9Context, C9Shared {
 
+    uint256 constant QR_SIZE = 170;
+    uint256 constant BAR_SIZE = 86;
+
     bytes constant QR_CODE_BASE = ""
         "<svg version='1.1' xmlns='http://www.w3.org/2000/svg' class='c9QRcode' width='100%' height='100%' viewBox='0 0 17 17'>"
         "<style type='text/css'>"
@@ -115,6 +118,7 @@ contract C9SVG is C9Context, C9Shared {
                     "<text y='788'>NFT AGE:   YR   MO   D</text>"
                 "</g>"
             "</g>"
+            "<rect x='140' y='191' style='width:350px;height:350px;fill:#fff;fill-opacity:0.25;'/>"
             "<g transform='translate(315 576)' text-anchor='middle'>"
                 "<text fill='#999'>                                        </text>"
                 "<text y='69' class='c9Tm c9Tb'>        |        </text>"
@@ -150,8 +154,8 @@ contract C9SVG is C9Context, C9Shared {
     private pure {
         (bytes32 _a1, bytes8 _a2) = Helpers.addressToB32B8(_address);
         assembly {
-            mstore(add(b, 1708), _a1)
-            let dst := add(b, 1740)
+            mstore(add(b, 1793), _a1)
+            let dst := add(b, 1825)
             mstore(dst, or(and(mload(dst), not(shl(192, 0xFFFFFFFFFFFFFFFF))), _a2))
         }
     }
@@ -284,9 +288,9 @@ contract C9SVG is C9Context, C9Shared {
             mstore(dst, or(and(mload(dst), not(shl(224, 0xFFFFFFFF))), __mintid))
             // Gen Country Text
             mask := not(shl(200, 0xFFFFFFFFFFFFFF))
-            dst := add(b, 1786)
+            dst := add(b, 1871)
             mstore(dst, or(and(mload(dst), mask), _tagtxt))
-            dst := add(b, 1796)
+            dst := add(b, 1881)
             mstore(dst, or(and(mload(dst), mask), _tushtxt))
         }
     }
@@ -419,7 +423,7 @@ contract C9SVG is C9Context, C9Shared {
     private pure
     returns (bytes memory rects) {
         uint256 j;
-        for (uint256 i; i<86;) {
+        for (uint256 i; i<BAR_SIZE;) {
             j = 1;
             if (Helpers.getBoolean256(packed, i) == 1) {
                 for (j; j<4;) {                    
@@ -597,8 +601,10 @@ contract C9SVG is C9Context, C9Shared {
     private pure 
     returns (bytes memory rects) {
         uint256 bitSwitch;
-        for (uint256 i; i<168;) {
-            bitSwitch = Helpers.getBoolean256(packed, (168-i));
+        uint256 qrIndex;
+        for (uint256 i; i<QR_SIZE;) {
+            qrIndex = QR_SIZE - (i + 1);
+            bitSwitch = Helpers.getBoolean256(packed, qrIndex);
             if (bitSwitch == 1) {
                 rects = bytes.concat(
                     rects,
@@ -646,8 +652,14 @@ contract C9SVG is C9Context, C9Shared {
     function _splitQRData(uint256 packed)
     private pure
     returns (uint256 qrCodeData, uint256 barCodeData) {
-        qrCodeData = uint256(uint168(packed));
-        barCodeData = packed >> 168;
+        qrCodeData = _viewPackedData(packed, 0, QR_SIZE);
+        barCodeData = packed >> QR_SIZE;
+    }
+
+    function viewQRData(uint256 packed)
+    external pure
+    returns (uint256 qrCodeData) {
+        qrCodeData = _viewPackedData(packed, 0, QR_SIZE);
     }
 
     /*
@@ -671,12 +683,15 @@ contract C9SVG is C9Context, C9Shared {
     function _toRect(uint256 index)
     private pure
     returns (bytes memory) {
+        bytes3[3] memory colors = [bytes3("111"), "007", "407"];
         (uint256 y, uint256 x) = _toXY(index);
         return bytes.concat(
             "<rect x='",
             _uintToStr(x),
             "' y='",
             _uintToStr(y),
+            "' fill='#",
+            colors[index % 3],
             "'/>"
         );
     }
@@ -726,7 +741,7 @@ contract C9SVG is C9Context, C9Shared {
         if (index > 31) {unchecked {index += 10;}}
         if (index > 48) {unchecked {index += 10;}}
         if (index > 67) {unchecked {index += 8;}}
-        if (index > 84) {unchecked {index += 9;}}
+        if (index > 84) {unchecked {index += 10;}}
         if (index > 97) {unchecked {index += 3;}}
         if (index > 101) {unchecked {index += 8;}}
         if (index > 114) {unchecked {index += 12;}}
@@ -736,8 +751,7 @@ contract C9SVG is C9Context, C9Shared {
         if (index > 183) {unchecked {index += 2;}}
         if (index > 199) {unchecked {index += 3;}}
         if (index > 214) {unchecked {index += 7;}}
-        if (index > 236) {unchecked {index += 2;}}
-        if (index > 252) {unchecked {index += 3;}}
+        if (index > 253) {unchecked {index += 2;}}
         if (index > 282) {unchecked {index += 2;}}
         unchecked {
             y = index / 17;
