@@ -9,14 +9,8 @@ import "./utils/Helpers.sol";
 import "./utils/interfaces/IC9EthPriceFeed.sol";
 
 contract C9Market is C9Signer, C9BasicOwnable {
-    //keccak256("Listing(uint256 tokenId,uint256 price,uint256 expiry)");.
-    bytes32 constant public LISTING_HASH = 0xde0e36f71e10b54c02373d9debeff6370862e3a6e8bb0fa532e1ef4e54736073;
-    struct Listing {
-        address from;
-        uint256 tokenId;
-        uint256 price;
-        uint256 expiry;
-    }
+    //keccak256("ListingRequest(address from,uint256 tokenId,uint256 price,uint256 expiry)");.
+    bytes32 constant public LISTING_HASH = 0xfd82c467e66ad82c85604b262428614d2828867d6db0c28657044d9c4aefc226;
     
     address private _contractPriceFeed;
     address private immutable _contractToken;
@@ -30,8 +24,6 @@ contract C9Market is C9Signer, C9BasicOwnable {
     );
 
     constructor(
-        string memory name,
-        string memory version,
         address contractPriceFeed,
         address contractToken
     ) {
@@ -39,8 +31,8 @@ contract C9Market is C9Signer, C9BasicOwnable {
         _contractPriceFeed = contractPriceFeed;
         _contractToken = contractToken;
         // Signature defaults
-        nameHash = keccak256(bytes(name));
-        versionHash = keccak256(bytes(version));
+        nameHash = keccak256(bytes("Collect9 NFT Store"));
+        versionHash = keccak256(bytes("1"));
     }
 
     /**
@@ -72,11 +64,11 @@ contract C9Market is C9Signer, C9BasicOwnable {
         );
     }
 
-    function hashStruct(uint256 tokenId, uint256 price, uint256 expiry)
+    function hashStruct(address from, uint256 tokenId, uint256 price, uint256 expiry)
     public pure
     returns (bytes32) {
         return keccak256(
-            abi.encode(LISTING_HASH, tokenId, price, expiry)
+            abi.encode(LISTING_HASH, from, tokenId, price, expiry)
         );
     }
 
@@ -89,13 +81,27 @@ contract C9Market is C9Signer, C9BasicOwnable {
         // 1. Recreate the message
         bytes32 _message = toTypedDataHash(
             DOMAIN_SEPARATOR(),
-            hashStruct(tokenId, price, expiry)
+            hashStruct(signer, tokenId, price, expiry)
         );
         // 2. Recover signer from message
         address _signer = recoverSigner(_message, sig);
         // 3. Verify the signer
         if (_signer != signer) revert InvalidSigner(signer, _signer);
     }
+
+    /*
+    function verifySigner(address signer, uint256 tokenId, uint256 price, uint256 expiry, bytes calldata sig)
+    public view
+    returns (bool) {
+        // 1. Recreate the message
+        bytes32 _message = toTypedDataHash(
+            DOMAIN_SEPARATOR(),
+            hashStruct(signer, tokenId, price, expiry)
+        );
+        // 2. Recover signer from message
+        return signer == recoverSigner(_message, sig);
+    }
+    */
 
     /**
      * @dev View function to see the contracts this market contract interacts with.
