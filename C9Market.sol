@@ -2,21 +2,24 @@
 pragma solidity >=0.8.17;
 import "./C9OwnerControl.sol";
 import "./interfaces/IC9Token.sol";
-import "./utils/C9Context.sol";
 import "./utils/C9Signer.sol";
 import "./utils/Helpers.sol";
 import "./utils/interfaces/IC9EthPriceFeed.sol";
 
+// Always paying to the minter address
 address constant MINTER_ADDRESS = 0x4f06EC058c9844750cD8B61b913BFa75AF9c565C;
 
-contract C9Market is C9Context, C9Signer, C9OwnerControl {
+contract C9Market is C9Signer, C9OwnerControl {
 
     address private _contractPriceFeed;
     address private immutable _contractToken;
     address public signer;
+    address public purchaseFrom;
+
+    mapping(address => bool) private expiredSigners;
 
     event Purchase(
-        address indexed buyer,
+        address indexed purchaser,
         uint256 indexed price,
         uint256 indexed tokenId
     );
@@ -25,6 +28,7 @@ contract C9Market is C9Context, C9Signer, C9OwnerControl {
         _contractPriceFeed = contractPriceFeed;
         _contractToken = contractToken;
         signer = MINTER_ADDRESS;
+        purchaseFrom = MINTER_ADDRESS;
     }
 
     /**
@@ -39,9 +43,9 @@ contract C9Market is C9Context, C9Signer, C9OwnerControl {
             revert InvalidPaymentAmount(_weiPrice, msg.value);
         }
         // Check to ensure payment was received
-        (bool success,) = payable(MINTER_ADDRESS).call{value: msg.value}("");
+        (bool success,) = payable(purchaseFrom).call{value: msg.value}("");
         if(!success) {
-            revert PaymentFailure(msg.sender, MINTER_ADDRESS, msg.value);
+            revert PaymentFailure(msg.sender, purchaseFrom, msg.value);
         }
     }
 
@@ -102,7 +106,7 @@ contract C9Market is C9Context, C9Signer, C9OwnerControl {
     function isPurchaseable(uint256 tokenId)
     public view
     returns (bool) {
-        return IC9Token(_contractToken).ownerOf(tokenId) == MINTER_ADDRESS;
+        return IC9Token(_contractToken).ownerOf(tokenId) == purchaseFrom;
     }
 
     /**
@@ -123,7 +127,7 @@ contract C9Market is C9Context, C9Signer, C9OwnerControl {
             revert InvalidToken(_uTokenId);
         }
         // 4. Transfer and emit event
-        IC9Token(_contractToken).safeTransferFrom(MINTER_ADDRESS, _msgSender(), _uTokenId);
+        IC9Token(_contractToken).safeTransferFrom(purchaseFrom, _msgSender(), _uTokenId);
         emit Purchase(_msgSender(), _uListingPrice, _uTokenId);
     }
 
@@ -157,7 +161,7 @@ contract C9Market is C9Context, C9Signer, C9OwnerControl {
             _uTokenIds[i] = _uTokenId;
             _uListingPrice = _strToUInt(listingPrices[i]);
             emit Purchase(_msgSender(), _uTokenId, _uListingPrice);
-             unchecked {
+            unchecked {
                 _totalListingPrice += _uListingPrice;
                 ++i;
             }
@@ -165,20 +169,29 @@ contract C9Market is C9Context, C9Signer, C9OwnerControl {
         // 3. Check payment
         _checkPayment(_totalListingPrice);
         // 4. Transfer
-        IC9Token(_contractToken).safeTransferBatchFrom(MINTER_ADDRESS, _msgSender(), _uTokenIds);
+        IC9Token(_contractToken).safeTransferBatchFrom(purchaseFrom, _msgSender(), _uTokenIds);
     }
 
     /**
      * @dev Sets/updates the pricer contract 
      * address if ever needed.
      */
-    function setContractPricer(address _address)
+    function setContractPricer(address pricer)
     external
-    onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (_contractPriceFeed == _address) {
-            revert AddressAlreadySet();
-        }
-        _contractPriceFeed = _address;
+    onlyRole(DEFAULT_ADMIN_ROLE)
+    addressNotSame(pricer, _contractPriceFeed) {
+        _contractPriceFeed = pricer;
+    }
+
+    /**
+     * @dev Sets/updates the pricer contract 
+     * address if ever needed.
+     */
+    function setPurchaseFrom(address newPurchaseFrom)
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE)
+    addressNotSame(newPurchaseFrom, purchaseFrom) {
+        purchaseFrom = newPurchaseFrom;
     }
 
     /**
@@ -186,13 +199,19 @@ contract C9Market is C9Context, C9Signer, C9OwnerControl {
      * 'expire' signatures from the current signer. New
      * signatures will need to be created from the 
      * new signer.
+     * Once a new signer is set, the old one is permanently 
+     * expired to prevent accidental reactivation.
+     * This is done because there's no easy way to implement some 
+     * kind of an expiration into a personal signature.
      */
-    function setSigner(address _address)
+    function setSigner(address newSigner)
     external
-    onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (signer == _address) {
-            revert AddressAlreadySet();
+    onlyRole(DEFAULT_ADMIN_ROLE)
+    addressNotSame(newSigner, signer) {
+        if (expiredSigners[newSigner]) {
+            revert SignerExpired();
         }
-        signer = _address;
+        expiredSigners[signer] = true;
+        signer = newSigner;
     }
 }

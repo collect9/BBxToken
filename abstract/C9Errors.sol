@@ -32,10 +32,13 @@ error C9ZeroAddressInvalid(); //0x7c7fa4fb
 error RequiredAccessMissing(address account, bytes32 role);
 
 // Market contract
+error InvalidListing();
 error InputSizeMismatch(uint256 tokenIdSize, uint256 listingPriceSize, uint256 sigSize); //0x0e8930bf
 error InvalidUPrice(string String, uint256 UInt); //0x9dc0c4ff
 error InvalidUTokenId(string String, uint256 UInt); //0xa5504564
 error InvalidSigner(address expected, address received); //0x7ba5ffb5
+error ListingExpired();
+error SignerExpired();
 error StringConversionError();
 
 // Redeemer
