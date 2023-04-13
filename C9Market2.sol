@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.17;
 
-import "./C9OwnerControl.sol";
+// import "./C9OwnerControl.sol";
 import "./interfaces/IC9Token.sol";
 import "./utils/C9Signer.sol";
+import "./utils/C9BasicOwnable.sol";
 import "./utils/Helpers.sol";
 import "./utils/interfaces/IC9EthPriceFeed.sol";
 
-contract C9Market is C9Signer, C9OwnerControl {
-    //keccak256("Listing(uint256 tokenId,uint256 price,uint256 expiry)");
+contract C9Market is C9Signer, C9BasicOwnable {
+    //keccak256("Listing(uint256 tokenId,uint256 price,uint256 expiry)");.
     bytes32 constant public LISTING_HASH = 0xde0e36f71e10b54c02373d9debeff6370862e3a6e8bb0fa532e1ef4e54736073;
     struct Listing {
         address from;
@@ -57,7 +58,7 @@ contract C9Market is C9Signer, C9OwnerControl {
     }
 
     function DOMAIN_SEPARATOR()
-    internal view
+    private view
     returns (bytes32) {
         return keccak256(
             abi.encode(
@@ -116,7 +117,7 @@ contract C9Market is C9Signer, C9OwnerControl {
     }
 
     function _verifyToken(address from, uint256 tokenId, uint256 listingPrice, uint256 expiry, bytes calldata sig)
-    internal {
+    private {
         // 1. Make sure token has not already been purchased
         if (!isPurchaseableFrom(from, tokenId)) {
             revert InvalidListing();
@@ -136,7 +137,7 @@ contract C9Market is C9Signer, C9OwnerControl {
      */
     function purchaseToken(address from, uint256 tokenId, uint256 listingPrice, uint256 expiry, bytes calldata sig)
     external payable
-    notFrozen() {
+    notFrozen {
         // 1. Verify token and signature and event
         _verifyToken(from, tokenId, listingPrice, expiry, sig);
         // 2. Pay
@@ -157,7 +158,7 @@ contract C9Market is C9Signer, C9OwnerControl {
         bytes[] calldata sigs
     )
     external payable
-    notFrozen() {
+    notFrozen {
         // 1. Verify signer and get sum price of all tokens in batch
         uint256 _totalListingPrice;
         uint256 _batchSize = tokenIds.length;
@@ -182,8 +183,10 @@ contract C9Market is C9Signer, C9OwnerControl {
      */
     function setContractPricer(address pricer)
     external
-    onlyRole(DEFAULT_ADMIN_ROLE)
-    addressNotSame(pricer, _contractPriceFeed) {
+    onlyOwner {
+        if (pricer == _contractPriceFeed) {
+            revert AddressAlreadySet();
+        }
         _contractPriceFeed = pricer;
     }
 }
