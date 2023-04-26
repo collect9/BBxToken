@@ -89,7 +89,6 @@ contract C9Market is C9Signer, C9BasicOwnable {
         if (_signer != signer) revert InvalidSigner(signer, _signer);
     }
 
-    /*
     function verifySigner(address signer, uint256 tokenId, uint256 price, uint256 expiry, bytes calldata sig)
     public view
     returns (bool) {
@@ -101,7 +100,6 @@ contract C9Market is C9Signer, C9BasicOwnable {
         // 2. Recover signer from message
         return signer == recoverSigner(_message, sig);
     }
-    */
 
     /**
      * @dev View function to see the contracts this market contract interacts with.
@@ -156,7 +154,7 @@ contract C9Market is C9Signer, C9BasicOwnable {
      * @dev Processess batch purchase. The token contract has batch transfer 
      * functions that reduce the number of calls and thus gas fees.
      */
-    function purchaseTokenBatch(
+    function purchaseToken(
         address from,
         uint256[] calldata tokenIds,
         uint256[] calldata listingPrices,

@@ -11,6 +11,7 @@ contract C9Redeemable is C9Token {
     uint256 constant MAX_BATCH_SIZE = 6;
     uint256 constant RUINT_SIZE = 24;
 
+    uint256 private _baseFees;
     bool private _frozenRedeemer;
     address private contractPricer;
     uint256 public preRedeemablePeriod; //seconds
@@ -18,7 +19,7 @@ contract C9Redeemable is C9Token {
 
     /**
      * @dev https://docs.opensea.io/docs/metadata-standards.
-     * While there is no definitive EIP yet for token staking or locking, OpenSea 
+     * @notice While there is no definitive EIP yet for token staking or locking, OpenSea 
      * does support several events to help signal that a token should not be eligible 
      * for trading. This helps prevent "execution reverted" errors for your users 
      * if transfers are disabled while in a staked or locked state.
@@ -27,11 +28,12 @@ contract C9Redeemable is C9Token {
     event TokenUnlocked(uint256 indexed tokenId, address indexed approvedContract);
 
     constructor() {
+        _baseFees = 20;
         preRedeemablePeriod = 31600000; //1 year
     }
 
     /*
-     * @dev Check to see if contract is frozen.
+     * @dev Checks to see contract is not frozen.
      */ 
     modifier redeemerNotFrozen() { 
         if (_frozenRedeemer) {
@@ -41,11 +43,13 @@ contract C9Redeemable is C9Token {
     }
 
     /**
-     * @dev Updates the addresse's redemptions count.
+     * @dev Updates the address redemptions count.
+     * @param redeemer The address to increment redemptions count of.
+     * @param batchSize The increment amount.
      */
-    function _addRedemptionsTo(address from, uint256 batchSize)
+    function _addRedemptionsTo(address redeemer, uint256 batchSize)
     internal virtual {
-        uint256 balancesFrom = _balances[from];
+        uint256 balancesFrom = _balances[redeemer];
         uint256 redemptions = uint256(uint16(balancesFrom>>APOS_REDEMPTIONS));
         unchecked {
             redemptions += batchSize;
@@ -56,12 +60,13 @@ contract C9Redeemable is C9Token {
             redemptions,
             type(uint16).max
         );
-        _balances[from] = balancesFrom;
+        _balances[redeemer] = balancesFrom;
     }
 
     /*
-     * @dev Checks to see if the caller is approved for 
-     * the redeemer.
+     * @dev Checks to see if the caller is approved for the redeemer.
+     * @param redeemer The address of the account to check if _msgSender() is 
+     * approved on behalf of.
      */ 
     function _callerApproved(address redeemer)
     private view {
@@ -73,8 +78,9 @@ contract C9Redeemable is C9Token {
     }
     
     /*
-     * @dev Clears the step, batchsize, and space for 
-     * 6 token Ids (u24).
+     * @dev Clears the step, batchsize, and space for 6x u24 tokenIds.
+     * @param redeemer The address to clear any redemption data of.
+     * @notice The first 160 bits of the balances data are the redeemer data.
      */
     function _clearRedemptionData(address redeemer)
     private {
@@ -82,26 +88,31 @@ contract C9Redeemable is C9Token {
     }
 
     /*
-     * @dev Gets the batch size of the redeemer.
+     * @dev Gets the tokenIds batch size of the redeemer.
+     * @param redeemerData _balances[address].
      */
-    function _getBatchSize(uint256 balancesData)
+    function _getBatchSize(uint256 redeemerData)
     private pure
     returns (uint256) {
-        return uint256(uint8(balancesData>>RPOS_BATCHSIZE));
+        return uint256(uint8(redeemerData>>RPOS_BATCHSIZE));
     }
 
     /**
      * @dev See {IERC-5560 IRedeemable}
-     * The IERC is not official, but the function is a good
-     * idea to implement anyway for quick lookup.
+     * While the IERC is not official, but the function is a good
+     * idea to implement anyway for quick lookup, and the contract 
+     * supports interface may be updated in the future to signal
+     * support.
+     * @param tokenId The tokenId.
+     * @param ownersData _owners[tokenId].
      */
-    function _isRedeemable(uint256 tokenId, uint256 tokenData)
+    function _isRedeemable(uint256 tokenId, uint256 ownersData)
     private view
     returns (bool) {
         if (_preRedeemable(_uTokenData[tokenId])) {
             return false;
         }
-        uint256 _vId = _currentVId(tokenData); 
+        uint256 _vId = _currentVId(ownersData); 
         if (_vId != VALID) {
             if (_vId != INACTIVE) {
                 return false;
@@ -110,16 +121,24 @@ contract C9Redeemable is C9Token {
         return true;
     }
 
-    function _lockToken(uint256 tokenId, uint256 tokenData)
+    /**
+     * @dev Locks the token from further transfer.
+     * @param tokenId The tokenId.
+     * @param ownersData _owners[tokenId].
+     * @return uint256 The updated ownersData of tokenId locked.
+     */
+    function _lockToken(uint256 tokenId, uint256 ownersData)
     internal
     returns (uint256) {
         emit TokenLocked(tokenId, _msgSender());
-        return tokenData |= BOOL_MASK<<MPOS_LOCKED;
+        return ownersData |= BOOL_MASK<<MPOS_LOCKED;
     }
 
     /**
      * @dev Returns whether or not the token pre-release period 
      * has ended.
+     * @param tokenData _uTokenData[tokenId].
+     * @return bool If the token pre-release period has ended.
      */
     function _preRedeemable(uint256 tokenData)
     private view
@@ -129,8 +148,8 @@ contract C9Redeemable is C9Token {
     }
 
     /*
-     * @dev The function that locks to token prior to 
-     * calling the redeemer contract.
+     * @dev Locks the tokens after a series of conditions pass.
+     * @param tokenIds The array of tokenId to lock.
      */
     function _redeemLockTokens(uint256[] calldata tokenIds)
     private {
@@ -139,62 +158,75 @@ contract C9Redeemable is C9Token {
         uint256 _ownerData;
         address _redeemer;
         for (uint256 i; i<_batchSize;) {
+            // 1. Get the tokenId
             _tokenId = tokenIds[i];
-            // 1. Copy token data from storage
+            // 2. Copy the token's tightly packed data from storage
             _ownerData = _owners[_tokenId];
-            // 2. Check caller is owner or approved
+            // 3. Check _msgSender() is owner or approved of the tokenId
             _redeemer = address(uint160(_ownerData>>MPOS_OWNER));
             _isApprovedOrOwner(_msgSender(), _redeemer, _tokenId);
-            // 3. Check token is redeemable
+            // 4. Check token is redeemable
             if (!_isRedeemable(_tokenId, _ownerData)) {
                 revert TokenNotRedeemable(_tokenId);
             }
-            /* 4. If redeemable but locked, token is already in redeemer.
-                  This will also prevent multiple approved trying to
+            /* 5. If redeemable but locked, the token is already in redeemer.
+                  This will also prevent multiple approved users trying to
                   redeem the same token at once.
             */
             if (_isLocked(_ownerData)) {
                 revert TokenIsLocked(_tokenId);
             }
-            // 5. All checks pass, so lock the token
+            // 6. All checks pass, so lock the token
             _ownerData = _lockToken(_tokenId, _ownerData);
-            // 6. Save to storage
+            // 7. Save to storage (token now locked)
             _owners[_tokenId] = _ownerData;
             unchecked {++i;}
         }
     }
 
     /**
-     * @dev Updates the token validity status.
+     * @dev Updates the token validity status. If the validity status
+     * is set to be a dead status (REDEEMED or greater) then the token is 
+     * locked. If set to redeemed the token is locked and a redemption 
+     * is added to the owner of that token.
+     * @param tokenId The tokenId.
+     * @param ownersData _owners[tokenId].
+     * @param vId The integer validity status to set for tokenId.
+     * @notice Emits an event so marketplaces supporting ERC4906 will 
+     * quickly show the updated status.
      */
-    function _setTokenValidity(uint256 tokenId, uint256 tokenData, uint256 vId)
+    function _setTokenValidity(uint256 tokenId, uint256 ownersData, uint256 vId)
     internal {
-        tokenData = _setDataValidity(tokenData, vId);
+        ownersData = _setDataValidity(ownersData, vId);
         // Lock if changing to a dead status (forever lock)
         if (vId >= REDEEMED) {
-            tokenData = _lockToken(tokenId, tokenData);
+            ownersData = _lockToken(tokenId, ownersData);
             if (vId == REDEEMED) {
                 _redeemedTokens.push(uint24(tokenId));
                 _addRedemptionsTo(_ownerOf(tokenId), 1);
             }
         }
-        _owners[tokenId] = tokenData;
+        _owners[tokenId] = ownersData;
         _metaUpdate(tokenId);
     }
 
     /**
-     * @dev Unlocks the token. The Redeem cancel functions 
-     * call this to unlock the token.
+     * @dev Unlocks the token.
+     * @param tokenId The tokenId to unlock.
+     * @notice Emits an event so supporting marketplaces know to 
+     * re-enable exchange of this tokenId.
      */
-    function _unlockToken(uint256 _tokenId)
+    function _unlockToken(uint256 tokenId)
     internal {
-        _owners[_tokenId] &= ~(BOOL_MASK<<MPOS_LOCKED);
-        emit TokenUnlocked(_tokenId, _msgSender());
+        _owners[tokenId] &= ~(BOOL_MASK<<MPOS_LOCKED);
+        emit TokenUnlocked(tokenId, _msgSender());
     }
 
     /**
      * @dev Unpacks tokenIds from the tightly packed
-     * redemption data portion of the balances slot.
+     * redemption data.
+     * @param redeemerData _balances[address].
+     * @return tokenIds The unpacked array of tokenId.
      */
     function _unpackTokenIds(uint256 redeemerData)
     private pure
@@ -213,6 +245,7 @@ contract C9Redeemable is C9Token {
 
     /**
      * @dev Admin clear redeemer slot.
+     * @param redeemer Address to clear (zero out) all redeemer data.
      */
     function adminClearRedeemer(address redeemer)
     external
@@ -221,11 +254,10 @@ contract C9Redeemable is C9Token {
     }
 
     /**
-     * @dev
-     * Admin final approval. Admin verifies that all 
-     * redemption fees have been paid. Beyond this step, the redemption 
-     * user will receive tracking information by the email they provided 
-     * in a prior step.
+     * @dev Admin final approval of tokens to be redeemed.
+     * @param redeemer The account of the redeemer to approve.
+     * The tokenIds within that redeemer's data will be set 
+     * to status REDEEMED.
      */
     function adminFinalApprove(address redeemer)
     external
@@ -240,23 +272,25 @@ contract C9Redeemable is C9Token {
         uint256[] memory _tokenIds = _unpackTokenIds(_redeemerData);
         // 3. Set all tokens in the redeemer's account to redeemed
         uint256 _tokenId;
-        uint256 _tokenData;
         for (uint256 i; i<_batchSize;) {
             _tokenId = _tokenIds[i];
-            _tokenData = _owners[_tokenId];
-            _setTokenValidity(_tokenId, _tokenData, REDEEMED);
+            _owners[_tokenId] = _setDataValidity(_owners[_tokenId], REDEEMED);
             unchecked {++i;}
         }
-        // 4. Clear redeemer's info so a new redemption can begin
+        // 4. To to redeemer's redemption count
+        _addRedemptionsTo(_ownerOf(_tokenIds[0]), _batchSize);
+        // 5. Clear redeemer's info so a new redemption can begin
         _clearRedemptionData(redeemer);
     }
 
     /**
-     * @dev Fail-safe function that can unlock an active token.
+     * @dev Fail-safe function that can unlock an active status token.
      * This is for any edge cases that may have been missed 
-     * during redeemer testing. Dead tokens are still not 
-     * possible to unlock, though they may be transferred to the 
-     * contract owner where they may only be burned.
+     * during testing.
+     * Dead tokens are still not possible to unlock, though they 
+     * may still be burned (to the zero address only, so the token 
+     * still exists without present and future owner).
+     * @param tokenId the tokenId to unlock.
      */
     function _adminUnlock(uint256 tokenId)
     private
@@ -265,6 +299,10 @@ contract C9Redeemable is C9Token {
         _unlockToken(tokenId);
     }
 
+    /**
+     * @dev Batched version of _adminUnlock to save on gas fees.
+     * @param tokenId The array of tokenId to unlock.
+     */
     function adminUnlock(uint256[] calldata tokenIds)
     external
     onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -276,7 +314,8 @@ contract C9Redeemable is C9Token {
     }
 
     /**
-     * @dev Returns list of contracts this contract is linked to.
+     * @dev Convenience view function.
+     * @return Contracts this contract is linked to.
      */
     function getContracts()
     external view
@@ -289,7 +328,8 @@ contract C9Redeemable is C9Token {
     }
 
     /**
-     * @dev Returns the list of redeemed tokens.
+     * @dev Convenience view function.
+     * @return redeemedTokens The array of redeemed tokenId.
      */
     function getRedeemed()
     external view
@@ -298,25 +338,23 @@ contract C9Redeemable is C9Token {
     }
 
     /*
-     * @dev Returns the minimum amount payable given batch size.
-     * Shipping insurance as quoted Mar 2023 costs around ~1.2% 
-     * of the value. We add a refundable buffer (~2%) for international 
-     * shipments that will have a higher base.
-     * Base package costs are around $25 CONUS. Thus the release 
-     * fee can be summarized as $25 + 2%*VALUE.
-     * Additional fees may be refunded.
-     * Note: Max batch size 6.
+     * @dev Returns the s&h fees payable given redemption batch size.
+     * @param insuredValue The insured value in USD.
+     * @return total Fees payable in USD.
      */
     function getRedemptionFees(uint256 insuredValue)
-    public pure
+    public view
     returns (uint256 total) {
+        uint256 baseFees = _baseFees;
         unchecked {
-            total = 25 + 2*insuredValue/100;
+            total = baseFees + baseFees*insuredValue/1000;
         }
     }
 
     /*
-     * @dev Gets the redemption info/array of redeemer.
+     * @dev Convenience view function.
+     * @param redeemer The address of the redeemer to lookup.
+     * @return tokenIds The array of tokenIds for the redeemer.
      */
     function getRedeemerTokenIds(address redeemer)
     external view
@@ -329,6 +367,8 @@ contract C9Redeemable is C9Token {
      * @dev See {IERC-5560 IRedeemable}
      * The IERC is not official, but the function is a good
      * idea to implement anyway for quick lookup.
+     * @param tokenId The tokenId.
+     * @return bool If the tokenId is redeemable.
      */
     function isRedeemable(uint256 tokenId)
     external view
@@ -338,8 +378,9 @@ contract C9Redeemable is C9Token {
     }
 
     /**
-     * @dev
-     * A view function to check if a token is already redeemed.
+     * @dev Convenience view function.
+     * @param tokenId The tokenId.
+     * @return If a token is already redeemed.
      */
     function isRedeemed(uint256 tokenId)
     external view
@@ -349,7 +390,9 @@ contract C9Redeemable is C9Token {
     }
 
     /**
-     * @dev Returns whether or not the token pre-release period 
+     * @dev Convenience view function.
+     * @param tokenId The tokenId.
+     * @return Whether or not the tokenId pre-release period 
      * has ended.
      */
     function preRedeemable(uint256 tokenId)
@@ -363,47 +406,56 @@ contract C9Redeemable is C9Token {
      * @dev Starts the redemption process.
      * Once started, the token is locked from further exchange 
      * unless canceled.
+     * @param redeemer The address to start the redemption process for
+     * @param registrationCode The correct registration code received by 
+     * the redeemer upon registration.
+     * @param tokenIds The array of tokenId to redeem.
+     * @notice Max length of tokenIds due to tightly packed
+     * storage limitations. Some code has been moved to a separate 
+     * internal function to prevent stack to deep errors.
      */
     function redeemStart(address redeemer, uint256 registrationCode, uint256[] calldata tokenIds)
     external payable
     redeemerNotFrozen() {
-        _callerApproved(redeemer);
         // 1. Checks
+        _callerApproved(redeemer);
         uint256 _redeemerData = _balances[redeemer];
-        // 1b. Check account is registered
-        if (!(_getRegistrationFor(_redeemerData) > 0)) {
+        // 1b. Check the account is already registered
+        uint256 _registrationData = _getRegistrationFor(_redeemerData);
+        if (_registrationData == 0) {
             revert AddressMustFirstRegister(redeemer);
         }
-        // 1c. Check account does not have a pending redemption
+        // 1c. Check registration code
+        if (registrationCode != _registrationData) {
+            revert CodeMismatch();
+        }
+        // 1d. Check account does not have a pending redemption
         uint256 _batchSize = _getBatchSize(_redeemerData);
         if (_batchSize > 0) {
             revert WrongProcessStep(0, 2);
         }
-        // 1d. Check redemption batchsize is within limits
+        // 1e. Check redemption batchsize is within limits
         _batchSize = tokenIds.length;
         if (_batchSize > MAX_BATCH_SIZE) {
             revert RedeemerBatchSizeTooLarge(MAX_BATCH_SIZE, _batchSize);
         }
-        // 2. Check registration code
-        if (registrationCode != _getRegistrationFor(_redeemerData)) {
-            revert CodeMismatch();
-        }
-        // 3. Lock tokens
+        // 2. Lock tokens
         _redeemLockTokens(tokenIds);
-        // 4. Get the estimated s&h fees
-        uint256 _minRedeemUsd = getRedemptionFees(getInsuredsValue(tokenIds));            
-        uint256 _minRedeemWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(
-            _minRedeemUsd
+        // 3. Get the estimated s&h fees
+        uint256 _insuredValue = getInsuredsValue(tokenIds);
+        uint256 _feesUSD = getRedemptionFees(_insuredValue);            
+        uint256 _feesWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(
+            _feesUSD
         );
-        // 5. Make sure payment amount is valid and successful
-        if (msg.value != _minRedeemWei) {
-            revert InvalidPaymentAmount(_minRedeemWei, msg.value);
+        // 4. Make sure payment amount is valid and successful
+        if (msg.value != _feesWei) {
+            revert InvalidPaymentAmount(_feesWei, msg.value);
         }
         (bool success,) = payable(owner).call{value: msg.value}("");
         if (!success) {
             revert PaymentFailure(_msgSender(), owner, msg.value);
         }
-        // 6. Update redeemer data
+        // 5. Update redeemer data
         _redeemerData |= _batchSize<<RPOS_BATCHSIZE;
         uint256 _offset = RPOS_TOKEN1;
         for (uint256 i; i<_batchSize;) {
@@ -413,12 +465,26 @@ contract C9Redeemable is C9Token {
                 ++i;
             }
         }
-        // 7. Save redeemer state
+        // 6. Save redeemer state
         _balances[redeemer] = _redeemerData;
     }
 
     /**
-     * @dev Updates the token contract address.
+     * @dev Sets the base shipping fee.
+     * @param baseFees The new base shipping fee.
+     */
+    function setBaseFees(uint256 baseFees)
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (baseFees == _baseFees) {
+            revert ValueAlreadySet();
+        }
+        _baseFees = baseFees;
+    }
+
+    /**
+     * @dev Sets the eth pricer contract address.
+     * @param pricer The new contract address.
      */
     function setContractPricer(address pricer)
     external
@@ -428,8 +494,8 @@ contract C9Redeemable is C9Token {
     }
 
     /**
-     * @dev Gets or sets the global token redeemable period.
-     * Limit hardcoded.
+     * @dev Sets the global token redeemable period.
+     * @param period The new pre-redeemable period.
      */
     function setPreRedeemPeriod(uint256 period)
     external
@@ -441,30 +507,32 @@ contract C9Redeemable is C9Token {
     }
 
     /*
-     * @dev Sets the token validity. This method allows for 
-     * a gasless digital signature redemption process where  
-     * the admin can set the token to redeemed.
+     * @dev Sets the token validity.
+     * @param tokenId The tokenId.
+     * @param vId The new validity status id to set.
      */
     function setTokenValidity(uint256 tokenId, uint256 vId)
     external
     onlyRole(VALIDITY_ROLE)
     requireMinted(tokenId)
     notDead(tokenId) {
-        uint256 _tokenData = _owners[tokenId];
-        uint256 _tokenValidity = _currentVId(_tokenData);
+        uint256 _ownersData = _owners[tokenId];
+        uint256 _tokenValidity = _currentVId(_ownersData);
         if (vId == _tokenValidity) {
             revert ValueAlreadySet();
         }
         if (vId > REDEEMED) {
+            // Cannot go from a VALID (0) status immediately to DEAD (>4)
             if (_tokenValidity == VALID) {
                 revert CannotValidToDead(tokenId, vId);
             }
         }
-        _setTokenValidity(tokenId, _tokenData, vId);
+        _setTokenValidity(tokenId, _ownersData, vId);
     }
 
     /**
      * @dev Freezes or unfreezes redeemer portion of contract.
+     * @param toggle Freeze (true) or unfreeze (false).
      */
     function toggleRedeemerFreezer(bool toggle)
     external
@@ -476,7 +544,8 @@ contract C9Redeemable is C9Token {
     }
 
     /**
-     * @dev Returns the number of redeemed tokens.
+     * @dev Convenience view function.
+     * @return uint256 The total number of redeemed tokens.
      */
     function totalRedeemed()
     external view
