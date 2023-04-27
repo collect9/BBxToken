@@ -301,7 +301,7 @@ contract C9Redeemable is C9Token {
 
     /**
      * @dev Batched version of _adminUnlock to save on gas fees.
-     * @param tokenId The array of tokenId to unlock.
+     * @param tokenIds The array of tokenId to unlock.
      */
     function adminUnlock(uint256[] calldata tokenIds)
     external
@@ -315,7 +315,6 @@ contract C9Redeemable is C9Token {
 
     /**
      * @dev Convenience view function.
-     * @return Contracts this contract is linked to.
      */
     function getContracts()
     external view
