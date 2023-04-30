@@ -2,7 +2,6 @@
 pragma solidity >0.8.17;
 import "./interfaces/IC9MetaData.sol";
 import "./interfaces/IC9SVG2.sol";
-import "./interfaces/IC9Token.sol";
 import "./utils/Helpers.sol";
 
 
