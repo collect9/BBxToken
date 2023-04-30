@@ -39,7 +39,7 @@ contract C9Token is ERC721IdEnumBasic {
     string private _contractURI;
 
     /**
-     * @dev Redemption definitions and events. preRedeemablePeriod 
+     * @dev Redemption definitions and events. 
      * defines how long a token must exist before it can be 
      * redeemed.
      */
@@ -72,7 +72,7 @@ contract C9Token is ERC721IdEnumBasic {
         _svgOnly = true;
     }
 
-    /*
+    /**
      * @dev Checks to see if caller is the token owner. 
      * ownerOf enforces token existing.
      */ 
@@ -81,7 +81,7 @@ contract C9Token is ERC721IdEnumBasic {
         _;
     }
 
-    /*
+    /**
      * @dev Checks to see the token is not dead. Any status redeemed 
      * or greater is a dead status, meaning the token is forever 
      * locked.
@@ -97,6 +97,8 @@ contract C9Token is ERC721IdEnumBasic {
      * @dev To ensure the token still exists, instead of 
      * delete burning, we are sending to the zero address.
      * The token is no longer recoverable at this point.
+     *
+     * @param tokenId The tokenId to burn.
      */
     function _burn(uint256 tokenId)
     internal
@@ -107,11 +109,14 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Minting function. This checks and sets the `_edition` based on 
-     * the `TokenData` input attributes, sets the `__mintId` based on 
+     * @dev Minting function.
+     * The `TokenData` input attributes, sets the `__mintId` based on 
      * the `_edition`, sets the royalty, and then stores all of the 
      * attributes required to construct the SVG in the tightly packed 
-     * `TokenData` structure.
+     * uint256 slots.
+     *
+     * @param input The external minting data TokenData.
+     * @return votes The number of votes created by this minting batch.
      */
     function _setTokenData(TokenData[] calldata input)
     private
@@ -128,7 +133,7 @@ contract C9Token is ERC721IdEnumBasic {
         for (uint256 i; i<batchSize;) {
             _input = input[i];
 
-            // Checks
+            // Pre-mint checks
             tokenId = _input.tokenid;
             if (tokenId == 0) {
                 revert ZeroTokenId();
@@ -162,7 +167,7 @@ contract C9Token is ERC721IdEnumBasic {
             packedToken |= _to<<MPOS_OWNER;
             _owners[tokenId] = packedToken; // Officially minted
             
-            // Additional storage in _uTokenData
+            // Additional meta data storage in _uTokenData
             packedToken = timestamp;
             packedToken |= _input.edition<<UPOS_EDITION;
             packedToken |= editionMintId<<UPOS_EDITION_MINT_ID;
@@ -175,12 +180,12 @@ contract C9Token is ERC721IdEnumBasic {
             packedToken |= _input.raritytier<<UPOS_RARITYTIER;
             packedToken |= _input.royaltiesdue<<UPOS_ROYALTIES_DUE;
             packedToken |= uint256(uint152(bytes19(bytes(_input.name))))<<UPOS_NAME;
-            _uTokenData[tokenId] = packedToken;
+            _uTokenData[tokenId] = packedToken; // Additional storage done
 
-            // Store token data for SVG
+            // Store token data for SVG QR and bar codes
             _cTokenData[tokenId] = _input.cData;
 
-            // This is a waste but there's no transfer batch
+            // This is a waste to call on every mint but there's no transfer batch
             _transferEvent(address(0), to, tokenId);
 
             unchecked {
@@ -191,10 +196,14 @@ contract C9Token is ERC721IdEnumBasic {
         return votes;
     }
 
-    /*
+    /**
      * @dev Since royalty info is already stored in the uTokenData,
      * we don't need a new slots for per token royalties, and can 
      * use the already existing uTokenData instead.
+     *
+     * @param tokenId The tokenId to set the per-token royalty of.
+     * @param receiver The royalty receiver of tokenId.
+     * @param royalty The royalty amount of tokenId.
      */
     function _setTokenRoyalty(uint256 tokenId, address receiver, uint256 royalty)
     private {
@@ -227,8 +236,11 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-      * @dev Returns the baseURI at given index.
-      */
+     * @dev Convenience view function.
+     *
+     * @param index The index of the URI (either 0 or 1).
+     * @return The baseURI for index.
+     */
     function baseURIArray(uint256 index)
     external view
     returns (string memory) {
@@ -236,12 +248,14 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Token burning. This option is not available for live 
-     * tokens, or with those that have a status below REDEEMED.
+     * @dev Token burning. This option is not available for VALID 
+     * tokens, or with those that have a status below REDEEMED (<4).
      * The token owner can only zero address burn dead tokens. 
      * Zero address tokens still exist to prevent a hole in the token 
      * enumeration, and to preserve a historical record on-chain 
-     * of physically redeemed tokens.
+     * of redeemed tokens.
+     *
+     * @param tokenId The tokenId to burn.
      */
     function burn(uint256 tokenId)
     public
@@ -262,9 +276,10 @@ contract C9Token is ERC721IdEnumBasic {
         // 5. Update burners balances (we don't add a transfer, just like minting doesn't add one)
         (uint256 burnerBalance, uint256 burnerVotes,,) = ownerDataOf(_msgSender());
         unchecked {
-            --burnerBalance;
-            burnerVotes -= votesToBurn;
+            --burnerBalance; // Subtract one from balance
+            burnerVotes -= votesToBurn; // Subtract votes of token from voting balance
         }
+        // 6. Save back to storage
         uint256 balances = _balances[_msgSender()];
         balances &= ~(MASK_BURNER<<APOS_BALANCE);
         balances |= burnerBalance<<APOS_BALANCE;
@@ -275,6 +290,8 @@ contract C9Token is ERC721IdEnumBasic {
     /**
      * @dev Contract-level meta data for OpenSea.
      * OpenSea: https://docs.opensea.io/docs/contract-level-metadata
+     *
+     * @return string The contract URI.
      */
     function contractURI()
     external view
@@ -285,7 +302,9 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Returns the list of burned tokens.
+     * @dev Convenience view function.
+     *
+     * @return burnedTokens The array of burned tokenIds.
      */
     function getBurned()
     external view
@@ -294,7 +313,9 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Returns list of contracts this contract is linked to.
+     * @dev Convenience view function.
+     *
+     * @return meta The meta contract this contract is linked to.
      */
     function getContracts()
     external view virtual
@@ -306,7 +327,10 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Returns the latest minted Id of the edition number.
+     * @dev Convenience view function.
+     *
+     * @param edition The editionId.
+     * @return uint256 The current max mintId of edition.
      */
     function getEditionMaxMintId(uint256 edition)
     external view
@@ -315,7 +339,11 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Returns the latest minted Id of the edition number.
+     * @dev This function is called during the redemption process.
+     * It determines the redemption fees to be paid.
+     *
+     * @param tokenIds Array of tokenIds
+     * @return value The current insured value of tokenIds
      */
     function getInsuredsValue(uint256[] memory tokenIds)
     public view
@@ -335,7 +363,10 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Returns an unpacked view of the ownerData.
+     * @dev Convenienve view function.
+     *
+     * @param tokenId The tokenId to lookup.
+     * @return xParams Unpacked view of _owners.
      */
     function getOwnersParams(uint256 tokenId)
     external view
@@ -353,7 +384,10 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Returns an unpacked view of the tokenData.
+     * @dev Convenienve view function.
+     *
+     * @param tokenId The tokenId to lookup.
+     * @return xParams Unpacked view of _uTokenData.
      */
     function getTokenParams(uint256 tokenId)
     external view
@@ -373,10 +407,12 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Returns the name stored in token params.
-     * This is in a separate function since it is a string 
-     * of unknown length that needs to be checked in a special 
-     * way prior to returning.
+     * @dev Parses name stored in the metadata. It is a string 
+     * of unknown length that is parsed to ensure no null bytes 
+     * are present in the return.
+     *
+     * @param tokenId The tokenId to lookup.
+     * @return string The name stored in _uTokenData.
      */
     function getTokenParamsName(uint256 tokenId)
     external view
@@ -398,7 +434,10 @@ contract C9Token is ERC721IdEnumBasic {
         return string(bName);
     }
 
-    /* @dev Batch minting function.
+    /* @dev Batch minting function. Batch minting reduces minting costs 
+     * by largely negating call overhead.
+     *
+     * @param input The TokenData format token input.
      */
     function mint(TokenData[] calldata input)
     external
@@ -419,8 +458,10 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Resets royalty information for the token id back to the 
+     * @dev Resets royalty information for the tokenId back to the 
      * global defaults.
+     *
+     * @param tokenId The tokenId to reset royalty info of.
      */
     function resetTokenRoyalty(uint256 tokenId)
     external
@@ -431,9 +472,13 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Custom EIP-2981. First this checks to see if the 
+     * @dev Custom EIP-2981.
+     * This first this checks to see if the 
      * token has a royalty receiver and fraction assigned to it.
      * If not then it defaults to the contract wide values.
+     *
+     * @param tokenId EIP-2981 definition.
+     * @param salePrice EIP-2981 definition.
      */
     function royaltyInfo(uint256 tokenId, uint256 salePrice)
     public view
@@ -458,27 +503,32 @@ contract C9Token is ERC721IdEnumBasic {
     //>>>>>>> SETTER FUNCTIONS START
 
     /**
-     * @dev Updates the baseURI.
+     * @dev Sets the baseURI.
      * By default this contract will load SVGs from another contract, 
      * but if a future upgrade allows for artwork (i.e, on ipfs), the 
      * contract will need to set the IPFS location.
+     *
+     * @param newBaseURI The new baseURI to set.
+     * @param idx The index of the baseURI to set (either 0 or 1).
      */
-    function setBaseUri(string calldata _newBaseURI, uint256 _idx)
+    function setBaseUri(string calldata newBaseURI, uint256 idx)
     external
     onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (Helpers.stringEqual(_baseURIArray[_idx], _newBaseURI)) {
+        if (Helpers.stringEqual(_baseURIArray[idx], newBaseURI)) {
             revert URIAlreadySet();
         }
-        bytes calldata _bBaseURI = bytes(_newBaseURI);
+        bytes calldata _bBaseURI = bytes(newBaseURI);
         uint256 len = _bBaseURI.length;
         if (bytes1(_bBaseURI[len-1]) != 0x2f) {
             revert URIMissingEndSlash();
         }
-        _baseURIArray[_idx] = _newBaseURI;
+        _baseURIArray[idx] = newBaseURI;
     }
 
     /**
      * @dev Sets the meta data contract address.
+     *
+     * @param _address The new contract address.
      */
     function setContractMeta(address _address)
     external
@@ -489,6 +539,8 @@ contract C9Token is ERC721IdEnumBasic {
 
     /**
      * @dev Sets the upgrader contract address.
+     *
+     * @param _address The new contract address.
      */
     function setContractUpgrader(address _address)
     external
@@ -500,6 +552,8 @@ contract C9Token is ERC721IdEnumBasic {
 
     /**
      * @dev Sets the contractURI.
+     *
+     * @param newContractURI The new contractURI link.
      */
     function setContractURI(string calldata newContractURI)
     external
@@ -512,6 +566,8 @@ contract C9Token is ERC721IdEnumBasic {
 
     /**
      * @dev Sets the validity handler contract address.
+     *
+     * @param _address The new contract address.
      */
     function setContractVH(address _address)
     external
@@ -523,14 +579,14 @@ contract C9Token is ERC721IdEnumBasic {
 
     /**
      * @dev Set royalties due if token validity status 
-     * is ROYALTIES. This is admin role instead of VALIDITY_ROLE 
-     * to reduce gas costs from using a proxy contract.
-     * VALIDITY_ROLE will still need to set 
-     * validity status ROYALTIES beforehand.
+     * is ROYALTIES.
+     *
+     * @param tokenId The tokenId to set royalties due for.
+     * @param amount The royalties due in USD.
      */
     function setRoyaltiesDue(uint256 tokenId, uint256 amount)
     external
-    onlyRole(DEFAULT_ADMIN_ROLE)
+    onlyRole(VALIDITY_ROLE)
     requireMinted(tokenId)
     notDead(tokenId) {
         if (amount == 0) {
@@ -553,10 +609,15 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Allows holder toggle display flag.
-     * Flag must be set to true for upgraded / external 
-     * view to show. Metadata needs to be refershed 
-     * on exchanges for changes to show.
+     * @dev Allows NFT owner to toggle the SVG/external display flag.
+     * Flag must be set to true for external 
+     * view to show.
+     *
+     * @param tokenId The tokenId.
+     * @param flag The SVG/external display flag to set.
+     * @notice Token must be upgraded otherwise this will revert.
+     *
+     * Emits metaDataUpdate event.
      */
     function setTokenDisplay(uint256 tokenId, bool flag)
     external
@@ -582,10 +643,14 @@ contract C9Token is ERC721IdEnumBasic {
 
     /**
      * @dev Allows the contract owner to set royalties 
-     * on a per token basis, within limits.
-     * Note: set _receiver address to the null address 
-     * to ignore it and use the already default set royalty address.
-     * Note: Updating the receiver the first time is nearly as
+     * on a per token basis.
+     *
+     * @param tokenId The tokenId to set royalties of.
+     * @param royalty The new royalty value in bps.
+     * @param receiver The royalty receiver for this tokenId.
+     * @notice Set receiver to the null address to use the already 
+     * default global set royalty address.
+     * @notice Updating the receiver the first time is nearly as
      * expensive as updating both together the first time.
      */
     function setTokenRoyalty(uint256 tokenId, uint256 royalty, address receiver)
@@ -600,8 +665,11 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Sets the token as upgraded. A separate upgrader contract 
-     * will call this.
+     * @dev Sets the token as upgraded.
+     *
+     * @param tokenId The tokenId to upgrade.
+     *
+     * Emits metaDataUpdate event.
      */
     function setTokenUpgraded(uint256 tokenId)
     external
@@ -617,9 +685,10 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Returns the base64 representation of the SVG string. 
-     * This is desired when including the string in json data which 
-     * does not allow special characters found in hmtl/xml code.
+     * @dev Returns the on-chain SVG image display of tokenId.
+     *
+     * @param tokenId The tokenId to lookup.
+     * @return string The SVG image.
      */
     function svgImage(uint256 tokenId)
     external view
@@ -635,6 +704,12 @@ contract C9Token is ERC721IdEnumBasic {
         );
     }
 
+    /**
+     * @dev Convenience view function.
+     *
+     * @return bool If the contract is set to display SVG only 
+     * regardless of token upgrades.
+     */
     function svgOnly()
     external view
     returns (bool) {
@@ -642,9 +717,13 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Set SVG flag to either display on-chain SVG (true) or  
+     * @dev Sets the SVG flag to either display on-chain SVG (true) or  
      * external version (false). If set to true, it is still possible 
      * to retrieve the SVG image by calling svgImage(_tokenId).
+     *
+     * @param toggle The toggle to set _svgOnly to.
+     *
+     * Emits BatchMetadataUpdate event for all tokens.
      */
     function toggleSvgOnly(bool toggle)
     external
@@ -653,17 +732,19 @@ contract C9Token is ERC721IdEnumBasic {
             revert BoolAlreadySet();
         }
         _svgOnly = toggle;
+        metaUpdateAll();
     }
 
     /**
      * @dev Required override that returns fully onchain constructed 
      * json output that includes the SVG image. If a baseURI is set and 
-     * the token has been upgraded and the svgOnly flag is false, call 
-     * the baseURI.
+     * the token has been upgraded and the svgOnly flag is false, the 
+     * baseURI to the external image will be called instead.
      *
-     * Notes:
-     * It seems like if the baseURI method fails after upgrade, OpenSea
-     * still displays the cached on-chain version.
+     * @param tokenId The tokenId to lookup.
+     * @return string The JSON output (NFT standard).
+     * @notice It seems like if the baseURI method fails after upgrade,
+     * OpenSea still displays the cached on-chain version.
      */
     function tokenURI(uint256 tokenId)
     public view
@@ -681,7 +762,9 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Returns the number of burned tokens.
+     * @dev Convenience view function.
+     *
+     * @return The number of burned tokens.
      */
     function totalBurned()
     external view
@@ -690,8 +773,9 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev The cost to set/update should be comparable 
-     * to updating insured values.
+     * @dev Updates the insured values of the tokens.
+     *
+     * @param data The data array as [tokenId, insuredValue].
      */
     function updatedInsuranceValues(uint256[2][] calldata data)
     external
@@ -715,13 +799,16 @@ contract C9Token is ERC721IdEnumBasic {
 
     /**
      * @dev Disables self-destruct functionality.
-     * Note: even if admin gets through the confirm 
-     * is hardcoded to false.
+     *
+     * @param receiver The address to receive any remaining balance.
+     * @param confirm Confirmation of destruction of the contract.
+     * @notice Even if admin gets through the confirm is 
+     * hardcoded to false.
      */
-    function __destroy(address _receiver, bool confirm)
+    function __destroy(address receiver, bool confirm)
     public override
     onlyRole(DEFAULT_ADMIN_ROLE) {
         //confirm = false;
-        super.__destroy(_receiver, confirm);
+        super.__destroy(receiver, confirm);
     }
 }

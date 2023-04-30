@@ -96,6 +96,7 @@ abstract contract C9OwnerControl is AccessControl, ERC2771Context {
 
     /**
      * @dev Allows account to renounce current role.
+     *
      * @param role The role to renounce.
      * @param account The account to renounce role of.
      * @notice If the renouncer is the original contract owner, the contract 
@@ -113,6 +114,7 @@ abstract contract C9OwnerControl is AccessControl, ERC2771Context {
      * to revoke the admin rights of the contract owner.
      * As a result admin also cannot revoke itself either 
      * but it can still renounce.
+     *
      * @param role The role to renounce.
      * @param account The account to renounce role of.
      */
@@ -128,6 +130,7 @@ abstract contract C9OwnerControl is AccessControl, ERC2771Context {
      * @dev Transfers ownership of the contract to a new account (`newOwner`).
      * This is meant to make AccessControl functionally equivalent 
      * to 2-step Ownable.
+     *
      * @param newOwner The new owner of the contract.
      * @notice Old owner still has admin role. That needs to either be renounced 
      * or revoked by the new owner.
@@ -149,6 +152,7 @@ abstract contract C9OwnerControl is AccessControl, ERC2771Context {
     /**
      * @dev Transfers ownership of the contract to a new account (`newOwner`).
      * This can only be called by the current owner.
+     *
      * @param newOwner The new owner of the contract.
      */
     function transferOwnership(address newOwner)
@@ -181,6 +185,7 @@ abstract contract C9OwnerControl is AccessControl, ERC2771Context {
 
     /**
      * @dev Set the trusted forwarder of the contract.
+     *
      * @param forwarder The address of the forwarder.
      */
     function setTrustedForwarder(address forwarder)
@@ -193,6 +198,7 @@ abstract contract C9OwnerControl is AccessControl, ERC2771Context {
     /**
      * @dev Flag that sets global toggle to freeze functionality. 
      * For method that have the freeze modifier.
+     *
      * @param toggle Freeze (true) or unfreeze (false).
      */
     function toggleFreeze(bool toggle)
@@ -207,6 +213,7 @@ abstract contract C9OwnerControl is AccessControl, ERC2771Context {
     /**
      * @dev Allows for contract to be destroyed. The virtual flag
      * allows this to be overriden and disabled.
+     *
      * @param receiver The address to receive any remaining balance.
      * @param confirm Confirmation of destruction of the contract.
      * @notice This will eventually be deprecated and not work.
