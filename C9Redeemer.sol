@@ -7,8 +7,11 @@ import "./utils/interfaces/IC9EthPriceFeed.sol";
 contract C9Redeemable is C9Token {
     
     uint256 constant RPOS_BATCHSIZE = 0; // Pending number of redemptions
-    uint256 constant RPOS_TOKEN1 = 8;
+    uint256 constant RPOS_FEES_PAID = 3; // Max value 8191
+    uint256 constant RPOS_TOKEN1 = 16;
     uint256 constant MAX_BATCH_SIZE = 6;
+
+    uint256 constant RFEES_SIZE = 13;
     uint256 constant RUINT_SIZE = 24;
 
     uint256 private _baseFees;
@@ -94,7 +97,7 @@ contract C9Redeemable is C9Token {
     function _getBatchSize(uint256 redeemerData)
     private pure
     returns (uint256) {
-        return uint256(uint8(redeemerData>>RPOS_BATCHSIZE));
+        return _viewPackedData(redeemerData, 0, 3);
     }
 
     /**
@@ -402,6 +405,38 @@ contract C9Redeemable is C9Token {
     }
 
     /**
+     * @dev Allows user to cancel redemption while pending 
+     * final admin approval. There is no built-in auto refund.
+     *
+     * @param redeemer Address of tokens to unlock
+     */
+    function redeemCancel(address redeemer)
+    external payable {
+        // 1. Check if caller approved
+        _callerApproved(redeemer);
+        // 2. Check if redemption batch exists
+        uint256 _redeemerData = _balances[redeemer];
+        uint256 _batchSize = _getBatchSize(_redeemerData);
+        if (_batchSize == 0) {
+            revert NoRedemptionBatchPresent();
+        }
+        // 3. Unlock all tokens in redeemer
+        uint256[] memory _tokenIds = _unpackTokenIds(_redeemerData);
+        for (uint256 i; i<_batchSize;) {
+            _unlockToken(_tokenIds[i]);
+            unchecked {++i;}
+        }
+        // 4. Get refund amount
+        uint256 _redemptionFees = _viewPackedData(_redeemerData, RPOS_FEES_PAID, RFEES_SIZE);
+        // 5. Clear redeemer data
+        _clearRedemptionData(redeemer);
+        // 6. Process refund after all other state vars are set
+        if (_redemptionFees > 0) {
+            uint256 _refundFeesWei = _redemptionFees * 10**15;
+            _sendPayment(address(this), redeemer, _refundFeesWei);
+        }
+    }
+    /**
      * @dev Starts the redemption process.
      * Once started, the token is locked from further exchange 
      * unless canceled.
@@ -442,20 +477,25 @@ contract C9Redeemable is C9Token {
         _redeemLockTokens(tokenIds);
         // 3. Get the estimated s&h fees
         uint256 _insuredValue = getInsuredsValue(tokenIds);
-        uint256 _feesUSD = getRedemptionFees(_insuredValue);            
-        uint256 _feesWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(
-            _feesUSD
-        );
-        // 4. Make sure payment amount is valid and successful
-        if (msg.value != _feesWei) {
-            revert InvalidPaymentAmount(_feesWei, msg.value);
-        }
-        (bool success,) = payable(owner).call{value: msg.value}("");
-        if (!success) {
-            revert PaymentFailure(_msgSender(), owner, msg.value);
+        uint256 _feesUSD = getRedemptionFees(_insuredValue);
+        uint256 _redemptionFees; // Min value 0
+        // Check if >0 (i.e. some promotions may set baseFees to 0)
+        if (_feesUSD > 0) {       
+            uint256 _feesWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(
+                _feesUSD
+            );
+            // 4. Make sure payment amount is valid
+            if (msg.value != _feesWei) {
+                revert InvalidPaymentAmount(_feesWei, msg.value);
+            }
+            // 5. Make sure payment is successful
+            _sendPayment(_msgSender(), address(this), msg.value);
+            // 6. Get fee amount to store in redeemer's data
+            _redemptionFees = (_feesWei-1) / (10**15); // Max value 999
         }
         // 5. Update redeemer data
         _redeemerData |= _batchSize<<RPOS_BATCHSIZE;
+        _redeemerData |= _redemptionFees<<RPOS_FEES_PAID;
         uint256 _offset = RPOS_TOKEN1;
         for (uint256 i; i<_batchSize;) {
             _redeemerData |= tokenIds[i]<<_offset;
@@ -550,5 +590,26 @@ contract C9Redeemable is C9Token {
     external view
     returns (uint256) {
         return _redeemedTokens.length;
+    }
+
+    /**
+     * @dev Withdrawal function to remove partial or entire 
+     * contract balance.
+     */
+    function withdraw(address account, uint256 amount)
+    external
+    onlyRole(DEFAULT_OWNER_ROLE) {
+        uint256 _thisBalance = address(this).balance;
+        // 1. Check amount is valid
+        if (amount > _thisBalance) {
+            revert WithdrawlExceedsBalance();
+        }
+        // 2. Check amount to remove
+        if (amount == 0) { // Remove full balance
+            _sendPayment(address(this), account, address(this).balance);
+        }
+        else { // Remove partial
+            _sendPayment(address(this), account, amount);
+        }
     }
 }
