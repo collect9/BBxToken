@@ -6,8 +6,8 @@ import "./utils/interfaces/IC9EthPriceFeed.sol";
 
 contract C9Redeemable is C9Token {
     
-    uint256 constant RPOS_BATCHSIZE = 0; // Pending number of redemptions
-    uint256 constant RPOS_FEES_PAID = 3; // Max value 8191
+    uint256 constant RPOS_BATCHSIZE = 0; // Pending number of redemptions, max 6, 3-bits data needed
+    uint256 constant RPOS_FEES_PAID = 3; // 13-bits max value 8191, making max usable value here 999
     uint256 constant RPOS_TOKEN1 = 16;
     uint256 constant MAX_BATCH_SIZE = 6;
 
@@ -430,9 +430,12 @@ contract C9Redeemable is C9Token {
         uint256 _redemptionFees = _viewPackedData(_redeemerData, RPOS_FEES_PAID, RFEES_SIZE);
         // 5. Clear redeemer data
         _clearRedemptionData(redeemer);
-        // 6. Process refund after all other state vars are set
+        /* 6. Process refund after all other state vars are set.
+              It should not be possible to re-enter this function and reach 
+              this point again as _batchSize should be zero after re-entry.
+        */
         if (_redemptionFees > 0) {
-            uint256 _refundFeesWei = _redemptionFees * 10**15;
+            uint256 _refundFeesWei = _redemptionFees * 10**15; // converts 0.xxx eth into wei
             _sendPayment(address(this), redeemer, _refundFeesWei);
         }
     }
@@ -491,7 +494,7 @@ contract C9Redeemable is C9Token {
             // 5. Make sure payment is successful
             _sendPayment(_msgSender(), address(this), msg.value);
             // 6. Get fee amount to store in redeemer's data
-            _redemptionFees = (_feesWei-1) / (10**15); // Max value 999
+            _redemptionFees = (_feesWei-1) / (10**15); // Max value 999 or 0.999 ETH
         }
         // 5. Update redeemer data
         _redeemerData |= _batchSize<<RPOS_BATCHSIZE;
