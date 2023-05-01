@@ -436,7 +436,7 @@ contract C9Redeemable is C9Token {
         */
         if (_redemptionFees > 0) {
             uint256 _refundFeesWei = _redemptionFees * 10**15; // converts 0.xxx eth into wei
-            _sendPayment(address(this), redeemer, _refundFeesWei);
+            _transferFunds(redeemer, _refundFeesWei);
         }
     }
     /**
@@ -609,10 +609,10 @@ contract C9Redeemable is C9Token {
         }
         // 2. Check amount to remove
         if (amount == 0) { // Remove full balance
-            _sendPayment(address(this), account, address(this).balance);
+            _transferFunds(account, address(this).balance);
         }
         else { // Remove partial
-            _sendPayment(address(this), account, amount);
+            _transferFunds(account, amount);
         }
     }
 }

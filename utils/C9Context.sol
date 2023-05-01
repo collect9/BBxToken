@@ -64,6 +64,17 @@ abstract contract C9Context is C9Struct {
         return packedData;
     }
 
+    /**
+     * @dev Transfer from contract to.
+     */
+    function _transferFunds(address to, uint256 amount)
+    internal {
+        bool success = payable(to).send(amount);
+        if (!success) {
+            revert PaymentFailure(address(this), to, amount);
+        }
+    }
+
     function _viewPackedData(uint256 packedData, uint256 offset, uint256 size)
     public pure virtual
     returns (uint256 output) {
