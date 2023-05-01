@@ -492,7 +492,11 @@ contract C9Redeemable is C9Token {
                 revert InvalidPaymentAmount(_feesWei, msg.value);
             }
             // 5. Make sure payment is successful
-            _sendPayment(_msgSender(), address(this), msg.value);
+            address _thisContract = address(this);
+            (bool success,) = payable(_thisContract).call{value: _feesWei}("");
+            if (!success) {
+                revert PaymentFailure(_msgSender(), _thisContract, _feesWei);
+            }
             // 6. Get fee amount to store in redeemer's data
             _redemptionFees = (_feesWei-1) / (10**15); // Max value 999 or 0.999 ETH
         }

@@ -34,17 +34,6 @@ abstract contract C9Context is C9Struct {
         return tokenData>>MPOS_UPGRADED & BOOL_MASK;
     }
 
-    /**
-     * @dev Send payment amount from to.
-     */
-    function _sendPayment(address from, address to, uint256 amount)
-    internal {
-        (bool success,) = payable(to).call{value: amount}("");
-        if (!success) {
-            revert PaymentFailure(from, to, amount);
-        }
-    }
-
     function _setTokenParam(uint256 packedData, uint256 pos, uint256 val, uint256 mask)
     internal pure virtual
     returns(uint256) {
