@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.8.0) (token/ERC721/ERC721.sol)
 pragma solidity >=0.8.17;
+import "./../abstract/C9Errors.sol";
 import "./../abstract/C9Struct4.sol";
 
 abstract contract C9Context is C9Struct {
@@ -31,6 +32,17 @@ abstract contract C9Context is C9Struct {
     internal pure
     returns (uint256) {
         return tokenData>>MPOS_UPGRADED & BOOL_MASK;
+    }
+
+    /**
+     * @dev Send payment amount from to.
+     */
+    function _sendPayment(address from, address to, uint256 amount)
+    internal {
+        (bool success,) = payable(to).call{value: amount}("");
+        if (!success) {
+            revert PaymentFailure(from, to, amount);
+        }
     }
 
     function _setTokenParam(uint256 packedData, uint256 pos, uint256 val, uint256 mask)

@@ -48,6 +48,7 @@ error NoRedemptionBatchPresent();
 error RedeemerBatchSizeTooLarge(uint256 maxSize, uint256 received); //0x66aa3a8c
 error RedeemerFrozen();
 error SizeMismatch(uint256 maxSize, uint256 received); //0x97ce59d2
+error WithdrawlExceedsBalance();
 
 // Registrar
 error AddressAlreadyRegistered(); //0x2d42c772
