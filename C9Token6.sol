@@ -505,7 +505,7 @@ contract C9Token is ERC721IdEnumBasic {
      * @param newBaseURI The new baseURI to set.
      * @param idx The index of the baseURI to set (either 0 or 1).
      */
-    function setBaseUri(string calldata newBaseURI, uint256 idx)
+    function setBaseURI(string calldata newBaseURI, uint256 idx)
     external
     onlyRole(DEFAULT_ADMIN_ROLE) {
         if (idx > 1) {

@@ -173,34 +173,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     }
 
     /**
-     * @dev Base URI for computing {tokenURI}. If set, the resulting URI for each
-     * token will be the concatenation of the `baseURI` and the `tokenId`. Empty
-     * by default, can be overridden in child contracts.
-     */
-    function _baseURI()
-    internal view virtual
-    returns (string memory) {
-        return "";
-    }
-
-    /**
-     * @dev Hook that is called before any token transfer. This includes minting and burning. If {ERC721Consecutive} is
-     * used, the hook may be called as part of a consecutive (batch) mint, as indicated by `batchSize` greater than 1.
-     *
-     * Calling conditions:
-     *
-     * - When `from` and `to` are both non-zero, ``from``'s tokens will be transferred to `to`.
-     * - When `from` is zero, the tokens will be minted for `to`.
-     * - When `to` is zero, ``from``'s tokens will be burned.
-     * - `from` and `to` are never both zero.
-     * - `batchSize` is non-zero.
-     *
-     * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
-     */
-    function _beforeTokenTransfer(address from, address to, uint256 firstTokenId, uint256 batchSize)
-    internal virtual {}
-
-    /**
      * @dev Destroys `tokenId`.
      * The approval is cleared when the token is burned.
      * This is an internal function that does not check if the sender is authorized to operate on the token.
@@ -264,10 +236,19 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     }
 
     /**
+     * @dev Gets the stored registration data.
+     */
+    function _getRegistrationFor(uint256 accountData)
+    internal pure
+    returns (uint256) {
+        return _viewPackedData(accountData, APOS_REGISTRATION, ASZ_REGISTRATION);
+    }
+
+    /**
      * @dev Returns whether `spender` is allowed to manage `tokenId`.
      */
     function _isApproved(address spender, address tokenOwner, uint256 tokenId)
-    internal view virtual
+    private view
     returns (bool) {
         return (isApprovedForAll(tokenOwner, spender) || getApproved(tokenId) == spender);
     }
@@ -320,7 +301,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * Emits a {Transfer} event.
      */
     function _safeTransfer(address from, address to, uint256 tokenId, bytes memory data)
-    internal virtual {
+    private {
         _transfer(from, to, tokenId);
         if (!_checkOnERC721Received(from, to, tokenId, data)) {
             revert NonERC721Receiver();
@@ -328,7 +309,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     }
 
     function _safeTransfer(address from, address to, uint256[] calldata tokenIds, bytes memory data)
-    internal virtual {
+    private {
         _transferBatch(from, to, tokenIds);
         // Only check the first token
         if (!_checkOnERC721Received(from, to, tokenIds[0], data)) {
@@ -342,7 +323,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * Emits an {ApprovalForAll} event.
      */
     function _setApprovalForAll(address tokenOwner, address operator, bool approved)
-    internal virtual {
+    private {
         if (operator == tokenOwner) {
             revert ApproveToCaller();
         }
@@ -379,7 +360,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * Emits a {Transfer} event.
      */
     function __transfer(address from, uint256 to, uint256 tokenId)
-    internal virtual
+    private
     returns (uint256 votes) {
         uint256 tokenData = _owners[tokenId];
         /*
@@ -392,11 +373,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
             revert TransferFromIncorrectOwner(tokenOwner, from);
         }
         // 2. Make sure the caller is owner or approved
-        if (_msgSender() != tokenOwner) {
-            if (!_isApproved(_msgSender(), tokenOwner, tokenId)) {
-                revert CallerNotOwnerOrApproved(tokenId, tokenOwner, _msgSender());
-            }
-        }
+        _isApprovedOrOwner(_msgSender(), tokenOwner, tokenId);
         // 3. Make sure token is not locked
         if (_isLocked(tokenData)) {
             revert TokenIsLocked(tokenId);
@@ -427,7 +404,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     }
 
     function _transfer(address from, address to, uint256 tokenId)
-    internal virtual
+    private
     validTo(to)
     notFrozen() {
         // Checks, set new owner, return votes to add to balances
@@ -443,7 +420,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * to balances for every token. One time update at the end only.
      */
     function _transferBatch(address from, address to, uint256[] calldata tokenIds)
-    internal virtual
+    private
     validTo(to)
     notFrozen() {
         uint256 _to = uint256(uint160(to)); // Convert one time
@@ -507,15 +484,6 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     }
 
     /**
-     * @dev Gets the stored registration data.
-     */
-    function _getRegistrationFor(uint256 accountData)
-    internal pure
-    returns (uint256) {
-        return _viewPackedData(accountData, APOS_REGISTRATION, ASZ_REGISTRATION);
-    }
-
-    /**
      * @dev See {IERC721-isApprovedForAll}.
      */
     function isApprovedForAll(address tokenOwner, address operator)
@@ -556,7 +524,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * @dev Contract owner emits meta update for all tokens.
      */
     function metaUpdateAllEvent()
-    public virtual {
+    public {
         emit BatchMetadataUpdate(0, type(uint256).max);
     }
 
@@ -564,7 +532,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * @dev View function to see owner balances data.
      */
     function ownerDataOf(address tokenOwner)
-    public view virtual
+    public view
     returns (uint256 balance, uint256 votes, uint256 redemptions, uint256 transfers) {
         uint256 ownerData = _balances[tokenOwner];
         balance = uint256(uint16(ownerData>>APOS_BALANCE));
@@ -595,7 +563,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     }
 
     function redemptionsOf(address tokenOwner)
-    public view virtual
+    external view
     returns (uint256 redemptions) {
         (,,redemptions,) = ownerDataOf(tokenOwner);
     }
@@ -617,7 +585,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * @dev See {IERC2981-royaltyInfo}.
      */
     function royaltyInfo(uint256 /*tokenId*/, uint256 salePrice)
-    external view virtual override
+    external view virtual
+    override
     returns (address receiver, uint256 royaltyAmount) {
         receiver = owner;
         royaltyAmount = (salePrice * _royalty) / 10000;
@@ -742,24 +711,23 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     override
     requireMinted(tokenId)
     returns (string memory) {
-        string memory baseURI = _baseURI();
-        return bytes(baseURI).length > 0 ? string(abi.encodePacked(baseURI, tokenId.toString())) : "";
+        return "";
     }
 
     function totalSupply()
-    public view virtual 
+    public view virtual
     returns (uint256) {
         return _totalSupply;
     }
 
     function totalVotes()
-    public view virtual 
+    external view 
     returns (uint256) {
         return _totalVotes;
     }
 
     function transfersOf(address tokenOwner)
-    public view virtual
+    external view
     returns (uint256 transfers) {
         (,,,transfers) = ownerDataOf(tokenOwner);
     }
@@ -768,7 +736,8 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * @dev See {IERC721-transferFrom}.
      */
     function transferFrom(address from, address to, uint256 tokenId)
-    public virtual {
+    public virtual
+    override {
         _transfer(from, to, tokenId);
     }
 
@@ -777,8 +746,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
      * between two addresses. Max batch size is 64.
      */
     function transferBatchFrom(address from, address to, uint256[] calldata tokenIds)
-    external virtual
-    override {
+    external {
         _transferBatch(from, to, tokenIds);
     }
 
@@ -793,7 +761,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     }
 
     function votesOf(address tokenOwner)
-    public view virtual
+    external view
     returns (uint256 votes) {
         (,votes,,) = ownerDataOf(tokenOwner);
     }

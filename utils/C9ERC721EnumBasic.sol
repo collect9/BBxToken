@@ -15,29 +15,13 @@ abstract contract ERC721IdEnumBasic is ERC721 {
     // Array of all token ids, used for enumeration
     uint24[] internal _allTokens;
 
-    function _mint(address to, uint256[] calldata tokenIds)
-    internal virtual {
-        uint256 batchSize = tokenIds.length;
-        uint256 tokenData = uint256(uint160(to));
-        uint256 _tokenId;
-        for (uint256 i; i<batchSize;) {
-            _tokenId = tokenIds[i];
-            // Add to all tokens list
-            _allTokens.push(uint24(_tokenId));
-            // Set owner of the token
-            _owners[_tokenId] = tokenData;
-            emit Transfer(address(0), to, _tokenId);
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
     /**
      * @dev See {IERC721Enumerable-tokenByIndex}.
      * @dev Collect9: copied from ERC721Enumerable
      */
-    function tokenByIndex(uint256 index) public view virtual returns (uint256) {
+    function tokenByIndex(uint256 index)
+    public view virtual
+    returns (uint256) {
         uint256 _totalSupply = totalSupply();
         if (index >= _totalSupply) {
             revert TokenEnumIndexOOB(_totalSupply, index);
@@ -45,7 +29,10 @@ abstract contract ERC721IdEnumBasic is ERC721 {
         return uint256(_allTokens[index]);
     }
 
-    function totalSupply() public view virtual override returns (uint256) {
+    function totalSupply()
+    public view virtual
+    override
+    returns (uint256) {
         return _allTokens.length;
     }
 }
