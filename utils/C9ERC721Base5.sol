@@ -96,6 +96,15 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     }
 
     /**
+     * @dev Checks to see if caller is the token owner. 
+     * ownerOf enforces token existing.
+     */ 
+    modifier isOwnerOrApproved(uint256 tokenId) {
+        _isApprovedOrOwner(_msgSender(), ownerOf(tokenId), tokenId);
+        _;
+    }
+
+    /**
      * @dev Reverts if the `tokenId` has not been minted yet.
      */
     modifier requireMinted(uint256 tokenId) {
@@ -453,12 +462,12 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     function approve(address to, uint256 tokenId)
     public virtual
     override
+    isOwnerOrApproved(tokenId)
     validTo(to) {
         address tokenOwner = ownerOf(tokenId);
         if (to == tokenOwner) {
             revert OwnerAlreadyApproved();
         }
-        _isApprovedOrOwner(_msgSender(), tokenOwner, tokenId);
         _approve(to, tokenId);
     }
 

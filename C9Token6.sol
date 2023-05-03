@@ -69,15 +69,6 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Checks to see if caller is the token owner. 
-     * ownerOf enforces token existing.
-     */ 
-    modifier isOwnerOrApproved(uint256 tokenId) {
-        _isApprovedOrOwner(_msgSender(), ownerOf(tokenId), tokenId);
-        _;
-    }
-
-    /**
      * @dev Checks to see the token is not dead. Any status redeemed 
      * or greater is a dead status, meaning the token is forever 
      * locked.

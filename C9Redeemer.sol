@@ -36,6 +36,20 @@ contract C9Redeemable is C9Token {
     }
 
     /*
+     * @dev Checks to see if the caller is approved for the redeemer.
+     * @param redeemer The address of the account to check if _msgSender() is 
+     * approved on behalf of.
+     */ 
+    modifier callerApproved(address redeemer) {
+        if (_msgSender() != redeemer) {
+            if (!isApprovedForAll(redeemer, _msgSender())) {
+                revert Unauthorized();
+            }
+        }
+        _;
+    }
+
+    /*
      * @dev Checks to see contract is not frozen.
      */ 
     modifier redeemerNotFrozen() { 
@@ -64,20 +78,6 @@ contract C9Redeemable is C9Token {
             type(uint16).max
         );
         _balances[redeemer] = balancesFrom;
-    }
-
-    /*
-     * @dev Checks to see if the caller is approved for the redeemer.
-     * @param redeemer The address of the account to check if _msgSender() is 
-     * approved on behalf of.
-     */ 
-    function _callerApproved(address redeemer)
-    private view {
-        if (_msgSender() != redeemer) {
-            if (!isApprovedForAll(redeemer, _msgSender())) {
-                revert Unauthorized();
-            }
-        }
     }
     
     /*
@@ -409,26 +409,25 @@ contract C9Redeemable is C9Token {
      * @param redeemer Address of tokens to unlock
      */
     function redeemCancel(address redeemer)
-    external payable {
-        // 1. Check if caller approved
-        _callerApproved(redeemer);
-        // 2. Check if redemption batch exists
+    external payable
+    callerApproved(redeemer) {
+        // 1. Check if redemption batch exists
         uint256 _redeemerData = _balances[redeemer];
         uint256 _batchSize = _getBatchSize(_redeemerData);
         if (_batchSize == 0) {
             revert NoRedemptionBatchPresent();
         }
-        // 3. Unlock all tokens in redeemer
+        // 2. Unlock all tokens in redeemer
         uint256[] memory _tokenIds = _unpackTokenIds(_redeemerData);
         for (uint256 i; i<_batchSize;) {
             _unlockToken(_tokenIds[i]);
             unchecked {++i;}
         }
-        // 4. Get refund amount
+        // 3. Get refund amount
         uint256 _redemptionFees = _viewPackedData(_redeemerData, RPOS_FEES_PAID, RFEES_SIZE);
-        // 5. Clear redeemer data
+        // 4. Clear redeemer data
         _clearRedemptionData(redeemer);
-        /* 6. Process refund after all other state vars are set.
+        /* 5. Process refund after all other state vars are set.
               It should not be possible to re-enter this function and reach 
               this point again as _batchSize should be zero after re-entry.
         */
@@ -451,9 +450,9 @@ contract C9Redeemable is C9Token {
      */
     function redeemStart(address redeemer, uint256 registrationCode, uint256[] calldata tokenIds)
     external payable
+    callerApproved(redeemer)
     redeemerNotFrozen() {
         // 1. Checks
-        _callerApproved(redeemer);
         uint256 _redeemerData = _balances[redeemer];
         // 1b. Check the account is already registered
         uint256 _registrationData = _getRegistrationFor(_redeemerData);
