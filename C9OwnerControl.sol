@@ -153,7 +153,7 @@ abstract contract C9OwnerControl is AccessControl, ERC2771Context {
     function _validRole(bytes32 role)
     private pure {
         if (role == DEFAULT_OWNER_ROLE) {
-            revert OwnerRoleMustBeTransfer();
+            revert OwnerRoleMustBeTransferOr();
         }
     }
 
@@ -173,6 +173,20 @@ abstract contract C9OwnerControl is AccessControl, ERC2771Context {
     }
 
     /**
+     * @dev Renounces contract ownership. Contract is left 
+     * without owner thus cannot be transferred anymore.
+     * Any admins or other roles still exist.
+     */
+    function renounceOwnership()
+    external
+    onlyRole(DEFAULT_OWNER_ROLE) {
+        if (_msgSender() != owner) revert C9Unauthorized();
+        _removeRole(DEFAULT_ADMIN_ROLE, owner);
+        _removeRole(DEFAULT_OWNER_ROLE, owner);
+        owner = address(0);
+    }
+
+    /**
      * @dev Allows account to renounce current role.
      *
      * @param role The role to renounce.
@@ -184,6 +198,7 @@ abstract contract C9OwnerControl is AccessControl, ERC2771Context {
     public
     override {
         if (account != _msgSender()) revert C9Unauthorized();
+        _validRole(role);
         _removeRole(role, account);
     }
 

@@ -28,7 +28,8 @@ error CannotRevokeSelf();
 error ContractFrozen(); //0x4051e961
 error NoRoleOnAccount(); //0xb1a60829
 error NoTransferPending(); //0x9c6b0866
-error OwnerRoleMustBeTransfer();
+error OwnerCannotRenounceAdminSelf();
+error OwnerRoleMustBeTransferOr();
 error C9Unauthorized(); //0xa020ddad
 error C9ZeroAddressInvalid(); //0x7c7fa4fb
 error RequiredAccessMissing(address account, bytes32 role);
