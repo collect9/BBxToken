@@ -12,15 +12,12 @@ contract C9Token is ERC721IdEnumBasic {
      * @dev Contract access roles.
      */
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
-    bytes32 public constant UPDATER_ROLE  = keccak256("UPDATER_ROLE");
     bytes32 public constant VALIDITY_ROLE = keccak256("VALIDITY_ROLE");
 
     /**
      * @dev Contracts this token contract interacts with.
      */
     address internal contractMeta;
-    address internal contractUpgrader;
-    address internal contractVH;
 
     /**
      * @dev Flag that may enable external (IPFS) artwork 
@@ -318,11 +315,9 @@ contract C9Token is ERC721IdEnumBasic {
      */
     function getContracts()
     external view virtual
-    returns(address meta, address pricer, address upgrader, address vH) {
+    returns(address meta, address pricer) {
         meta = contractMeta;
         pricer = address(0);
-        upgrader = contractUpgrader;
-        vH = contractVH;
     }
 
     /**
@@ -513,6 +508,9 @@ contract C9Token is ERC721IdEnumBasic {
     function setBaseUri(string calldata newBaseURI, uint256 idx)
     external
     onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (idx > 1) {
+            revert IndexOOB();
+        }
         if (Helpers.stringEqual(_baseURIArray[idx], newBaseURI)) {
             revert URIAlreadySet();
         }
@@ -537,19 +535,6 @@ contract C9Token is ERC721IdEnumBasic {
     }
 
     /**
-     * @dev Sets the upgrader contract address.
-     *
-     * @param _address The new contract address.
-     */
-    function setContractUpgrader(address _address)
-    external
-    onlyRole(DEFAULT_ADMIN_ROLE)
-    addressNotSame(contractUpgrader, _address) {
-        contractUpgrader = _address;
-        _grantRole(UPGRADER_ROLE, _address);
-    }
-
-    /**
      * @dev Sets the contractURI.
      *
      * @param newContractURI The new contractURI link.
@@ -562,20 +547,7 @@ contract C9Token is ERC721IdEnumBasic {
         }
         _contractURI = newContractURI;
     }
-
-    /**
-     * @dev Sets the validity handler contract address.
-     *
-     * @param _address The new contract address.
-     */
-    function setContractVH(address _address)
-    external
-    onlyRole(DEFAULT_ADMIN_ROLE)
-    addressNotSame(contractVH, _address) {
-        contractVH = _address;
-        _grantRole(VALIDITY_ROLE, _address);
-    }
-
+    
     /**
      * @dev Set royalties due if token validity status 
      * is ROYALTIES.
@@ -637,7 +609,7 @@ contract C9Token is ERC721IdEnumBasic {
             display,
             BOOL_MASK
         );
-        _metaUpdate(tokenId);
+        _metaUpdateEvent(tokenId);
     }
 
     /**
@@ -680,7 +652,7 @@ contract C9Token is ERC721IdEnumBasic {
             revert TokenAlreadyUpgraded(tokenId);
         }
         _owners[tokenId] |= BOOL_MASK<<MPOS_UPGRADED;
-        _metaUpdate(tokenId);
+        _metaUpdateEvent(tokenId);
     }
 
     /**
@@ -731,7 +703,7 @@ contract C9Token is ERC721IdEnumBasic {
             revert BoolAlreadySet();
         }
         _svgOnly = toggle;
-        metaUpdateAll();
+        metaUpdateAllEvent();
     }
 
     /**
@@ -807,7 +779,7 @@ contract C9Token is ERC721IdEnumBasic {
     function __destroy(address receiver, bool confirm)
     public override
     onlyRole(DEFAULT_ADMIN_ROLE) {
-        //confirm = false;
+        confirm = false;
         super.__destroy(receiver, confirm);
     }
 }

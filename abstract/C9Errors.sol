@@ -24,6 +24,7 @@ error ZeroAddressError();
 // C9OwnerControl
 error ActionNotConfirmed(); //0xacdb9fab
 error BoolAlreadySet(); //0xf04e4fd9
+error CannotRevokeSelf();
 error ContractFrozen(); //0x4051e961
 error NoRoleOnAccount(); //0xb1a60829
 error NoTransferPending(); //0x9c6b0866
@@ -71,6 +72,7 @@ error CannotValidToDead(uint256 tokenId, uint256 validity);
 error C9TokenNotBurnable(uint256 tokenId, uint256 validity);
 error EditionOverflow(uint256 received); //0x5723b5d1
 error IncorrectTokenValidity(uint256 expected, uint256 received); //0xe8c07318
+error IndexOOB();
 error InputsSizeMismatch(uint256 inputSize1, uint256 inputSize2); //0xa9d63c10
 error InvalidVId(uint256 received); //0xcf8cffb0
 error NoOwnerSupply(address sender); //0x973d81af

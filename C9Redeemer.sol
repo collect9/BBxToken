@@ -210,7 +210,7 @@ contract C9Redeemable is C9Token {
             }
         }
         _owners[tokenId] = ownersData;
-        _metaUpdate(tokenId);
+        _metaUpdateEvent(tokenId);
     }
 
     /**
@@ -269,7 +269,7 @@ contract C9Redeemable is C9Token {
         uint256 _redeemerData = _balances[redeemer];
         uint256 _batchSize = _getBatchSize(_redeemerData);
         if (_batchSize == 0) {
-            revert WrongProcessStep(2, 0);
+            revert NoRedemptionBatchPresent();
         }
         // 2. Get tokenIds for this redeemer
         uint256[] memory _tokenIds = _unpackTokenIds(_redeemerData);
@@ -322,11 +322,9 @@ contract C9Redeemable is C9Token {
     function getContracts()
     external view
     override
-    returns(address meta, address pricer, address upgrader, address vH) {
+    returns(address meta, address pricer) {
         meta = contractMeta;
         pricer = contractPricer;
-        upgrader = contractUpgrader;
-        vH = contractVH;
     }
 
     /**

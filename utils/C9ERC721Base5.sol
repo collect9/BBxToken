@@ -287,7 +287,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     /**
      * @dev Emits metadata update for tokenId.
      */
-    function _metaUpdate(uint256 tokenId)
+    function _metaUpdateEvent(uint256 tokenId)
     internal {
         emit MetadataUpdate(tokenId);
     }
@@ -555,7 +555,7 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     /**
      * @dev Contract owner emits meta update for all tokens.
      */
-    function metaUpdateAll()
+    function metaUpdateAllEvent()
     public virtual {
         emit BatchMetadataUpdate(0, type(uint256).max);
     }
