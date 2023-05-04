@@ -11,17 +11,25 @@ import "./C9BaseDeploy_test.sol";
  */
 contract RedeemersTestFull is C9TestContract {
 
-    uint256 constant NUMBER_TO_REDEEM = 3;
-    uint256 constant NUMBER_TO_ADD_REMOVE = 2;
-    uint256[NUMBER_TO_REDEEM] mintIds;
-    uint256[NUMBER_TO_REDEEM] tokenIds;
+    uint256 immutable NUMBER_TO_REDEEM = _timestamp % 5 + 1;
+    uint256[] mintIds;
+
+    uint256 constant MASK_REGISTRATION = 2**20-1;
+    bytes32 constant ksig = 0x271577b3d4a93c7c5fecc74cc37569c86d8df05e511c8acf0438f0cb98e35427;
+    uint256 constant code = uint256(ksig) % MASK_REGISTRATION;
 
     function afterEach()
     public override {
         super.afterEach();
-        for (uint256 i; i<NUMBER_TO_REDEEM; i++) {
-            _checkTokenParams(mintIds[i]);
-            _checkOwnerParams(mintIds[i]);
+    }
+
+    function _shuffle(uint256[] memory numberArr)
+    private view {
+        for (uint256 i; i<numberArr.length; i++) {
+            uint256 n = i + uint256(keccak256(abi.encodePacked(_timestamp))) % (numberArr.length - i);
+            uint256 temp = numberArr[n];
+            numberArr[n] = numberArr[i];
+            numberArr[i] = temp;
         }
     }
 
@@ -31,158 +39,70 @@ contract RedeemersTestFull is C9TestContract {
     function beforeAll()
     public {
         c9t.setPreRedeemPeriod(0);
-        c9t.register(0x271577b3d4a93c7c5fecc74cc37569c86d8df05e511c8acf0438f0cb98e35427);
+        c9t.register(ksig);
+        c9t.setBaseFees(0); // 0 fees makes redeemer not payable
         regStatus = true; //Set truth
         _checkOwnerDataOf(c9tOwner);
     }
 
-    function redeemStartMultiple()
+    function redeemStart()
     public {
-        uint256[] memory _mintIds = new uint256[](NUMBER_TO_REDEEM);
         for (uint256 i; i<NUMBER_TO_REDEEM; i++) {
-            _mintIds[i] = (_timestamp + i) % (_rawData.length-4);
-            _rawData[_mintIds[i]].locked = LOCKED; // Set truth
+            mintIds.push( (_timestamp + i) % (_rawData.length-4) );
+            _rawData[mintIds[i]].locked = LOCKED; // Set truth
         }
-        (uint256[] memory _tokenIds,) = _getTokenIdsVotes(_mintIds);
+        (uint256[] memory tokenIds,) = _getTokenIdsVotes(mintIds);
 
-        //_shuffle(_tokenIds);
-        c9t.redeemStart(_tokenIds);
+        _shuffle(tokenIds);
+        c9t.redeemStart(c9tOwner, code, tokenIds);
 
         // Check basic redeemer info is correct
-        (uint256 step, uint256[] memory rTokenIds) = c9t.getRedeemerInfo(c9tOwner);
-        Assert.equal(step, 2, "Invalid redeem start step");
+        uint256[] memory rTokenIds = c9t.getRedeemerTokenIds(c9tOwner);
         Assert.equal(rTokenIds.length, NUMBER_TO_REDEEM, "Invalid redeem tokenIds length");
 
         // Check all tokens are in redeemer and locked
         for (uint256 i; i<NUMBER_TO_REDEEM; i++) {
-            // Copy to storage for later
-            tokenIds[i] = _tokenIds[i];
-            mintIds[i] = _mintIds[i];
-
             Assert.equal(rTokenIds[i], tokenIds[i], "Invalid tokenId in redeemer");
             Assert.equal(c9t.isLocked(tokenIds[i]), true, "Invalid locked status");
-        }
-    }
-
-    function redeemRemoveMultiple()
-    public {
-        (uint256 step, uint256[] memory rTokenIds) = c9t.getRedeemerInfo(c9tOwner);
-        Assert.equal(step, 2, "Invalid redeem add step");
-        Assert.equal(rTokenIds.length, NUMBER_TO_REDEEM, "Invalid redeem tokenIds length");
-
-        // TokenIds to remove (remove last two)
-        uint256[] memory removeTokenIds = new uint256[](NUMBER_TO_ADD_REMOVE);
-        for (uint256 i; i<NUMBER_TO_ADD_REMOVE; i++) {
-            removeTokenIds[i] = rTokenIds[i+1];
+            // Make sure the rest of the packed params are still ok
+            _checkTokenParams(mintIds[i]);
+            _checkOwnerParams(mintIds[i]);
         }
 
-        // TokenIds that will remain
-        uint256 numberToRemain = NUMBER_TO_REDEEM - NUMBER_TO_ADD_REMOVE; // Random number from 1-X that will remain
-        Assert.equal(numberToRemain>0, true, "Invalid number to remain");
-        Assert.equal(numberToRemain+NUMBER_TO_ADD_REMOVE, NUMBER_TO_REDEEM, "Invalid remove remain combo");
-        uint256[] memory remainingTokenIds = new uint256[](numberToRemain);
-        remainingTokenIds[0] = rTokenIds[0]; // Keep the first token
-
-        // Remove tokenIds and check basic info
-        c9t.redeemRemove(removeTokenIds);
-        (uint256 step2, uint256[] memory lTokenIds) = c9t.getRedeemerInfo(c9tOwner);
-        Assert.equal(step2, 2, "Invalid redeem add step");
-        Assert.equal(lTokenIds.length, numberToRemain, "Invalid redeem tokenIds length");
-
-        // Make sure removed ones are unlocked
-        for (uint256 i; i<NUMBER_TO_ADD_REMOVE; i++) {
-            Assert.equal(c9t.isLocked(removeTokenIds[i]), false, "Invalid unlocked status");
-            _rawData[mintIds[i+1]].locked = UNLOCKED; // Set truth for afterEach
-        }
-
-        // Check the ones remaining in the redeemer are correct
-        uint256 correctCounter;
-        for (uint256 i; i<numberToRemain; i++) {
-            for (uint256 j; j<numberToRemain; j++) {
-                if (lTokenIds[j] == remainingTokenIds[i]) {
-                    ++correctCounter;
-                }
-            }
-        }
-        Assert.equal(correctCounter, numberToRemain, "Invalid correctness counter");
-    }
-
-    function redeemAddMultiple()
-    public {
-        uint256[] memory _mintIds = new uint256[](NUMBER_TO_ADD_REMOVE);
-        for (uint256 i; i<NUMBER_TO_ADD_REMOVE; i++) {
-            _mintIds[i] = (_timestamp + NUMBER_TO_REDEEM + i) % (_rawData.length-4);
-        }
-        (uint256[] memory _tokenIds,) = _getTokenIdsVotes(_mintIds);
-        
-        c9t.redeemAdd(_tokenIds);
-        
-        // Check basic redeemer info is correct
-        (uint256 step, uint256[] memory rTokenIds) = c9t.getRedeemerInfo(c9tOwner);
-        Assert.equal(step, 2, "Invalid redeem add step");
-        Assert.equal(rTokenIds.length, NUMBER_TO_REDEEM, "Invalid redeem tokenIds length");
-
-        // Check all tokens are in redeemer and locked
-        for (uint256 i; i<NUMBER_TO_ADD_REMOVE; i++) {
-            Assert.equal(rTokenIds[i+1], _tokenIds[i], "Invalid tokenId added to redeemer");
-            Assert.equal(c9t.isLocked(_tokenIds[i]), true, "Invalid locked status");
-            
-            // Copy to storage for later
-            mintIds[i+1] = _mintIds[i];
-            tokenIds[i+1] = _tokenIds[i];
-
-            _rawData[mintIds[i+1]].locked = LOCKED; // Set truth for afterEach
-        }
-    }
-
-    function verifyRedemption()
-    public {
-        uint256 code = 719959;
-        c9t.userVerifyRedemption(code); // Zero payment for testing
-
-        (uint256 step, uint256[] memory rTokenIds) = c9t.getRedeemerInfo(c9tOwner);
-        Assert.equal(step, 3, "Invalid redeem  add step");
-        Assert.equal(rTokenIds.length, NUMBER_TO_REDEEM, "Invalid redeem tokenIds length");
-
-        // Check the ones remaining in the redeemer are correct
-        uint256 correctCounter;
-        for (uint256 i; i<NUMBER_TO_REDEEM; i++) {
-            for (uint256 j; j<NUMBER_TO_REDEEM; j++) {
-                if (tokenIds[i] == rTokenIds[j]) {
-                    ++correctCounter;
-                }
-            }
-        }
-         Assert.equal(correctCounter, NUMBER_TO_REDEEM, "Invalid correctness counter");
+        afterEach();
     }
 
     function adminFinalizeRedemption()
     public {
-        uint256 ts = block.timestamp;
-        c9t.adminFinalApproval(c9tOwner);
+        uint256[] memory rTokenIds = c9t.getRedeemerTokenIds(c9tOwner);
 
+        uint256 ts = block.timestamp;
+        c9t.adminFinalApprove(c9tOwner);
+
+        
         // After approval the redeemer should be back at step 0
-        (uint256 step,) = c9t.getRedeemerInfo(c9tOwner);
-        Assert.equal(step, 0, "Invalid redeem  add step");
+        uint256[] memory doneTokenIds = c9t.getRedeemerTokenIds(c9tOwner);
+        Assert.equal(doneTokenIds.length, 0, "Invalid redeem tokenIds length after approved");
 
         // Check all tokens have still been locked and are redeemed status
         for (uint256 i; i<NUMBER_TO_REDEEM; i++) {
-            Assert.equal(c9t.isLocked(tokenIds[i]), true, "Invalid locked status");
-            Assert.equal(c9t.validityStatus(tokenIds[i]), REDEEMED, "Invalid validity status");
-            Assert.equal(c9t.getRedeemed()[i], tokenIds[i], "Invalid redeemed tokenId");
+            Assert.equal(c9t.isLocked(rTokenIds[i]), true, "Invalid locked status");
+            Assert.equal(c9t.validityStatus(rTokenIds[i]), REDEEMED, "Invalid validity status");
+            Assert.equal(c9t.getRedeemed()[i], rTokenIds[i], "Invalid redeemed tokenId");
 
             // Set ground truth
             _rawData[mintIds[i]].validity = REDEEMED;
             _rawData[mintIds[i]].validitystamp = ts;
         }
 
-        // // Update truthing
+        // Update truthing
         redemptions[c9tOwner] += NUMBER_TO_REDEEM;
         redeemCounter += NUMBER_TO_REDEEM;
 
-        Assert.equal(c9t.totalRedeemed(), redeemCounter, "Invalid locked status");
+        Assert.equal(c9t.totalRedeemed(), redeemCounter, "Invalid total redeemed");
     }
-
+    
+    
     function burnRedeemed()
     public {
         uint256[] memory _mintIds = new uint256[](NUMBER_TO_REDEEM);
@@ -210,7 +130,6 @@ contract RedeemersTestFull is C9TestContract {
             Assert.equal(burned[i], tokenId, "Invalid burned tokenId");
         }
 
-    
         // 5. Check burned tokens length
         uint256 numBurned = c9t.totalBurned();
         Assert.equal(numBurned, NUMBER_TO_REDEEM, "Invalid number of burned token");
@@ -221,5 +140,4 @@ contract RedeemersTestFull is C9TestContract {
         // 7. Make sure total supply is still the same
         Assert.equal(c9t.totalSupply(), _rawData.length, "Invalid number of tokens");
     }
-
 }

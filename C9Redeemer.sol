@@ -278,6 +278,7 @@ contract C9Redeemable is C9Token {
         for (uint256 i; i<_batchSize;) {
             _tokenId = _tokenIds[i];
             _owners[_tokenId] = _setDataValidity(_owners[_tokenId], REDEEMED);
+            _redeemedTokens.push(uint24(_tokenId));
             unchecked {++i;}
         }
         // 4. To to redeemer's redemption count
