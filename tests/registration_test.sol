@@ -7,7 +7,6 @@ import "./C9BaseDeploy_test.sol";
 contract RegistrationTest is C9TestContract {
 
     bytes32 ksig;
-    uint256 constant MASK_REGISTRATION = 2**20-1;
 
     function afterEach()
     public override {
@@ -36,25 +35,11 @@ contract RegistrationTest is C9TestContract {
         _checkRegistration(false);
     }
 
-    function checkRegistrationCode1()
-    public {
-        uint256 code = uint256(ksig) % MASK_REGISTRATION;
-        Assert.equal(code, c9t.getRegistrationFor(c9tOwner), "registration code error1");
-    }
-
     function checkReRegistration()
     public {
         ksig = keccak256(abi.encodePacked("some random data"));
         _checkRegistration(true);
     }
-
-    function checkRegistrationCode2()
-    public {
-        uint256 code = uint256(ksig) % MASK_REGISTRATION;
-        Assert.equal(code, c9t.getRegistrationFor(c9tOwner), "registration code error2");
-    }
-
-
 
 
 

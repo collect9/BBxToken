@@ -37,6 +37,7 @@ contract C9Redeemable is C9Token {
 
     /*
      * @dev Checks to see if the caller is approved for the redeemer.
+     *
      * @param redeemer The address of the account to check if _msgSender() is 
      * approved on behalf of.
      */ 
@@ -61,6 +62,7 @@ contract C9Redeemable is C9Token {
 
     /**
      * @dev Updates the address redemptions count.
+     *
      * @param redeemer The address to increment redemptions count of.
      * @param batchSize The increment amount.
      */
@@ -82,6 +84,7 @@ contract C9Redeemable is C9Token {
     
     /*
      * @dev Clears the step, batchsize, and space for 6x u24 tokenIds.
+     *
      * @param redeemer The address to clear any redemption data of.
      * @notice The first 160 bits of the balances data are the redeemer data.
      */
@@ -92,6 +95,7 @@ contract C9Redeemable is C9Token {
 
     /*
      * @dev Gets the tokenIds batch size of the redeemer.
+     *
      * @param redeemerData _balances[address].
      */
     function _getBatchSize(uint256 redeemerData)
@@ -100,12 +104,26 @@ contract C9Redeemable is C9Token {
         return _viewPackedData(redeemerData, 0, 3);
     }
 
+    /*
+     * @dev Convenience internal function.
+     *
+     * @param tokenIds The array of tokenIds to redeem.
+     * @return uint256 The total fees of the redemption of tokenIds in wei.
+     */
+    function _getRedeemerRedemptionFeesUSD(uint256[] memory tokenIds)
+    private view
+    returns (uint256 _feesUSD) {
+        uint256 _insuredValue = getInsuredsValue(tokenIds);
+        _feesUSD = getRedemptionFees(_insuredValue);            
+    }
+
     /**
      * @dev See {IERC-5560 IRedeemable}
      * While the IERC is not official, but the function is a good
      * idea to implement anyway for quick lookup, and the contract 
      * supports interface may be updated in the future to signal
      * support.
+     *
      * @param tokenId The tokenId.
      * @param ownersData _owners[tokenId].
      */
@@ -126,6 +144,7 @@ contract C9Redeemable is C9Token {
 
     /**
      * @dev Locks the token from further transfer.
+     *
      * @param tokenId The tokenId.
      * @param ownersData _owners[tokenId].
      * @return uint256 The updated ownersData of tokenId locked.
@@ -140,6 +159,7 @@ contract C9Redeemable is C9Token {
     /**
      * @dev Returns whether or not the token pre-release period 
      * has ended.
+     *
      * @param tokenData _uTokenData[tokenId].
      * @return bool If the token pre-release period has ended.
      */
@@ -152,6 +172,7 @@ contract C9Redeemable is C9Token {
 
     /*
      * @dev Locks the tokens after a series of conditions pass.
+     *
      * @param tokenIds The array of tokenId to lock.
      */
     function _redeemLockTokens(uint256[] calldata tokenIds)
@@ -192,6 +213,7 @@ contract C9Redeemable is C9Token {
      * is set to be a dead status (REDEEMED or greater) then the token is 
      * locked. If set to redeemed the token is locked and a redemption 
      * is added to the owner of that token.
+     *
      * @param tokenId The tokenId.
      * @param ownersData _owners[tokenId].
      * @param vId The integer validity status to set for tokenId.
@@ -215,6 +237,7 @@ contract C9Redeemable is C9Token {
 
     /**
      * @dev Unlocks the token.
+     *
      * @param tokenId The tokenId to unlock.
      * @notice Emits an event so supporting marketplaces know to 
      * re-enable exchange of this tokenId.
@@ -228,6 +251,7 @@ contract C9Redeemable is C9Token {
     /**
      * @dev Unpacks tokenIds from the tightly packed
      * redemption data.
+     *
      * @param redeemerData _balances[address].
      * @return tokenIds The unpacked array of tokenId.
      */
@@ -248,6 +272,7 @@ contract C9Redeemable is C9Token {
 
     /**
      * @dev Admin clear redeemer slot.
+     *
      * @param redeemer Address to clear (zero out) all redeemer data.
      */
     function adminClearRedeemer(address redeemer)
@@ -258,6 +283,7 @@ contract C9Redeemable is C9Token {
 
     /**
      * @dev Admin final approval of tokens to be redeemed.
+     *
      * @param redeemer The account of the redeemer to approve.
      * The tokenIds within that redeemer's data will be set 
      * to status REDEEMED.
@@ -294,6 +320,7 @@ contract C9Redeemable is C9Token {
      * Dead tokens are still not possible to unlock, though they 
      * may still be burned (to the zero address only, so the token 
      * still exists without present and future owner).
+     *
      * @param tokenId the tokenId to unlock.
      */
     function _adminUnlock(uint256 tokenId)
@@ -305,6 +332,7 @@ contract C9Redeemable is C9Token {
 
     /**
      * @dev Batched version of _adminUnlock to save on gas fees.
+     *
      * @param tokenIds The array of tokenId to unlock.
      */
     function adminUnlock(uint256[] calldata tokenIds)
@@ -330,6 +358,7 @@ contract C9Redeemable is C9Token {
 
     /**
      * @dev Convenience view function.
+     *
      * @return redeemedTokens The array of redeemed tokenId.
      */
     function getRedeemed()
@@ -340,6 +369,7 @@ contract C9Redeemable is C9Token {
 
     /*
      * @dev Returns the s&h fees payable given redemption batch size.
+     *
      * @param insuredValue The insured value in USD.
      * @return total Fees payable in USD.
      */
@@ -354,11 +384,29 @@ contract C9Redeemable is C9Token {
 
     /*
      * @dev Convenience view function.
+     *
+     * @param redeemer The address of the redeemer to lookup.
+     * @return uint256 The total fees of the redemption in wei.
+     */
+    function getRedeemerRedemptionFeesWei(address redeemer)
+    external view
+    returns (uint256) {
+        uint256[] memory tokenIds = getRedeemerTokenIds(redeemer);
+        if (tokenIds.length == 0) {
+            return 0;
+        }
+        uint256 _feesUSD = _getRedeemerRedemptionFeesUSD(tokenIds);
+        return IC9EthPriceFeed(contractPricer).safeGetTokenWeiPrice(_feesUSD);
+    }
+
+    /*
+     * @dev Convenience view function.
+     *
      * @param redeemer The address of the redeemer to lookup.
      * @return tokenIds The array of tokenIds for the redeemer.
      */
     function getRedeemerTokenIds(address redeemer)
-    external view
+    public view
     returns(uint256[] memory tokenIds) {
         uint256 _balancesData = _balances[redeemer];
         tokenIds = _unpackTokenIds(_balancesData);
@@ -368,6 +416,7 @@ contract C9Redeemable is C9Token {
      * @dev See {IERC-5560 IRedeemable}
      * The IERC is not official, but the function is a good
      * idea to implement anyway for quick lookup.
+     *
      * @param tokenId The tokenId.
      * @return bool If the tokenId is redeemable.
      */
@@ -380,6 +429,7 @@ contract C9Redeemable is C9Token {
 
     /**
      * @dev Convenience view function.
+     *
      * @param tokenId The tokenId.
      * @return If a token is already redeemed.
      */
@@ -392,6 +442,7 @@ contract C9Redeemable is C9Token {
 
     /**
      * @dev Convenience view function.
+     *
      * @param tokenId The tokenId.
      * @return Whether or not the tokenId pre-release period 
      * has ended.
@@ -441,6 +492,7 @@ contract C9Redeemable is C9Token {
      * @dev Starts the redemption process.
      * Once started, the token is locked from further exchange 
      * unless canceled.
+     *
      * @param redeemer The address to start the redemption process for
      * @param registrationCode The correct registration code received by 
      * the redeemer upon registration.
@@ -477,14 +529,11 @@ contract C9Redeemable is C9Token {
         // 2. Lock tokens
         _redeemLockTokens(tokenIds);
         // 3. Get the estimated s&h fees
-        uint256 _insuredValue = getInsuredsValue(tokenIds);
-        uint256 _feesUSD = getRedemptionFees(_insuredValue);
+        uint256 _feesUSD = _getRedeemerRedemptionFeesUSD(tokenIds);
         uint256 _redemptionFees; // Min value 0
         // Check if >0 (i.e. some promotions may set baseFees to 0)
         if (_feesUSD > 0) {       
-            uint256 _feesWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(
-                _feesUSD
-            );
+            uint256 _feesWei = IC9EthPriceFeed(contractPricer).getTokenWeiPrice(_feesUSD);
             // 4. Make sure payment amount is valid
             if (msg.value != _feesWei) {
                 revert InvalidPaymentAmount(_feesWei, msg.value);
@@ -515,6 +564,7 @@ contract C9Redeemable is C9Token {
 
     /**
      * @dev Sets the base shipping fee.
+     *
      * @param baseFees The new base shipping fee.
      */
     function setBaseFees(uint256 baseFees)
@@ -528,6 +578,7 @@ contract C9Redeemable is C9Token {
 
     /**
      * @dev Sets the eth pricer contract address.
+     *
      * @param pricer The new contract address.
      */
     function setContractPricer(address pricer)
@@ -539,6 +590,7 @@ contract C9Redeemable is C9Token {
 
     /**
      * @dev Sets the global token redeemable period.
+     *
      * @param period The new pre-redeemable period.
      */
     function setPreRedeemPeriod(uint256 period)
@@ -552,6 +604,7 @@ contract C9Redeemable is C9Token {
 
     /*
      * @dev Sets the token validity.
+     *
      * @param tokenId The tokenId.
      * @param vId The new validity status id to set.
      */
@@ -576,6 +629,7 @@ contract C9Redeemable is C9Token {
 
     /**
      * @dev Freezes or unfreezes redeemer portion of contract.
+     *
      * @param toggle Freeze (true) or unfreeze (false).
      */
     function toggleRedeemerFreezer(bool toggle)
@@ -589,6 +643,7 @@ contract C9Redeemable is C9Token {
 
     /**
      * @dev Convenience view function.
+     *
      * @return uint256 The total number of redeemed tokens.
      */
     function totalRedeemed()

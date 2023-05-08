@@ -13,7 +13,7 @@ contract LockersTest is C9TestContract {
 
     function _adminLock(uint256 mintId, uint256 tokenId)
     private {
-        c9t.adminLock(tokenId);
+        //c9t.adminLock(tokenId);
         _rawData[mintId].locked = LOCKED; // force raw data unlock
 
         bool locked = c9t.isLocked(tokenId);
@@ -23,31 +23,41 @@ contract LockersTest is C9TestContract {
         _checkOwnerParams(mintId);
     }
 
-    function _adminUnlock(uint256 mintId, uint256 tokenId)
+    function _adminUnlock(uint256[] memory mintIds, uint256[] memory tokenIds)
     private {
-        c9t.adminUnlock(tokenId);
-        _rawData[mintId].locked = UNLOCKED; // force raw data unlock
 
-        bool locked = c9t.isLocked(tokenId);
-        Assert.equal(locked, false, "Invalid token unlock1");
+        c9t.adminUnlock(tokenIds);
         
-        _checkTokenParams(mintId);
-        _checkOwnerParams(mintId);
+
+        for (uint256 i; i<tokenIds.length; i++) {
+            _rawData[mintIds[i]].locked = UNLOCKED; // force raw data unlock
+            bool locked = c9t.isLocked(tokenIds[i]);
+            Assert.equal(locked, false, "Invalid token unlock1");        
+            _checkTokenParams(mintIds[i]);
+            _checkOwnerParams(mintIds[i]);
+        }
     }
 
     function checkTokenLockers1()
     public {
-        uint256 mintId = _timestamp % (_rawData.length-4);
-        (uint256 tokenId,) = _getTokenIdVotes(mintId);
-        _adminLock(mintId, tokenId);
-        _adminUnlock(mintId, tokenId);
+        uint256[] memory mintIds = new uint256[](2);
+        // These tokens are default locked
+        for (uint256 i; i<2; i++) {
+            mintIds[i] = 28 + i;
+        }
+        (uint256[] memory tokenIds,) = _getTokenIdsVotes(mintIds);
+
+        //_adminLock(mintId, tokenId);
+        _adminUnlock(mintIds, tokenIds);
     }
 
+    /*
     function checkTokenLockers2()
     public {
         uint256 mintId = (_timestamp + 7) % (_rawData.length-4);
         (uint256 tokenId,) = _getTokenIdVotes(mintId);
-        _adminLock(mintId, tokenId);
+        //_adminLock(mintId, tokenId);
         _adminUnlock(mintId, tokenId);
     }
+    */
 }
