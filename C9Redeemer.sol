@@ -299,7 +299,7 @@ contract C9Redeemable is C9Token {
         }
         // 2. Get tokenIds for this redeemer
         uint256[] memory _tokenIds = _unpackTokenIds(_redeemerData);
-        // 3. Set all tokens in the redeemer's account to redeemed
+        // 3. Set all tokens in the redeemer's account to redeemed (already locked)
         uint256 _tokenId;
         for (uint256 i; i<_batchSize;) {
             _tokenId = _tokenIds[i];
@@ -308,7 +308,7 @@ contract C9Redeemable is C9Token {
             unchecked {++i;}
         }
         // 4. To to redeemer's redemption count
-        _addRedemptionsTo(_ownerOf(_tokenIds[0]), _batchSize);
+        _addRedemptionsTo(_ownerOf(_tokenId), _batchSize);
         // 5. Clear redeemer's info so a new redemption can begin
         _clearRedemptionData(redeemer);
     }
@@ -495,7 +495,9 @@ contract C9Redeemable is C9Token {
      *
      * @param redeemer The address to start the redemption process for
      * @param registrationCode The correct registration code received by 
-     * the redeemer upon registration.
+     * the redeemer upon registration. This registration code acts as a 
+     * way for the token redeemer to confirm the user's information 
+     * supplied during registration.
      * @param tokenIds The array of tokenId to redeem.
      * @notice Max length of tokenIds due to tightly packed
      * storage limitations. Some code has been moved to a separate 
@@ -516,10 +518,10 @@ contract C9Redeemable is C9Token {
         if (registrationCode != _registrationData) {
             revert CodeMismatch();
         }
-        // 1d. Check account does not have a pending redemption
+        // 1d. Check account does not have a pending redemption (must cancel to start new)
         uint256 _batchSize = _getBatchSize(_redeemerData);
         if (_batchSize > 0) {
-            revert WrongProcessStep(0, 2);
+            revert RedemptionBatchPresent(_batchSize);
         }
         // 1e. Check redemption batchsize is within limits
         _batchSize = tokenIds.length;
@@ -547,7 +549,7 @@ contract C9Redeemable is C9Token {
             // 6. Get fee amount to store in redeemer's data
             _redemptionFees = (_feesWei-1) / (10**15); // Max value 999 or 0.999 ETH
         }
-        // 5. Update redeemer data
+        // 5. Update redeemer data (first 160-bits are zero)
         _redeemerData |= _batchSize<<RPOS_BATCHSIZE;
         _redeemerData |= _redemptionFees<<RPOS_FEES_PAID;
         uint256 _offset = RPOS_TOKEN1;

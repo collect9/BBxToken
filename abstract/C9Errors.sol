@@ -50,6 +50,7 @@ error CancelRemainder(uint256 remainingBatch); //0x2c9f7f1d
 error NoRedemptionBatchPresent();
 error RedeemerBatchSizeTooLarge(uint256 maxSize, uint256 received); //0x66aa3a8c
 error RedeemerFrozen();
+error RedemptionBatchPresent(uint256 batchSize);
 error SizeMismatch(uint256 maxSize, uint256 received); //0x97ce59d2
 error WithdrawlExceedsBalance();
 
