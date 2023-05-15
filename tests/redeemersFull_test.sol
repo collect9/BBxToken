@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity >0.8.17;
+pragma solidity >=0.8.17;
 import "./C9BaseDeploy_test.sol";
 
 
@@ -11,7 +11,7 @@ import "./C9BaseDeploy_test.sol";
  */
 contract RedeemersTestFull is C9TestContract {
 
-    uint256 immutable NUMBER_TO_REDEEM = _timestamp % 5 + 1;
+    uint256 immutable NUMBER_TO_REDEEM = _timestamp % 6 + 1;
     uint256[] mintIds;
 
     uint256 constant MASK_REGISTRATION = 2**20-1;
@@ -48,7 +48,7 @@ contract RedeemersTestFull is C9TestContract {
     function redeemStart()
     public {
         for (uint256 i; i<NUMBER_TO_REDEEM; i++) {
-            mintIds.push( (_timestamp + i) % (_rawData.length-4) );
+            mintIds.push( (_timestamp + i) % DATA_SIZE-4 );
             _rawData[mintIds[i]].locked = LOCKED; // Set truth
         }
         (uint256[] memory tokenIds,) = _getTokenIdsVotes(mintIds);
@@ -58,12 +58,12 @@ contract RedeemersTestFull is C9TestContract {
 
         // Check basic redeemer info is correct
         uint256[] memory rTokenIds = c9t.getRedeemerTokenIds(c9tOwner);
-        Assert.equal(rTokenIds.length, NUMBER_TO_REDEEM, "Invalid redeem tokenIds length");
+        Assert.equal(rTokenIds.length, NUMBER_TO_REDEEM, "X redeem tokenIds length");
 
         // Check all tokens are in redeemer and locked
         for (uint256 i; i<NUMBER_TO_REDEEM; i++) {
-            Assert.equal(rTokenIds[i], tokenIds[i], "Invalid tokenId in redeemer");
-            Assert.equal(c9t.isLocked(tokenIds[i]), true, "Invalid locked status");
+            Assert.equal(rTokenIds[i], tokenIds[i], "X tokenId in redeemer");
+            Assert.equal(c9t.isLocked(tokenIds[i]), true, "X locked status");
             // Make sure the rest of the packed params are still ok
             _checkTokenParams(mintIds[i]);
             _checkOwnerParams(mintIds[i]);
@@ -82,13 +82,13 @@ contract RedeemersTestFull is C9TestContract {
         
         // After approval the redeemer should be back at step 0
         uint256[] memory doneTokenIds = c9t.getRedeemerTokenIds(c9tOwner);
-        Assert.equal(doneTokenIds.length, 0, "Invalid redeem tokenIds length after approved");
+        Assert.equal(doneTokenIds.length, 0, "X redeem tokenIds length after approved");
 
         // Check all tokens have still been locked and are redeemed status
         for (uint256 i; i<NUMBER_TO_REDEEM; i++) {
-            Assert.equal(c9t.isLocked(rTokenIds[i]), true, "Invalid locked status");
-            Assert.equal(c9t.validityStatus(rTokenIds[i]), REDEEMED, "Invalid validity status");
-            Assert.equal(c9t.getRedeemed()[i], rTokenIds[i], "Invalid redeemed tokenId");
+            Assert.equal(c9t.isLocked(rTokenIds[i]), true, "X locked status");
+            Assert.equal(c9t.validityStatus(rTokenIds[i]), REDEEMED, "X validity status");
+            Assert.equal(c9t.getRedeemed()[i], rTokenIds[i], "X redeemed tokenId");
 
             // Set ground truth
             _rawData[mintIds[i]].validity = REDEEMED;
@@ -99,9 +99,8 @@ contract RedeemersTestFull is C9TestContract {
         redemptions[c9tOwner] += NUMBER_TO_REDEEM;
         redeemCounter += NUMBER_TO_REDEEM;
 
-        Assert.equal(c9t.totalRedeemed(), redeemCounter, "Invalid total redeemed");
+        Assert.equal(c9t.totalRedeemed(), redeemCounter, "X total redeemed");
     }
-    
     
     function burnRedeemed()
     public {
@@ -123,21 +122,21 @@ contract RedeemersTestFull is C9TestContract {
             c9t.burn(tokenId);
 
             // 3. Check the 'owner' is now address 0
-            Assert.equal(c9t.ownerOf(tokenId), address(0), "Invalid burned address");
+            Assert.equal(c9t.ownerOf(tokenId), address(0), "X burned address");
 
             // 4. Check the burned tokens array
             uint24[] memory burned = c9t.getBurned();
-            Assert.equal(burned[i], tokenId, "Invalid burned tokenId");
+            Assert.equal(burned[i], tokenId, "X burned tokenId");
         }
 
         // 5. Check burned tokens length
         uint256 numBurned = c9t.totalBurned();
-        Assert.equal(numBurned, NUMBER_TO_REDEEM, "Invalid number of burned token");
+        Assert.equal(numBurned, NUMBER_TO_REDEEM, "X number of burned token");
 
         // 6. Check total number of votes is updated properly
-        Assert.equal(c9t.totalVotes(), remainingVotes, "Invalid remaining number of votes");
+        Assert.equal(c9t.totalVotes(), remainingVotes, "X remaining number of votes");
 
         // 7. Make sure total supply is still the same
-        Assert.equal(c9t.totalSupply(), _rawData.length, "Invalid number of tokens");
+        Assert.equal(c9t.totalSupply(), _rawData.length, "X number of tokens");
     }
 }

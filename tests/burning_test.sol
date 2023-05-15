@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity >0.8.17;
+pragma solidity >=0.8.17;
 import "./C9BaseDeploy_test.sol";
 
 
@@ -7,7 +7,7 @@ import "./C9BaseDeploy_test.sol";
 contract BurningTest is C9TestContract {
 
     // Random mintId every run
-    uint256 mintId = _timestamp % (_rawData.length - 4);
+    uint256 mintId = _timestamp % (DATA_SIZE - 4);
 
     function afterEach()
     public override {
@@ -62,7 +62,7 @@ contract BurningTest is C9TestContract {
         Assert.equal(c9t.totalVotes(), remainingVotes, "Invalid remaining number of votes");
 
         // 7. Make sure total supply is still the same
-        Assert.equal(c9t.totalSupply(), _rawData.length, "Invalid number of tokens");
+        Assert.equal(c9t.totalSupply(), DATA_SIZE, "Invalid number of tokens");
     }
 
 }

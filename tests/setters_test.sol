@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity >0.8.17;
+pragma solidity >=0.8.17;
 import "./C9BaseDeploy_test.sol";
 
 
@@ -17,25 +17,15 @@ contract SettersTest is C9TestContract {
     public {
         address contract1 = TestsAccounts.getAccount(1);
         address contract2 = TestsAccounts.getAccount(2);
-        address contract4 = TestsAccounts.getAccount(4);
-        address contract5 = TestsAccounts.getAccount(5);
 
         c9t.setContractMeta(contract1);
         c9t.setContractPricer(contract2);
-        c9t.setContractUpgrader(contract4);
-        c9t.setContractVH(contract5);
 
-        (address contractMeta, address contractPricer, address contractUpgrader, address contractVH) = c9t.getContracts();
+        (address contractMeta, address contractPricer) = c9t.getContracts();
 
         // Check contracts
         Assert.equal(contractMeta, contract1, "Invalid meta contract");
         Assert.equal(contractPricer, contract2, "Invalid pricer contract");
-        Assert.equal(contractUpgrader, contract4, "Invalid upgrader contract");
-        Assert.equal(contractVH, contract5, "Invalid vh contract");
-
-        // Check to make sure set contracts have proper roles
-        Assert.equal(c9t.hasRole(c9t.UPGRADER_ROLE(), contractUpgrader), true, "upgrader role not set");
-        Assert.equal(c9t.hasRole(c9t.VALIDITY_ROLE(), contractVH), true, "validity role not set");
     }
 
     /* @dev 3. Tests string setters.
@@ -45,8 +35,8 @@ contract SettersTest is C9TestContract {
         // Base URI testing
         string memory baseURI0 = "testbaseuri/uri0/";
         string memory baseURI1 = "testbaseuri/uri1/"; 
-        c9t.setBaseUri(baseURI0, 0);
-        c9t.setBaseUri(baseURI1, 1);
+        c9t.setBaseURI(baseURI0, 0);
+        c9t.setBaseURI(baseURI1, 1);
         Assert.equal(baseURI0, c9t.baseURIArray(0), "Invalid baseURI0");
         Assert.equal(baseURI1, c9t.baseURIArray(1), "Invalid baseURI1");
 

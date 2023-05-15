@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >0.8.17;
+pragma solidity >=0.8.17;
 import "./interfaces/IC9MetaData.sol";
 import "./interfaces/IC9SVG2.sol";
 import "./utils/Helpers.sol";
@@ -169,8 +169,15 @@ contract C9Token is ERC721IdEnumBasic {
             packedToken |= uint256(uint152(bytes19(bytes(_input.name))))<<UPOS_NAME;
             _uTokenData[tokenId] = packedToken; // Additional storage done
 
-            // Store token data for SVG QR and bar codes
-            _cTokenData[tokenId] = _input.cData;
+            /* Store VG QR and bar codes on-chain (only if set).
+               In the future if the <image> tag ever works on marketplaces, 
+               we no longer need to store the data on-chain and will save around
+               ~22K gas per mint, reducing from ~78200 gas/mint batched to 
+               ~56300 gas/mint.
+            */
+            if (_input.cData > 0) {
+                _cTokenData[tokenId] = _input.cData;
+            }
 
             // This is a waste to call on every mint but there's no transfer batch
             _transferEvent(address(0), to, tokenId);
@@ -601,6 +608,31 @@ contract C9Token is ERC721IdEnumBasic {
             BOOL_MASK
         );
         _metaUpdateEvent(tokenId);
+    }
+
+    /**
+     * @dev In the future if/when marketplaces support the <image>
+     * tag within the SVG, we will no longer need to set the QR data.
+     * However, we still want a path to do that just in case.
+     *
+     * @param input The external minting data TokenData.
+     * @notice The token must already exist.
+     */
+    function setTokenQRData(TokenData[] calldata input)
+    external
+    onlyRole(DEFAULT_ADMIN_ROLE) {
+        uint256 _tokenId;
+        TokenData calldata _input;
+        uint256 _batchSize = input.length;
+        for (uint256 i; i<_batchSize;) {
+            _input = input[i];
+            _tokenId = _input.tokenid;
+            if (!_exists(_tokenId)) {
+                revert InvalidToken(_tokenId);
+            }
+            _cTokenData[_tokenId] = _input.cData;
+            unchecked {++i;}
+        }
     }
 
     /**

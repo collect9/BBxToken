@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.8.0) (token/ERC721/ERC721.sol)
-
-pragma solidity ^0.8.0;
+pragma solidity >=0.8.17;
 
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
@@ -535,6 +534,14 @@ contract ERC721 is C9Context, ERC165, IC9ERC721, IERC2981, IERC4906, C9OwnerCont
     function metaUpdateAllEvent()
     public {
         emit BatchMetadataUpdate(0, type(uint256).max);
+    }
+
+    /**
+     * @dev Emits metadata update for one tokenId.
+     */
+    function metaUpdateOneEvent(uint256 tokenId)
+    external {
+        emit MetadataUpdate(tokenId);
     }
 
     /**

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity >0.8.17;
+pragma solidity >=0.8.17;
 import "./C9BaseDeploy_test.sol";
 
 
@@ -43,21 +43,11 @@ contract LockersTest is C9TestContract {
         uint256[] memory mintIds = new uint256[](2);
         // These tokens are default locked
         for (uint256 i; i<2; i++) {
-            mintIds[i] = 28 + i;
+            mintIds[i] = (DATA_SIZE-4) + i;
         }
         (uint256[] memory tokenIds,) = _getTokenIdsVotes(mintIds);
 
         //_adminLock(mintId, tokenId);
         _adminUnlock(mintIds, tokenIds);
     }
-
-    /*
-    function checkTokenLockers2()
-    public {
-        uint256 mintId = (_timestamp + 7) % (_rawData.length-4);
-        (uint256 tokenId,) = _getTokenIdVotes(mintId);
-        //_adminLock(mintId, tokenId);
-        _adminUnlock(mintId, tokenId);
-    }
-    */
 }
